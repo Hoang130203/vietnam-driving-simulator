@@ -1,8 +1,24 @@
-﻿<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tay Lái Việt · Buồng lái</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="quiz.css"></head><body>
-<header><a class="brand" href="./"><i>〽</i> TAY LÁI <em>VIỆT</em></a><span class="division">HỌC VIỆN LÁI XE</span><nav><button class="active" id="driveNav">Buồng lái</button><button id="theory">Lý thuyết</button><button id="history">Thành tích</button></nav><b class="avatar">HV</b></header>
-<main><div class="kicker"><span></span> TRUNG TÂM HUẤN LUYỆN</div><div class="title"><h1>Buồng lái mô phỏng</h1><span class="online">● &nbsp; Mô phỏng 3D</span></div>
-<div class="grid"><section class="screen"><canvas id="road"></canvas><div class="location"><b>⌖</b> Phố thị Việt Nam</div><button id="full" aria-label="Toàn màn hình">⛶</button><div class="speed"><strong id="speed">00</strong><small>KM/H</small></div><div class="gear">D <small>• &nbsp; SỐ TỰ ĐỘNG</small></div><div class="map"><canvas id="map" width="132" height="90"></canvas><small>LỘ TRÌNH</small></div></section>
-<aside><div class="kicker">THỰC HÀNH &nbsp; / &nbsp; BÀI 01</div><h2>Qua giao lộ</h2><p>Điều khiển ô tô qua ngã tư có đèn tín hiệu trên tuyến phố hai chiều.</p><div class="stats"><span>Quãng đường<b>180 m</b></span><span>Độ khó<b>Cơ bản</b></span></div><h3>Mục tiêu bài lái</h3><ul><li>Giữ đúng phần đường bên phải</li><li>Tuân thủ biển giới hạn 40 km/h</li><li>Chấp hành tín hiệu giao thông</li></ul><div id="hint" role="status">Sẵn sàng xuất phát</div><button class="start" id="start">▶ &nbsp; Bắt đầu lái</button></aside></div>
-<div class="bottom"><section><div class="kicker">ĐIỀU KHIỂN</div><div class="keys"><label><kbd>↑</kbd> Ga</label><label><kbd>↓</kbd> Phanh</label><label><kbd>←</kbd><kbd>→</kbd> Đánh lái</label><label><kbd>P</kbd> Tạm dừng</label></div></section><button id="lesson"><b>▤</b><span><small>GÓC ÔN TẬP</small>Lý thuyết giao thông</span><strong>↗</strong></button></div>
-<div class="touch"><button data-key="arrowleft">←</button><button data-key="arrowright">→</button><button data-key="arrowdown">Phanh</button><button data-key="arrowup">Ga</button></div></main><dialog id="quiz"></dialog><dialog id="report"><h2 id="rt"></h2><p id="rb"></p><button onclick="this.closest('dialog').close()">Đóng</button></dialog>
-<script src="three.min.js"></script><script src="scene.js"></script><script src="quiz.js"></script><script src="app.js"></script></body></html>
+﻿<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#12231f"><title>Tay Lái Việt · Lái xe tình huống</title>
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="quiz.css">
+</head><body>
+<header><a class="brand" href="./"><i aria-hidden="true">〽</i> TAY LÁI <em>VIỆT</em></a>
+<nav aria-label="Điều hướng chính"><button class="active" id="driveNav">Thực hành</button><button id="theory">Ngân hàng câu hỏi</button><button id="history">Thành tích</button></nav></header>
+<main>
+<div class="title"><div><div class="kicker">HUẤN LUYỆN LÁI XE &nbsp; / &nbsp; Ô TÔ</div><h1>Một vòng phố Việt</h1></div><span class="routeTag">180 m &nbsp;·&nbsp; 4 tình huống</span></div>
+<div class="grid"><section class="screen" aria-label="Buồng lái 3D"><canvas id="road"></canvas>
+<div class="location"><i></i> PHỐ TRẦN PHÚ</div><div class="tools"><button id="fullStart">Bắt đầu lái</button><button id="camera" title="Đổi góc nhìn (C)">Góc tài xế</button><button id="audio" aria-pressed="false">Âm thanh tắt</button><button id="full" aria-label="Toàn màn hình">⛶</button></div>
+<div class="liveHint" id="hint" role="status">Chọn bắt đầu để vào tuyến tập lái</div>
+<div class="speed"><strong id="speed">00</strong><span>km/h</span><b>D</b></div>
+<div class="map"><canvas id="map" width="132" height="90"></canvas><small id="remaining">180 m đến đích</small></div>
+<div class="touch"><button data-key="arrowleft" aria-label="Đánh lái trái">←</button><button data-key="arrowright" aria-label="Đánh lái phải">→</button><button id="blinkMobile">Xi nhan</button><button data-key="arrowdown">Phanh</button><button data-key="arrowup">Ga</button></div></section>
+<aside><div class="kicker">LỘ TRÌNH THỰC HÀNH</div><h2>Qua phố an toàn</h2><p>Đọc tình huống ngay tại hiện trường, chọn cách xử lý rồi tự tay điều khiển xe.</p>
+<ol id="stages"><li><b>Xuất phát</b><small>Đi đúng phần đường</small></li><li><b>Đọc biển tốc độ</b><small>Quan sát bên phải đường</small></li><li><b>Qua ngã tư</b><small>Nhường người đi bộ</small></li><li><b>Dừng xe sát lề</b><small>Báo hiệu và giảm tốc</small></li></ol>
+<button class="start" id="start">▶ &nbsp; Bắt đầu lái</button></aside></div>
+<div class="bottom"><section><div class="kicker">ĐIỀU KHIỂN</div><div class="keys"><label><kbd>↑</kbd> Ga</label><label><kbd>↓</kbd> Phanh</label><label><kbd>← →</kbd> Đánh lái</label><label><kbd>E</kbd> Xi nhan phải</label><label><kbd>P</kbd> Tạm dừng</label></div></section><button id="lesson"><span><small>NGÂN HÀNG CỤC CSGT · 2025</small>Ôn bộ 600 câu hỏi</span><b>↗</b></button></div>
+</main><dialog id="quiz"></dialog><dialog id="report"><h2 id="rt"></h2><p id="rb"></p><button onclick="this.closest('dialog').close()">Trở về buồng lái</button></dialog>
+<script src="three.min.js"></script><script src="scene.js"></script><script src="bank.js"></script><script src="quiz.js"></script><script src="app.js"></script>
+</body></html>

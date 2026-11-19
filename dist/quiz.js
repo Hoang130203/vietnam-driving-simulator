@@ -1,66 +1,158 @@
-(() => {
-  const law = 'https://vanban.chinhphu.vn/?classid=0&docid=217295&pageid=27160';
-  const questions = [
-    ['Đèn tín hiệu', 'Đèn đỏ trước mặt, bạn định đi thẳng. Không có hiệu lệnh khác. Bạn làm gì?', ['Dừng trước vạch dừng', 'Đi tiếp nếu đường vắng', 'Dừng giữa vạch qua đường'], 0, 'Chừa trống phần đường dành cho người đi bộ và chờ tín hiệu cho phép.', 11],
-    ['Quan sát', 'Đèn vừa xanh nhưng một người đi bộ vẫn đang qua đường. Bạn sẽ làm gì?', ['Bấm còi để họ chạy nhanh', 'Giảm tốc hoặc dừng để nhường đường', 'Lách qua sát phía sau họ'], 1, 'Hãy để người đang đi trên phần đường qua đường hoàn tất việc sang đường.', 11],
-    ['Chuyển làn', 'Bạn cần chuyển từ làn ngoài cùng vào làn trong cùng trên đường ba làn. Bạn xử lý thế nào?', ['Cắt ngang hai làn khi xe sau còn xa', 'Bật đèn cảnh báo nguy hiểm rồi chuyển', 'Báo hiệu, quan sát và chuyển từng làn liền kề ở nơi được phép'], 2, 'Kiểm tra khoảng trống phía trước, sau và hai bên cho từng lần chuyển làn.', 13],
-    ['Giao lộ', 'Ở ngã tư đồng cấp, không có tín hiệu, biển ưu tiên hay vòng xuyến, một ô tô đến từ bên phải cùng lúc. Ai đi trước?', ['Xe của bạn', 'Ô tô bên phải', 'Xe bấm còi trước'], 1, 'Giảm tốc và nhường xe đến từ phía tay phải tại giao lộ này.', 22],
-    ['Vòng xuyến', 'Khi vào nơi giao nhau có biển báo vòng xuyến, bạn phải nhường xe đến từ phía nào?', ['Bên trái', 'Bên phải', 'Phía sau'], 0, 'Quan sát bên trái và chờ khoảng trống an toàn trước khi nhập vòng xuyến.', 22],
-    ['Dây an toàn', 'Một người ngồi ghế sau có dây an toàn. Trước khi xe chạy, họ cần làm gì?', ['Chỉ thắt dây khi ra cao tốc', 'Giữ tay vào ghế trước', 'Thắt dây an toàn tại chỗ ngồi'], 2, 'Người ngồi ở vị trí có trang bị dây phải thắt dây khi tham gia giao thông.', 10],
-    ['Hiệu lệnh', 'Đèn xanh, nhưng người điều khiển giao thông ra hiệu cho xe bạn dừng. Bạn làm gì?', ['Đi theo đèn xanh', 'Dừng theo hiệu lệnh', 'Đi theo xe phía trước'], 1, 'Hiệu lệnh của người điều khiển giao thông được ưu tiên hơn tín hiệu đèn.', 11],
-    ['Đèn tín hiệu', 'Xe còn cách xa vạch dừng khi đèn chuyển sang vàng sáng liên tục. Bạn làm gì?', ['Giảm tốc và dừng trước vạch', 'Tăng tốc qua nút giao', 'Đi tiếp như đèn vàng nhấp nháy'], 0, 'Xe chưa đến vạch phải dừng. Xe đang trên vạch hoặc đã qua vạch khi đèn vàng sáng được đi tiếp.', 11],
-    ['Mở cửa xe', 'Bạn vừa đỗ sát lề, một xe máy đang áp sát cửa bên trái. Bạn xử lý thế nào?', ['Hé cửa ngay để báo hiệu', 'Mở cửa thật nhanh', 'Chờ xe máy qua, quan sát lại rồi mở khi an toàn'], 2, 'Quan sát phía trước, phía sau và bên mở cửa để tránh gây nguy hiểm.', 19],
-    ['Chuyển hướng', 'Bạn chuẩn bị rẽ phải qua phần đường có người đi bộ đang sang. Bạn làm gì?', ['Báo rẽ rồi tăng ga', 'Giảm tốc, báo rẽ và nhường người đi bộ', 'Dùng còi để xin đi trước'], 1, 'Di chuyển chậm và chỉ rẽ khi đường đi của xe đã an toàn.', 15]
+﻿(() => {
+  'use strict';
+  const dialog = document.getElementById('quiz');
+  const key = 'taylai.csgt2025.study.v1';
+  const source = 'https://www.csgt.vn/upload/services/273963059_Bộ 600 câu hỏi dùng cho sát hạch lái xe cơ giới đường bộ.pdf';
+  // Phụ lục III, Công văn 2262/CSGT-P5 ngày 07/05/2025.
+  const critical = new Set([
+    19,20,21,22,23,24,25,26,27,28,30,32,34,35,47,48,52,53,55,58,
+    63,64,65,66,67,68,70,71,72,73,74,85,86,87,88,89,90,91,92,93,
+    97,98,102,117,163,165,167,197,198,206,215,226,234,245,246,252,253,254,255,260
+  ]);
+  const chapters = [
+    [1, 180, 'Quy định và quy tắc giao thông'],
+    [181, 205, 'Văn hóa, đạo đức và cứu hộ'],
+    [206, 263, 'Kỹ thuật lái xe'],
+    [264, 300, 'Cấu tạo và sửa chữa'],
+    [301, 485, 'Báo hiệu đường bộ'],
+    [486, 600, 'Sa hình và xử lý tình huống']
   ];
-  const key = 'vn-drive.quiz.v1';
-  const all = questions.map((_, id) => id);
-  const fresh = (ids) => ({ ids, answers: [], index: 0 });
-  let session = fresh(all);
-  try {
-    const saved = JSON.parse(localStorage.getItem(key));
-    if (saved?.ids?.length && saved.ids.every(id => all.includes(id)) &&
-        Array.isArray(saved.answers) && saved.answers.every(a => [0, 1, 2].includes(a)) &&
-        Number.isInteger(saved.index) && saved.index >= 0 && saved.index <= saved.ids.length &&
-        saved.answers.length >= saved.index && saved.answers.length <= Math.min(saved.index + 1, saved.ids.length)) session = saved;
-  } catch {}
+  let state;
+  try { state = JSON.parse(localStorage.getItem(key)); } catch {}
+  if (!state || typeof state.results !== 'object' || !state.results) state = {results: {}, run: null};
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} };
+  const bank = () => window.driveBank || [];
+  const lookup = id => bank().find(q => q.id === Number(id));
+  const letter = index => String.fromCharCode(65 + index);
+  const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const attempted = id => Object.hasOwn(state.results, id);
+  const retry = () => bank().filter(q => attempted(q.id) && state.results[q.id] !== q.correct);
+  let road = null;
+  let chapterIndex = 0;
 
-  function draw(dialog) {
-    const {ids, index, answers} = session;
-    const missed = ids.filter((id, i) => answers[i] !== questions[id][3]);
-    let body;
-    if (index === ids.length) {
-      body = `<h2 id="quiz-title">Hoàn thành lượt ôn</h2><p class="q-score">${ids.length - missed.length} / ${ids.length} câu đúng</p>
-        ${missed.length ? '<button class="q-primary" data-action="retry">Ôn lại ' + missed.length + ' câu sai</button>' : ''}
-        <button class="q-option" data-action="restart">Luyện lại toàn bộ</button><button class="q-option" data-action="close">Trở về buồng lái</button>`;
-    } else {
-      const [topic, prompt, choices, correct, explanation, article] = questions[ids[index]];
-      const chosen = answers[index];
-      body = `<p class="q-count">${topic} · Câu ${index + 1}/${ids.length}</p><progress value="${index + 1}" max="${ids.length}"></progress>
-        <h2 id="quiz-title">${prompt}</h2>${choices.map((choice, i) => {
-          const result = chosen === undefined ? '' : i === correct ? 'right' : i === chosen ? 'wrong' : '';
-          return `<button class="q-option ${result}" data-choice="${i}" ${chosen !== undefined ? 'disabled' : ''}><b>${'ABC'[i]}</b>${choice}</button>`;
-        }).join('')}${chosen === undefined ? '' : `<div class="q-feedback" role="status"><strong>${chosen === correct ? 'Chính xác' : 'Đáp án đúng là ' + 'ABC'[correct]}</strong><p>${explanation}</p><a href="${law}" target="_blank" rel="noopener">Điều ${article} · Luật Trật tự, an toàn giao thông đường bộ ↗</a></div>
-        <button class="q-primary" data-action="next">${index + 1 === ids.length ? 'Xem kết quả' : 'Câu tiếp theo'} →</button>`}`;
-    }
-    dialog.innerHTML = `<div class="q-top"><strong>Ôn lý thuyết</strong><button aria-label="Đóng bài ôn" data-action="close">×</button></div>${body}`;
-    dialog.onclick = event => {
-      const button = event.target.closest('button');
-      if (!button) return;
-      const action = button.dataset.action;
-      if (action === 'close') return dialog.close();
-      if (action === 'next') session.index++;
-      if (action === 'retry') session = fresh(missed);
-      if (action === 'restart') session = fresh(all);
-      if (button.hasAttribute('data-choice') && answers[index] === undefined) answers.push(Number(button.dataset.choice));
-      try { localStorage.setItem(key, JSON.stringify(session)); } catch {}
-      draw(dialog);
-      dialog.querySelector('.q-primary, .q-option:not(:disabled)')?.focus();
-    };
-  }
-  window.openQuiz = () => {
-    const dialog = document.getElementById('quiz');
+  function mount(compact) {
+    const parent = document.fullscreenElement || document.body;
+    if (dialog.parentNode !== parent) parent.append(dialog);
+    dialog.classList.toggle('q-road', compact);
     dialog.setAttribute('aria-labelledby','quiz-title');
-    draw(dialog);
     if (!dialog.open) dialog.showModal();
+    dialog.scrollTop = 0;
+  }
+
+  function chrome(section, content) {
+    dialog.innerHTML = '<div class="q-top"><strong>' + escape(section) + '</strong>' +
+      (road ? '' : '<button type="button" class="q-close" aria-label="Đóng thư viện" data-action="close">×</button>') + '</div>' + content;
+  }
+  function library() {
+    const all = bank(), done = all.filter(q => attempted(q.id)).length, missed = retry();
+    const run = state.run;
+    chrome('Thư viện lý thuyết', '<h2 id="quiz-title">Bộ ' + all.length + ' câu sát hạch</h2>' +
+      '<div class="q-metrics"><span>Đã làm <b>' + done + ' / ' + all.length + '</b></span><span>Đã trả lời đúng <b>' + (done - missed.length) + '</b></span></div>' +
+      '<progress aria-label="Số câu đã làm" value="' + done + '" max="' + all.length + '"></progress>' +
+      (run && run.ids?.length && run.index < run.ids.length && lookup(run.ids[run.index]) ? '<button class="q-primary" data-action="resume">Tiếp tục lượt đang ôn · câu ' + run.ids[run.index] + '</button>' : '') +
+      '<h3>Chọn chương</h3><div class="q-chapters">' + chapters.map(([first,last,title],index) =>
+        '<button class="q-chapter" data-chapter="' + index + '"><strong>' + title + '</strong><small>Câu ' + first + '–' + last + '</small></button>').join('') + '</div>' +
+      '<div class="q-tools"><button class="q-secondary" data-action="critical">Ôn câu điểm liệt</button><button class="q-secondary" data-action="missed" ' + (missed.length ? '' : 'disabled') + '>Ôn câu sai (' + missed.length + ')</button>' +
+      '<form class="q-jump"><label for="q-number">Đến câu</label><input id="q-number" type="number" min="1" max="' + all.length + '" required inputmode="numeric" placeholder="1–' + all.length + '"><button class="q-secondary">Mở</button></form></div>' +
+      '<a class="q-source" href="' + source + '" target="_blank" rel="noopener">Xem tài liệu gốc · Cục CSGT 2025 ↗</a>');
+    dialog.scrollTop = 0;
+  }
+
+  function chapter() {
+    const [first,last,title] = chapters[chapterIndex];
+    let chunks = '';
+    for (let id = first; id <= last; id += 10) {
+      const end = Math.min(id + 9,last);
+      const count = bank().filter(q => q.id >= id && q.id <= end && attempted(q.id)).length;
+      chunks += '<button class="q-chapter" data-chunk="' + id + '"><strong>Câu ' + id + '–' + end + '</strong><small>Đã làm ' + count + '/' + (end-id+1) + '</small></button>';
+    }
+    chrome('Chương ' + (chapterIndex + 1), '<h2 id="quiz-title">' + title + '</h2><div class="q-chapters">' + chunks + '</div>' +
+      '<button class="q-secondary q-back" data-action="library">Về thư viện</button>');
+    dialog.scrollTop = 0;
+  }
+
+  function begin(ids) {
+    if (!ids.length) return library();
+    state.run = {ids,index:0,answers:[]}; save(); question();
+  }
+
+  function question() {
+    const run = state.run;
+    const q = road ? road.question : lookup(run.ids[run.index]);
+    const chosen = road ? road.answer : run.answers[run.index];
+    const answered = Number.isInteger(chosen);
+    const matched = chosen === q.correct;
+    const text = road ? 'Quyết định trên đường' : 'Ôn lý thuyết · ' + (run.index + 1) + '/' + run.ids.length;
+    let html = '<div class="q-label">Câu ' + q.id + (critical.has(q.id) ? ' · Điểm liệt' : '') + ' · ' + chapters.find(([a,b]) => q.id >= a && q.id <= b)[2] + '</div>' +
+      '<h2 id="quiz-title">' + escape(q.prompt) + '</h2>';
+    if (q.image) html += '<img class="q-image" src="' + escape(q.image) + '" alt="Hình minh họa của câu ' + q.id + '">';
+    html += '<div class="q-options">' + q.choices.map((choice,i) =>
+      '<button type="button" class="q-option ' + (answered ? i === q.correct ? 'right' : i === chosen ? 'wrong' : '' : '') + '" data-choice="' + i + '" ' + (answered ? 'disabled' : '') + '><b>' + letter(i) + '</b><span>' + escape(choice) + '</span></button>').join('') + '</div>';
+    if (answered) html += '<div class="q-feedback" role="status"><strong>' + (matched ? 'Chính xác' : 'Đáp án đúng là ' + letter(q.correct)) + '</strong>' +
+      (road && road.coaching ? '<p>' + escape(road.coaching) + '</p>' : '') + '</div>' +
+      '<button class="q-primary" data-action="next">' + (road ? 'Tiếp tục lái' : run.index + 1 === run.ids.length ? 'Xem kết quả' : 'Câu tiếp theo') + '</button>';
+    if (!road) html += '<button class="q-secondary q-back" data-action="library">Về thư viện</button>';
+    chrome(text,html);
+    if (answered) dialog.querySelector('[data-action="next"]').focus({preventScroll:false});
+    else {dialog.scrollTop=0;dialog.querySelector('.q-option')?.focus({preventScroll:true});}
+  }
+
+  function summary() {
+    const {ids,answers} = state.run;
+    const missed = ids.filter((id,index) => answers[index] !== lookup(id).correct);
+    chrome('Kết quả lượt ôn','<h2 id="quiz-title">Đúng ' + (ids.length - missed.length) + ' / ' + ids.length + ' câu</h2>' +
+      (missed.length ? '<button class="q-primary" data-action="round-retry">Làm lại ' + missed.length + ' câu sai</button>' : '') +
+      '<button class="q-secondary q-back" data-action="library">Chọn bài tiếp theo</button>');
+    dialog.scrollTop=0;
+  }
+
+  dialog.addEventListener('cancel', e => { if (road) e.preventDefault(); });
+  dialog.addEventListener('submit', e => {
+    e.preventDefault();
+    const q = lookup(dialog.querySelector('#q-number').value);
+    if (q) begin([q.id]);
+  });
+  dialog.addEventListener('click',e => {
+    const button = e.target.closest('button');
+    if (!button || button.disabled) return;
+    const {action,choice,chapter: selected,chunk} = button.dataset;
+    if (choice !== undefined) {
+      const q = road ? road.question : lookup(state.run.ids[state.run.index]);
+      const picked = Number(choice);
+      if (road) road.answer = picked; else state.run.answers[state.run.index] = picked;
+      state.results[q.id] = picked;
+      save(); return question();
+    }
+    if (action === 'next') {
+      if (road) {
+        const result = road.answer === road.question.correct;
+        const resume = road.resume;
+        road = null; dialog.close(); resume(result); return;
+      }
+      state.run.index++; save();
+      return state.run.index < state.run.ids.length ? question() : summary();
+    }
+    if (road) return;
+    if (action === 'close') return dialog.close();
+    if (action === 'library') return library();
+    if (action === 'resume') return question();
+    if (action === 'round-retry') return begin(state.run.ids.filter((id,i) => state.run.answers[i] !== lookup(id).correct));
+    if (action === 'missed') return begin(retry().map(q=>q.id));
+    if (action === 'critical') return begin([...critical]);
+    if (selected !== undefined) {chapterIndex=Number(selected);return chapter();}
+    if (chunk !== undefined) {
+      const first=Number(chunk), last=Math.min(first+9,chapters[chapterIndex][1]);
+      begin(bank().filter(q=>q.id>=first && q.id<=last).map(q=>q.id));
+    }
+  });
+  window.openQuiz = () => {
+    if (road) return;
+    library(); mount(false);
+  };
+  window.openRoadQuestion = (id, coachingText, onContinue) => {
+    const q = lookup(id);
+    if (!q) throw new Error('Không tìm thấy câu ' + id);
+    road = {question:q,coaching:coachingText,resume:onContinue};
+    question(); mount(true);
   };
 })();
