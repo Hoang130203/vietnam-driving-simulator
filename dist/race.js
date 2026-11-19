@@ -41,16 +41,9 @@ async function fitCoupe(parent,paint,isPlayer,name,driver){
  animatedCars.push({model,isPlayer,driver,wheels:['FL','FR','RL','RR'].map(id=>model.getObjectByName('wheel_'+id)),front:['FL','FR'].map(id=>model.getObjectByName('steer_'+id)),rear:finish.get('light_rear')});
 }
 fitCoupe(outer,0xcb331e,true,raceModels[chosenCar],null).then(()=>outer.remove(fallback)).catch(()=>loadSedan().catch(()=>{}));
-const chips=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:0xffc878,size:.085}));
-const positions=new Float32Array(54),velocities=new Float32Array(54);
-chips.geometry.setAttribute('position',new T.BufferAttribute(positions,3));chips.frustumCulled=false;chips.visible=false;scene.add(chips);
-let chipTime=0;
-function scatterChips(){
- chipTime=.55;chips.visible=true;chips.position.set(state.x,at(state.d).y+.65,state.z);
- positions.fill(0);
- for(let i=0;i<velocities.length;i+=3){velocities[i]=(Math.random()-.5)*8;velocities[i+1]=1+Math.random()*4;velocities[i+2]=(Math.random()-.5)*7;}
- chips.geometry.attributes.position.needsUpdate=true;
-}
+const cupBody={model:chosenCar};
+const cupFx=createDrivingFX(T,scene);
+let crashTime=0,crashKind='';
 const rivals = [
   {name:'Bảy Bánh Mì',lane:-3.4,grid:16,pace:29,color:0xcaa14c,asset:'gt-coupe'},
   {name:'Út Giao Hàng',lane:.3,grid:10,pace:27,color:0xf1efdb,asset:'rally-car'},
@@ -74,7 +67,7 @@ for(let i=0;i<12;i++){
  const oncoming=i%3===1,kind=['city-taxi','kei-van','hatchback','motor-scooter'][i%4];
  const path=kind==='city-taxi'?'streetscape/city-taxi.glb':'traffic/'+kind+'.glb';
  if(!civilianAssets.has(path))civilianAssets.set(path,TrafficModels.load.loadAsync(path));
- const npc={d:95+i*174,lane:oncoming?-3.65:(i%2?3.8:2.45),v:oncoming?-13:9+i%4,model:null};roadTraffic.push(npc);
+ const npc={bike:kind==='motor-scooter',d:95+i*174,lane:oncoming?-3.65:(i%2?3.8:2.45),v:oncoming?-13:9+i%4,model:null};roadTraffic.push(npc);
  civilianAssets.get(path).then(({scene:base})=>{
    const mesh=base.clone(true),bounds=new T.Box3().setFromObject(mesh);
    const scale=(kind==='motor-scooter'?1.9:kind==='city-taxi'?4.7:3.95)/(bounds.max.z-bounds.min.z);
@@ -84,28 +77,33 @@ for(let i=0;i<12;i++){
 }
 function placeCivilian(n){
  if(!n.model)return;
- const p=at(n.d,n.lane);n.model.position.set(p.x,p.y,p.z);n.model.rotation.y=-p.h+(n.v>0?Math.PI:0);
+ const p=at(n.d,n.lane+(n.kick||0));n.model.position.set(p.x,p.y,p.z);n.model.rotation.y=-p.h+(n.v>0?Math.PI:0)+(n.twist||0);
  n.model.visible=n.d>0&&n.d<route.finish&&Math.abs(n.d-(state?.d||0))<340;
 }
-let vitality=100,boost=100,lateral=0,grace=0,shake=0,countdown=3,penalty=0,repairs=0,drafting=false;
+let vitality=100,boost=100,grace=0,countdown=3,penalty=0,repairs=0,drafting=false;
 let lastRank=4,resumePhase='drive',checkpoint=0;
 const held=(...codes)=>codes.some(code=>keys.has(code));
 const clockText=seconds=>Math.floor(seconds/60)+':'+(seconds%60).toFixed(1).padStart(4,'0');
 const rank=()=>1+rivals.filter(r=>r.d>state.d||r.finished).length;
 function tellRace(text){message=text;feedbackUntil=state.time+2.4;}
 function setMode(mode){state.mode=mode;document.body.dataset.phase=mode;}
-function positionCar(){
- const p=at(state.d,state.offset);state.x=p.x;state.z=p.z;state.h=p.h+Math.atan2(lateral,Math.max(6,state.v))*.55;
+function parkCup(){
+ const p=at(state.d,state.offset);
+ Object.assign(cupBody,{x:p.x,z:p.z,yaw:p.h});DriveBody.reset(cupBody);syncCup();
+}
+function syncCup(){
+ const b=cupBody;
+ Object.assign(state,roadCoordinates(b.x,b.z,state.d),{x:b.x,z:b.z,h:b.yaw,v:b.speed,steer:b.steer});
 }
 function placeRivals(){
  for(const r of rivals){
-   const p=at(r.d,r.offset);r.car.position.set(p.x,p.y,p.z);r.car.rotation.y=-p.h;
+   const p=at(r.d,r.offset+(r.kick||0));r.car.position.set(p.x,p.y,p.z);r.car.rotation.y=-p.h+(r.twist||0);
  }
 }
 function beginRace(){
  const p=at(0,1.6);
  state={mode:'grid',d:0,x:p.x,z:p.z,h:p.h,offset:1.6,v:0,steer:0,time:0,signal:0};
- inside=false;placeRivals();$('routeName').textContent=route.name;$('progress').max=route.finish;
+ parkCup();cupFx.reset();inside=false;placeRivals();$('routeName').textContent=route.name;$('progress').max=route.finish;
  $('next').href='?route='+(river?'pass':'river');
  requestAnimationFrame(render);
 }
@@ -114,22 +112,39 @@ function startCountdown(){
  setMode('countdown');keys.clear();$('count').textContent='3';driveAudio.cue(false);
 }
 function openPit(kind){
- setMode('pit');state.v=0;lateral=0;keys.clear();repairs++;
+ setMode('pit');state.v=0;keys.clear();repairs++;
  showCupQuestion(kind);
 }
 const showCupQuestion=createPitQuiz($('pit'),()=>{penalty+=3;return 'Chưa ổn! Chú Tư cộng 3 giây tiền công. Thử lại nhé.';},repair);
 function repair(){
  if(state.mode!=='pit')return;
- vitality=100;state.offset=clamp(state.offset,-3.8,3.8);positionCar();
- grace=2;state.v=9;keys.clear();setMode('drive');tellRace('Máy lại giòn. Đi kiếm ổ bánh mì thôi!');
+ vitality=100;state.offset=clamp(state.offset,-3.8,3.8);parkCup();
+ grace=2;keys.clear();setMode('drive');tellRace('Máy lại giòn. Đi kiếm ổ bánh mì thôi!');
 }
-function collision(kind,relative){
- if(grace>0)return;
- const damage=Math.min(100,Math.round(18+2.4*relative));vitality=Math.max(0,vitality-damage);
- shake=.48;grace=1.15;scatterChips();driveAudio.impact(damage/100,kind==='car'?'vehicle':'curb');
+function collision(kind,hit,vx=0,vz=0){
+ const relative=DriveBody.resolve(cupBody,hit,vx,vz,kind==='car');syncCup();
+ if(grace>0||relative<1.3)return;
+ const damage=Math.min(100,Math.round(relative*2.7));vitality=Math.max(0,vitality-damage);
+ const reach=Math.abs(hit.nx*Math.sin(state.h)-hit.nz*Math.cos(state.h))>.65?1.9:.91;
+ cupFx.impact(state.x-hit.nx*reach,state.z-hit.nz*reach,hit.nx,hit.nz,Math.min(1,relative/29),kind,height(state.d));
+ grace=.65;driveAudio.impact(damage/100,kind==='car'?'vehicle':'curb');
  document.body.classList.add('hit');setTimeout(()=>document.body.classList.remove('hit'),270);
- state.v*=.55;lateral*=-.32;
- if(!vitality)openPit(kind);else tellRace('Rầm! Thân xe còn '+vitality+'%.');
+ if(!vitality){crashTime=.65;crashKind=kind;setMode('crash');keys.clear();}
+ else tellRace('Rầm! Thân xe còn '+vitality+'%.');
+}
+function trafficContact(actor,lane,dt){
+ const {d,v,bike}=actor;
+ actor.kick=(actor.kick||0)*Math.exp(-dt*2.1);actor.twist=(actor.twist||0)*Math.exp(-dt*3);
+ if(Math.abs(d-state.d)>6)return;
+ const p=at(d,lane+actor.kick),hit=DriveBody.contact(cupBody,{x:p.x,z:p.z,yaw:p.h-actor.twist},bike?.4:.9,bike?1:2.1);
+ if(!hit)return;
+ const vx=v*Math.sin(p.h),vz=-v*Math.cos(p.h),closing=Math.max(0,(vx-cupBody.vx)*hit.nx+(vz-cupBody.vz)*hit.nz);
+ collision('car',hit,vx,vz);
+ if(closing>1){
+   const side=hit.nx*Math.cos(p.h)+hit.nz*Math.sin(p.h);
+   actor.kick-=side*Math.min(.8,closing*.06);actor.twist+=side*Math.min(.22,closing*.014);
+   actor.v-=Math.sign(v)*Math.min(Math.abs(v)*.35,closing*.4);
+ }
 }
 function finishRace(){
  setMode('done');keys.clear();state.v=0;$('pause').hidden=true;$('touch').hidden=true;
@@ -140,36 +155,36 @@ function finishRace(){
  $('finish').showModal();
 }
 function raceUpdate(dt){
+ if(state.mode==='crash'){DriveBody.settle(cupBody,dt);syncCup();crashTime-=dt;if(crashTime<=0)openPit(crashKind);return;}
  if(state.mode==='countdown'){
    const before=Math.ceil(countdown);countdown-=dt;
    if(Math.ceil(countdown)!==before)driveAudio.cue(countdown<=0);$('count').textContent=countdown>0?Math.ceil(countdown):'';
    if(countdown<=0){setMode('drive');tellRace('Bánh nóng ra lò!');}return;
  }
  if(state.mode!=='drive')return;
- const s=state;s.time+=dt;grace=Math.max(0,grace-dt);shake=Math.max(0,shake-dt);
+ const s=state;s.time+=dt;grace=Math.max(0,grace-dt);
  const gas=held('w','arrowup'),brake=held('s','arrowdown',' ');
  const nitro=held('shift')&&boost>1&&!brake,setup=setups[chosenCar];
  drafting=s.v>12&&rivals.some(r=>r.d>s.d+4&&r.d<s.d+26&&Math.abs(s.offset-r.offset)<1.5);
  boost=clamp(boost+(nitro?-27:held('shift')?0:drafting?18:7)*dt,0,100);
- const accel=(gas?setup.power:0)+(drafting&&gas?1.6:0)+(nitro?13:0)-(brake?16:0)-.7-.0034*s.v*s.v;
- s.v=clamp(s.v+accel*dt,0,nitro?setup.top+9:Math.max(setup.top,s.v-.9*dt));
  const steer=Number(held('d','arrowright'))-Number(held('a','arrowleft'));
- s.steer+=(steer-s.steer)*(1-Math.exp(-dt*9));
- const curvature=(heading(s.d+2)-heading(s.d))/2;
- const slide=s.steer*Math.min(9,s.v*.34)-curvature*s.v*s.v*setup.grip;
- lateral+=(slide-lateral)*(1-Math.exp(-dt*4.5));
- s.offset+=lateral*dt;s.d=Math.min(route.finish,s.d+s.v*dt);positionCar();
- if(Math.abs(s.offset)>5.35){
-   s.offset=Math.sign(s.offset)*5.12;positionCar();
-   const kind=Math.abs(curvature)>.001?'curve':height(s.d+3)<height(s.d)-.04?'downhill':'shoulder';
-   collision(kind,Math.max(Math.abs(lateral)*1.8,s.v*.72));if(s.mode!=='drive')return;
+ DriveBody.step(cupBody,{gas,brake:held(' '),reverse:held('s','arrowdown'),steer,boost:nitro,power:setup.power+(drafting?1.6:0),top:setup.top},dt);
+ syncCup();
+ const angle=at(s.d).h,edge=Math.abs(s.offset)-5.35;
+ if(edge>0){
+   const side=-Math.sign(s.offset);
+   collision('shoulder',{nx:side*Math.cos(angle),nz:side*Math.sin(angle),depth:edge});
  }
+ if(s.d===0){
+   const start=at(0),nx=Math.sin(start.h),nz=-Math.cos(start.h);
+   const behind=-((s.x-start.x)*nx+(s.z-start.z)*nz)-8;
+   if(behind>0)collision('shoulder',{nx,nz,depth:behind});
+ }
+ if(s.mode!=='drive')return;
  for(const n of roadTraffic){
    n.d+=n.v*dt;placeCivilian(n);
-   if(n.model&&Math.abs(s.d-n.d)<3.8&&Math.abs(s.offset-n.lane)<1.65){
-     collision('car',Math.abs(s.v-n.v)+4);
-     if(s.mode!=='drive')return;
-   }
+   if(n.d>0&&n.d<route.finish)trafficContact(n,n.lane,dt);
+   if(s.mode!=='drive')return;
  }
  for(const [i,r] of rivals.entries()){
    const curve=Math.abs(heading(r.d+20)-heading(r.d));
@@ -180,11 +195,8 @@ function raceUpdate(dt){
    const target=blocked?Math.max(4,blocked.v*.9):r.pace*(1-.55*curve);
    r.v+=clamp(target-r.v,-11*dt,(5.3+i*.34)*dt);r.d+=r.v*dt;
    if(r.d>=route.finish)r.finished=true;r.d=Math.min(r.d,route.finish+38+i*6);
-   if(Math.abs(r.d-s.d)<3.8&&Math.abs(r.offset-s.offset)<1.65){
-     const delta=s.offset-r.offset;s.offset=clamp(r.offset+(delta<0?-1:1)*1.7,-5.12,5.12);positionCar();
-     collision('car',Math.max(4,Math.abs(r.v-s.v)+Math.abs(lateral)));
-     if(s.mode!=='drive')break;
-   }
+   trafficContact(r,r.offset,dt);
+   if(s.mode!=='drive')break;
  }
  placeRivals();if(s.mode!=='drive')return;
  if(s.d>=route.finish){finishRace();return;}
@@ -193,7 +205,7 @@ function raceUpdate(dt){
  lastRank=rank();
 }
 function raceHud(){
- $('speed').textContent=Math.round(state.v*3.6);$('hp').value=vitality;$('nitro').value=boost;
+ $('speed').textContent=Math.round(Math.abs(state.v)*3.6);$('hp').value=vitality;$('nitro').value=boost;
  $('rank').textContent=rank()+'/4';$('time').textContent=clockText(state.time+penalty);
  $('distance').textContent=Math.round(state.d)+' m';$('progress').value=state.d;
  $('callout').textContent=state.mode==='drive'?(state.time<feedbackUntil?message:drafting?'Núp gió · nạp nitro':''):'';
@@ -205,14 +217,9 @@ function raceCamera(dt,now){
    if(driving)c.wheels.forEach((wheel,i)=>wheel?.rotateX((i%2?-1:1)*v*dt/.344));
    c.front.forEach(joint=>{if(joint)joint.rotation.y=-steer*.36;});
    if(c.rear)c.rear.emissiveIntensity=c.isPlayer&&braking?4:.68;
-   c.model.rotation.z=T.MathUtils.lerp(c.model.rotation.z,steer*Math.min(.033,v*.001),1-Math.exp(-dt*6));
+   c.model.rotation.z=c.isPlayer?-cupBody.roll:0;
    const station=c.isPlayer?state.d:c.driver.d;
-   c.model.rotation.x=Math.atan(height(station+1)-height(station))+(c.isPlayer&&braking&&v>2?.019:0);
- }
- if(chipTime>0&&state.mode!=='paused'){
-   chipTime-=dt;
-   for(let i=0;i<positions.length;i+=3){velocities[i+1]-=dt*9;for(let j=0;j<3;j++)positions[i+j]+=dt*velocities[i+j];}
-   chips.geometry.attributes.position.needsUpdate=true;chips.visible=chipTime>0;
+   c.model.rotation.x=Math.atan(height(station+1)-height(station))-(c.isPlayer?cupBody.pitch:0);
  }
  if(state.mode==='grid'){
    const portrait=camera.aspect<.85;
@@ -221,12 +228,14 @@ function raceCamera(dt,now){
    camera.position.copy(eye);camera.lookAt(look);
  }else if(!inside){
    eye.set(-state.steer*.38,1.85+state.v*.009,6.1+state.v*.021).applyQuaternion(yawQ).add(rig.position);
-   const ahead=at(state.d+10,state.offset);look.set(ahead.x,ahead.y+.84,ahead.z);
+   look.set(0,.84,-10).applyQuaternion(yawQ).add(rig.position);
    camera.position.copy(eye);camera.lookAt(look);
  }
- if(shake>0&&driving)camera.rotateZ(Math.sin(now*.063)*shake*.055);
- const desired=inside?64:state.mode==='grid'?47:57+state.v*.29;
+
+ const desired=inside?64:state.mode==='grid'?47:57+Math.abs(state.v)*.29+(driving&&cupBody.boost?5:0);
  if(Math.abs(camera.fov-desired)>.05){camera.fov+=(desired-camera.fov)*(1-Math.exp(-dt*5));camera.updateProjectionMatrix();}
+ cupBody.y=height(state.d);cupBody.driving=driving;
+ cupFx.update(cupBody,state.mode==='paused'?0:dt,0,0,inside,camera);
 }
 function pauseRace(){
  if(!['drive','countdown'].includes(state.mode))return;

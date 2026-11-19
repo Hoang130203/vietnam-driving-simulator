@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 (() => {
   const widths={motorway:7.3,trunk:6.9,primary:6.1,secondary:5.2,tertiary:4.6,residential:3.4,unclassified:3.4,service:2.8};
   window.worldRoadHalfWidth=kind=>String(kind).endsWith('_link')?3.8:widths[kind]||4.2;
@@ -100,22 +100,58 @@
     const wireMaterial=new T.LineBasicMaterial({color:0x50554d,transparent:true,opacity:.64});
     const temp=new T.Object3D(),tone=new T.Color();
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
+    let obstacleCells=new Map(),waterContact=()=>null;
+    const obstacleKey=(x,z)=>Math.floor(x/15)+','+Math.floor(z/15);
+    function registerObstacle(o){
+      const reach=o.radius||Math.hypot(o.w,o.d);
+      for(let i=Math.floor((o.x-reach-3)/15);i<=Math.floor((o.x+reach+3)/15);i++)
+        for(let j=Math.floor((o.z-reach-3)/15);j<=Math.floor((o.z+reach+3)/15);j++){
+          const key=i+','+j;
+          if(!obstacleCells.has(key))obstacleCells.set(key,[]);
+          obstacleCells.get(key).push(o);
+        }
+    }
+    function contact(x,z,r=.95){
+      const px=x-originX,pz=z-originZ;
+      let hit=null;
+      for(const o of obstacleCells.get(obstacleKey(px,pz))||[]){
+        const dx=px-o.x,dz=pz-o.z;
+        let nx,nz,depth;
+        if(o.radius){
+          const dist=Math.hypot(dx,dz);
+          nx=dist?dx/dist:1;nz=dist?dz/dist:0;depth=r+o.radius-dist;
+        }else{
+          const u=dx*o.fx+dz*o.fz,v=-dx*o.fz+dz*o.fx;
+          let a=u-Math.min(o.w,Math.max(-o.w,u)),b=v-Math.min(o.d,Math.max(-o.d,v));
+          const dist=Math.hypot(a,b);
+          if(dist){depth=r-dist;a/=dist;b/=dist;}
+          else if(o.w-Math.abs(u)<o.d-Math.abs(v)){depth=r+o.w-Math.abs(u);a=u>=0?1:-1;b=0;}
+          else{depth=r+o.d-Math.abs(v);a=0;b=v>=0?1:-1;}
+          nx=a*o.fx-b*o.fz;nz=a*o.fz+b*o.fx;
+        }
+        if(depth>0&&(!hit||depth>hit.depth))hit={nx,nz,depth,kind:o.kind};
+      }
+      return hit||waterContact(px,pz,r);
+    }
     function discardRoads(){
       if(!roadGroup)return;scene.remove(roadGroup);
       roadGroup.traverse(obj=>{if(obj.isInstancedMesh)obj.dispose();else if(obj.geometry)obj.geometry.dispose();});
     }
-    function setRoads(edges,cx,cz,water=[]){
+    function setRoads(edges,cx,cz,water=[],graph=null){
       discardRoads();roadGroup=new T.Group();scene.add(roadGroup);originX=cx;originZ=cz;
       land.material.map.offset.set((cx/2200*430)%1,(-cz/2200*430)%1);land.position.x=land.position.z=0;
-      const segments=[],cells=new Map(),roadData=[],landData=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),occupied=new Set();
+      const segments=[],cells=new Map(),roadData=[],landData=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
+      obstacleCells=new Map();
       const cellSize=32,cutoff=650;
       // A small occupancy mask lets each generated building test its footprint in constant time.
-      const maskSize=352,maskScale=maskSize/(cutoff*2),waterData=[];
+      const maskSize=336,maskScale=.25,waterData=[];
+      // Raster cells are aligned in world metres across render-origin shifts.
+      const maskX=Math.floor((cx-cutoff)/4)*4-cx,maskZ=Math.floor((cz-cutoff)/4)*4-cz;
       let wetMask=null;
       if(water.length){
         const mask=document.createElement('canvas');mask.width=mask.height=maskSize;
         const painter=mask.getContext('2d',{willReadFrequently:true});
-        painter.setTransform(maskScale,0,0,maskScale,maskSize/2,maskSize/2);
+        painter.setTransform(maskScale,0,0,maskScale,-maskX*maskScale,-maskZ*maskScale);
         painter.fillStyle=painter.strokeStyle='#fff';painter.lineJoin=painter.lineCap='round';
         for(const feature of water){
           if(!feature.points||feature.points.length<2)continue;
@@ -159,7 +195,7 @@
         wetMask=painter.getImageData(0,0,maskSize,maskSize).data;
       }
       function wet(x,z){
-        const col=Math.floor((x+cutoff)*maskScale),row=Math.floor((z+cutoff)*maskScale);
+        const col=Math.floor((x-maskX)*maskScale),row=Math.floor((z-maskZ)*maskScale);
         return col>=0&&row>=0&&col<maskSize&&row<maskSize&&wetMask[(row*maskSize+col)*4+3]>100;
       }
       function nearbyCell(x,z){return Math.floor(x/cellSize)+','+Math.floor(z/cellSize);}
@@ -176,6 +212,19 @@
           if(dx*dx+dz*dz<(s.w+r)*(s.w+r))return true;
         }return false;
       }
+      // Bridges cover the water below. Estimate the outward bank normal only on contact.
+      waterContact=(x,z,r)=>{
+        if(!wetMask||!wet(x,z))return null;
+        for(const s of cells.get(nearbyCell(x,z))||[]){
+          const d=Math.max(0,Math.min(s.len,(x-s.ax)*s.fx+(z-s.az)*s.fz));
+          if(Math.hypot(s.ax+d*s.fx-x,s.az+d*s.fz-z)<s.w+.5)return null;
+        }
+        for(let d=1;d<=16;d+=1)for(let i=0;i<16;i++){
+          const nx=Math.cos(i*Math.PI/8),nz=Math.sin(i*Math.PI/8);
+          if(!wet(x+d*nx,z+d*nz))return {nx,nz,depth:d+r,kind:'water'};
+        }
+        return null;
+      };
       function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null){
         if(!batches.has(mat))batches.set(mat,{geo,poses:[],colors:[]});
         const b=batches.get(mat);temp.position.set(x,y,z);temp.rotation.set(0,yaw,0);temp.scale.set(sx,sy,sz);temp.updateMatrix();
@@ -196,10 +245,11 @@
           const fx=dx/length,fz=dz/length,nx=-fz,nz=fx;
           const near=Math.max(0,Math.min(length,-ax*fx-az*fz)),perp=Math.hypot(ax+near*fx,az+near*fz);
           if(perp>cutoff)continue;
-          const lo=Math.max(0,near-cutoff),hi=Math.min(length,near+cutoff);
-          bx=ax+fx*hi;bz=az+fz*hi;ax+=fx*lo;az+=fz*lo;
-          const s={ax,az,bx,bz,fx,fz,nx,nz,len:hi-lo,w:width,kind:e.kind,oneway:e.oneway,rank:perp,
-            seed:Math.floor(Math.abs(a.x*.4951+a.z*.1847+i*17))};
+          const seed=(Math.imul(e.id,2246822519)^Math.imul(i,3266489917))>>>0;
+          const latitude=graph?graph.lat-a.z/graph.my:0;
+          const mx=graph?111320*Math.cos(latitude*Math.PI/180)/graph.mx:1;
+          const sourceLength=Math.hypot(dx*mx,dz);
+          const s={ax,az,bx,bz,fx,fz,nx,nz,len:length,sourceLength,w:width,kind:e.kind,oneway:e.oneway,rank:perp,seed};
           segments.push(s);strip(landData,s,0,s.len,-width-.85,width+.85);strip(roadData,s,0,s.len,-width,width);
           for(const [x,z] of [[ax,az],[bx,bz]]){
             const k=Math.round(x*10)+','+Math.round(z*10);
@@ -216,8 +266,14 @@
       function openNearEnd(s,x,z){
         const node=junctions.get(Math.round(x*10)+','+Math.round(z*10));return node&&node.n>2?node.r+1:.0;
       }
-      segments.sort((a,b)=>a.rank-b.rank);
-      const dense=segments.reduce((total,s)=>s.rank<180?total+s.len:total,0)>2600;
+      // Placements compete only with immediate neighbours by fixed OSM-derived priority.
+      // Reordering visible roads or clipping a distant street cannot cascade into a new layout.
+      function compareCandidate(a,b){return a.priority-b.priority||a.key.localeCompare(b.key);}
+      const plotSize=12;
+      function visitPlots(c,cb){
+        for(let i=Math.floor((c.hx-c.footprint)/plotSize);i<=Math.floor((c.hx+c.footprint)/plotSize);i++)
+          for(let j=Math.floor((c.hz-c.footprint)/plotSize);j<=Math.floor((c.hz+c.footprint)/plotSize);j++)cb(i+','+j);
+      }
       for(const s of segments){
         const start=openNearEnd(s,s.ax,s.az),end=s.len-openNearEnd(s,s.bx,s.bz);
         if(end<=start)continue;
@@ -226,13 +282,14 @@
           for(let u=start+1;u<end;u+=10)strip(s.oneway?white:yellow,s,u,Math.min(end,u+3.7),-.074,.074);
           if(s.w>=6.75)for(let u=start+2;u<end;u+=11)for(const side of [-1,1])strip(white,s,u,Math.min(end,u+3),side*s.w*.49-.065,side*s.w*.49+.065);
         }
-        if(s.rank>380||s.len<3)continue;
+        if(s.rank>620||s.len<3)continue;
         if(s.w>=4.2&&s.len>=24){
           const spacing=s.w>6?31:38;
           let last=null;
           for(let station=9;station<end-4;station+=spacing){
             const px=s.ax+s.fx*station+s.nx*(s.w+1.7),pz=s.az+s.fz*station+s.nz*(s.w+1.7);
             if(blocked(px,pz,.45)){last=null;continue;}
+            registerObstacle({kind:'pole',x:px,z:pz,radius:.12});
             instance('concrete',unitPole,px,3.65,pz,.17,7.3,.17);
             const rot=Math.atan2(s.nx,s.nz);
             if(s.w>6){
@@ -250,27 +307,37 @@
             }last={x:px,z:pz};
           }
         }
-        let seed=s.seed||1;
-        const random=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};
-        const step=dense?13:23;
-        let d=(s.seed%step)+2;
-        if(d>s.len&&s.len>5)d=s.len*.52;
-        for(;d<s.len;d+=step){
-          const x=s.ax+s.fx*d,z=s.az+s.fz*d;
-          if(Math.hypot(x,z)>420)continue;
+        const dense=['residential','living_street','secondary','tertiary'].includes(s.kind);
+        const step=dense?14:23;
+        let first=(s.seed%step)+2;
+        if(first>s.sourceLength&&s.sourceLength>5)first=s.sourceLength*.52;
+        for(let station=first,index=0;station<s.sourceLength;station+=step,index++){
+          const d=station*s.len/s.sourceLength,x=s.ax+s.fx*d,z=s.az+s.fz*d;
+          if(Math.hypot(x,z)>620)continue;
           for(const sign of [-1,1]){
-            const house=random()<(dense?.73:.34),type=Math.floor(random()*shopTypes.length);
+            let seed=(s.seed^Math.imul(1+2*index+(sign>0?1:0),1597334677))>>>0;
+            const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+            const priority=random(),house=random()<(dense?.73:.34),type=Math.floor(random()*shopTypes.length);
             const width=4.5+random()*2.9,depth=5+random()*3.9;
             const dist=s.w+(house?3.5+depth/2:3)+random()*(house?3:5);
-            const hx=x+sign*s.nx*dist,hz=z+sign*s.nz*dist;
-            const footprint=house?Math.hypot(width,depth)/2+.8:1.7;
+            const hx=x+sign*s.nx*dist,hz=z+sign*s.nz*dist,footprint=house?Math.hypot(width,depth)/2+.8:1.7;
             if(blocked(hx,hz,footprint))continue;
-            const cellsTaken=[];
-            for(let gx=Math.floor((hx-footprint)/6);gx<=Math.floor((hx+footprint)/6);gx++)
-              for(let gz=Math.floor((hz-footprint)/6);gz<=Math.floor((hz+footprint)/6);gz++)cellsTaken.push(gx+','+gz);
-            if(cellsTaken.some(key=>occupied.has(key)))continue;
-            cellsTaken.forEach(key=>occupied.add(key));
+            const c={key:s.seed+':'+index+':'+sign,priority,s,sign,hx,hz,footprint,house,width,depth,type,random};
+            candidates.push(c);
+            visitPlots(c,k=>{if(!rivals.has(k))rivals.set(k,[]);rivals.get(k).push(c);});
+          }
+        }
+      }
+      for(const c of candidates){
+        let obscured=false;
+        visitPlots(c,k=>{
+          if(obscured)return;
+          obscured=rivals.get(k).some(o=>o!==c&&compareCandidate(o,c)<0&&Math.hypot(c.hx-o.hx,c.hz-o.hz)<c.footprint+o.footprint);
+        });
+        if(obscured)continue;
+        const {house,s,sign,hx,hz,width,depth,type,random}=c;
             if(house){
+              registerObstacle({kind:'building',x:hx,z:hz,fx:s.fx,fz:s.fz,w:width/2,d:depth/2});
               const h=(shopTypes[type][3]?6.7:3.65)+random()*.62;
               // Local +Z faces the road, with the façade just outside the wall.
               const sx=-s.nx*sign,sz=-s.nz*sign,rot=Math.atan2(sx,sz);
@@ -290,18 +357,17 @@
               instance('concrete',unitPole,hx+sx*porch+s.fx*width*.45,1.32,hz+sz*porch+s.fz*width*.45,.09,2.62,.09);
               if(type%3===0)instance('steel',unitPole,hx,h+.65,hz,1.2,1.0,1.2);
             }else{
+              registerObstacle({kind:'tree',x:hx,z:hz,radius:.27});
               const palm=random()<.26,height=(palm?7.5:5)+random()*5,w=height*(palm?.59:.92),r=random()*Math.PI;
               for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle);}
             }
-          }
-        }
       }
       function surface(data,mat,y,freq){
         if(!data.length)return;
         const verts=new Float32Array(data.length*1.5),uv=new Float32Array(data.length),normals=new Float32Array(verts.length);
         for(let i=0,j=0;i<data.length;i+=2,j+=3){
           verts[j]=data[i];verts[j+1]=y;verts[j+2]=data[i+1];normals[j+1]=1;
-          uv[i]=(data[i]+cx%1024)*freq;uv[i+1]=(data[i+1]+cz%1024)*freq;
+          uv[i]=data[i]*freq+(cx*freq)%1;uv[i+1]=data[i+1]*freq+(cz*freq)%1;
         }
         const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(verts,3));g.setAttribute('normal',new T.BufferAttribute(normals,3));g.setAttribute('uv',new T.BufferAttribute(uv,2));
         const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;roadGroup.add(mesh);
@@ -322,10 +388,10 @@
     const assetPaths={supercar:'streetscape/race-car.glb',gt:'streetscape/gt-coupe.glb',rally:'streetscape/rally-car.glb',sedan:'traffic/hatchback.glb',van:'traffic/kei-van.glb',scooter:'traffic/motor-scooter.glb',taxi:'streetscape/city-taxi.glb',rival:'streetscape/gt-coupe.glb'};
     const lengths={supercar:4.6,gt:4.65,rally:4.25,sedan:3.95,van:4.05,scooter:1.84,taxi:4.52,rival:4.65};
     const cache=new Map(),colors=[0x446370,0x9f553e,0x9aaba9,0x384c67,0xa7a39c,0x99864e];
-    const contact=document.createElement('canvas');contact.width=contact.height=64;
-    const ctx=contact.getContext('2d'),grad=ctx.createRadialGradient(32,32,9,32,32,31);
+    const contactTexture=document.createElement('canvas');contactTexture.width=contactTexture.height=64;
+    const ctx=contactTexture.getContext('2d'),grad=ctx.createRadialGradient(32,32,9,32,32,31);
     grad.addColorStop(0,'rgba(10,13,15,.75)');grad.addColorStop(1,'rgba(10,13,15,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
-    const contactMat=new T.MeshBasicMaterial({map:new T.CanvasTexture(contact),transparent:true,depthWrite:false});
+    const contactMat=new T.MeshBasicMaterial({map:new T.CanvasTexture(contactTexture),transparent:true,depthWrite:false});
     const fallbackMats=colors.map(c=>new T.MeshStandardMaterial({color:c,metalness:.5,roughness:.28}));
     const tires=basic(0x212323),windows=new T.MeshStandardMaterial({color:0x35494e,metalness:.48,roughness:.17}),lamps=new T.MeshBasicMaterial({color:0xa83227});
     function loadModel(kind){
@@ -437,6 +503,7 @@
         if(item.light)item.light.emissiveIntensity=car.brake?3.5:.55;
       }
     }
+    const driveFx=createDrivingFX(T,scene);
     function render(car,traffic,dt,inside=false){
       if(!car||!Number.isFinite(car.x)||!Number.isFinite(car.z))return;
       resize();dt=Math.max(0,Math.min(.12,dt||0));version++;totalDriven+=Math.abs(car.speed||0)*dt;
@@ -447,7 +514,9 @@
         if(player)player.root.visible=false;
         if(!players.has(kind))players.set(kind,makeVehicle(kind,0,true));player=players.get(kind);player.request();player.root.visible=true;
       }
-      pose(player,car,dt,true);player.outside.visible=!inside;playerRig.position.set(x,.011,z);playerRig.rotation.y=-car.yaw;
+      pose(player,car,dt,true);player.outside.visible=!inside;
+      player.outside.rotation.set(-(car.pitch||0),0,-(car.roll||0));
+      playerRig.position.set(x,.011,z);playerRig.rotation.y=-car.yaw;
       mirrorRotation.setFromAxisAngle(up,-car.yaw);
       cabinCourse.finish=Math.ceil(totalDriven);cabinCourse.name=car.roadName||'Việt Nam';
       if(cabin)cabin.update(inside,Math.abs(car.speed||0)*3.6,car.steer||0,totalDriven,cabinCourse);
@@ -479,13 +548,14 @@
       }
       eye.applyQuaternion(mirrorRotation).add(playerRig.position);look.applyQuaternion(mirrorRotation).add(playerRig.position);
       camera.position.copy(eye);camera.lookAt(look);
-      const fov=inside?64:car.showroom?47:57+Math.min(15,speed*.28);
+      const fov=(inside?64:car.showroom?47:57+Math.min(15,speed*.28))+(car.boost?5:0);
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
+      driveFx.update(car,dt,originX,originZ,inside,camera);
       renderer.render(scene,camera);
       if(lastPaint&&now-lastPaint>100&&version%40===0&&renderer.getPixelRatio()>.78)renderer.setPixelRatio(Math.max(.78,renderer.getPixelRatio()*.88));
       lastPaint=now;
     }
-    return {setRoads,render,resize};
+    return {setRoads,render,resize,contact,impact:driveFx.impact,resetFx:driveFx.reset};
   };
 })();

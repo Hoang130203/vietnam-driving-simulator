@@ -428,7 +428,7 @@ function render(now){
  if(slowFrames>=18&&renderer.getPixelRatio()>.75){
    renderer.setPixelRatio(Math.max(.75,renderer.getPixelRatio()*.83));slowFrames=0;
  }
- if(arcade)raceUpdate(dt);else update(dt);
+ if(arcade){const steps=Math.max(1,Math.ceil(dt*90));for(let i=0;i<steps;i++)raceUpdate(dt/steps);}else update(dt);
  const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
  if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
  rig.position.set(s.x,ground.y,s.z);rig.rotation.y=-s.h;yawQ.setFromAxisAngle(axisY,-s.h);
@@ -442,7 +442,7 @@ function render(now){
  for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.y=-p.h;}
  ripples.offset.x=(now*.000009)%1;
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);renderer.render(scene,camera);
- driveAudio.update({speed:s.v*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':arcade&&['grid','countdown'].includes(s.mode)?'idling':'ready'});
+ driveAudio.update({boost:arcade&&cupBody.driving&&cupBody.boost,slip:arcade?cupBody.slip:0,speed:Math.abs(s.v)*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':arcade&&['grid','countdown'].includes(s.mode)?'idling':'ready'});
  if(now-lastHud>90){if(arcade)raceHud();else hud();mapDraw();lastHud=now;}requestAnimationFrame(render);
 }
 $('sound').textContent=sound?'Tắt âm':'Bật âm';

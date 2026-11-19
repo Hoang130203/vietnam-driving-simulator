@@ -76,9 +76,9 @@ class VietnamRoads {
        for(const e of this.buckets.get(a+','+b)||[])unique.add(e);
    return [...unique];
  }
- nearest(x,z){
+ nearest(x,z,candidates=this.edges.values()){
    let best=null;
-   for(const edge of this.edges.values()){
+   for(const edge of candidates){
      for(let i=1;i<edge.points.length;i++){
        const a=edge.points[i-1],b=edge.points[i],vx=b.x-a.x,vz=b.z-a.z;
        const f=Math.max(0,Math.min(1,((x-a.x)*vx+(z-a.z)*vz)/(vx*vx+vz*vz)));

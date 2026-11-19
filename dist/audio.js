@@ -7,6 +7,7 @@
   try { enabled=localStorage.getItem(preference)!=='1'; } catch {}
   let nextTick = 0;
   let lowTick = false;
+  let boosting = false;
 
   function makeCabin(ctx) {
     const output = ctx.createGain();
@@ -43,9 +44,21 @@
     const roadGain = ctx.createGain();
     roadGain.gain.value = 0;
     road.connect(tire).connect(roadGain).connect(output);
+    const rush = ctx.createBiquadFilter();
+    rush.type = 'highpass';
+    rush.Q.value = .55;
+    const rushGain = ctx.createGain();
+    rushGain.gain.value = 0;
+    road.connect(rush).connect(rushGain).connect(output);
+    const scrub = ctx.createOscillator();
+    scrub.type = 'triangle';
+    const scrubGain = ctx.createGain();
+    scrubGain.gain.value = 0;
+    scrub.connect(scrubGain).connect(output);
+    scrub.start();
     road.start();
 
-    return { ctx, output, engine, engineGain, intake, roadGain, tire };
+    return { ctx, output, engine, engineGain, intake, roadGain, tire, rush, rushGain, scrub, scrubGain };
   }
 
   function tone(frequency, endFrequency, length, volume, offset = 0, shape = 'sine') {
@@ -87,19 +100,29 @@
     if(enabled&&sound?.ctx.state!=='running')unlock();
   },{capture:true});
 
-  function update({ speed, throttle, braking, signal, mode }) {
+  function update({ speed, throttle, braking, signal, mode, boost=false, slip=0, offroad=false }) {
     if (!enabled || sound?.ctx.state !== 'running') return;
-    const { ctx, engine, engineGain, intake, roadGain, tire } = sound;
+    const { ctx, engine, engineGain, intake, roadGain, tire, rush, rushGain, scrub, scrubGain } = sound;
     const now = ctx.currentTime;
     const driving = mode === 'driving';
     const velocity = Math.max(0, Math.min(190, speed || 0));
     const load = driving && throttle && !braking ? 1 : 0;
+    const onBoost = Boolean(driving && boost);
+    const speedFraction = velocity / 190;
+    const skid = driving && !offroad ? Math.max(0, Math.min(1, slip)) * Math.min(1, velocity / 24) : 0;
+    if (onBoost && !boosting) tone(220, 790, .24, .042, 0, 'triangle');
+    if (driving && boosting && !onBoost) tone(650, 110, .19, .037, 0, 'triangle');
+    boosting = onBoost;
+    rush.frequency.setTargetAtTime(onBoost ? 1450 : 450 + 700 * speedFraction, now, .11);
+    rushGain.gain.setTargetAtTime(driving ? .61 * speedFraction ** 2 + (onBoost ? .94 : 0) : 0, now, .09);
+    scrub.frequency.setTargetAtTime(520 + 315 * skid + Math.sin(now * 32) * 26, now, .04);
+    scrubGain.gain.setTargetAtTime(skid ** 1.6 * .09, now, .05);
     const kmhPerThousandRpm = velocity < 19 ? 8.4 : velocity < 37 ? 14 : velocity < 58 ? 22 : 30;
     const rpm = Math.max(760, velocity / kmhPerThousandRpm * 1000) + load * 260;
     engine.frequency.setTargetAtTime(rpm / 30 + Math.sin(now * 6.8) * .26, now, .12);
-    intake.frequency.setTargetAtTime(145 + rpm * .067 + load * 145, now, .12);
+    intake.frequency.setTargetAtTime(145 + rpm * .067 + load * 145 + (onBoost ? 240 : 0), now, .12);
     engineGain.gain.setTargetAtTime(driving ? .068 + load * .038 : mode==='idling' ? .038 : 0, now, .14);
-    tire.frequency.setTargetAtTime(260 + velocity * 8, now, .16);
+    tire.frequency.setTargetAtTime(offroad ? 230 + velocity * 2 : 260 + velocity * 8, now, .16);
     roadGain.gain.setTargetAtTime(driving ? velocity / 170 + (braking ? velocity / 340 : 0) : 0, now, .16);
     if (!driving || !signal) {
       nextTick = 0;
@@ -121,8 +144,15 @@
   }
   function impact(strength,type) {
     if (!enabled || sound?.ctx.state !== 'running') return;
-    tone(94,28,.24,.20+strength*.28);
+    strength=Math.min(1,Math.max(0,strength||0));
+    if(!strength)return;
+    tone(94,28,.14+strength*.15,.07+strength*.37);
     if(type==='person')return;
+    if((type==='vehicle'||type==='car')&&strength>.4){
+      tone(117,63,.17,.025+strength*.065,.06,'triangle');
+      tone(1830,1270,.055,.012+strength*.023,.11);
+      tone(1260,940,.046,.008+strength*.018,.18);
+    }
     const {ctx,output}=sound, source=ctx.createBufferSource(), filter=ctx.createBiquadFilter(), gain=ctx.createGain();
     const duration=.12+strength*.28;
     const buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*duration),ctx.sampleRate);

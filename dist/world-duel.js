@@ -40,9 +40,18 @@ class RollingDuel {
    const c=this.at(this.opponent),lane=Math.min(worldRoadHalfWidth(c.edge.kind)*.48,2.2);
    Object.assign(this.actor,this.graph.sample(c,lane),{speed:this.speed});
  }
- move(want,dt,traffic){
+ move(cursor,traveled,dt,traffic){
    this.ensure(Math.max(this.player,this.opponent)+150);
-   const start=this.player;this.player=Math.min(this.length,this.player+want);
+   const start=this.player;
+   let nearest=null;
+   for(const entry of this.path){
+     if(entry.edge.id!==cursor.edge.id||cursor.error>(worldRoadHalfWidth(entry.edge.kind)+1)**2)continue;
+     const progress=entry.from+(cursor.s-entry.s)*entry.dir;
+     if(progress<entry.from-.2||progress>entry.to+.2||Math.abs(progress-start)>35)continue;
+     if(nearest===null||Math.abs(progress-start)<Math.abs(nearest-start))nearest=progress;
+   }
+   this.offCourse=nearest===null;
+   if(nearest!==null)this.player=Math.max(0,start+clamp(nearest-start,-traveled*1.3,traveled*1.3));
    const current=this.at(this.opponent),a=this.graph.sample(current),b=this.graph.sample(this.at(this.opponent+18));
    const bend=Math.abs(Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw)));
    const gap=this.opponent-this.player;let target=clamp(21-gap*.075,13,29)*Math.max(.43,1-bend*.39);
@@ -52,6 +61,7 @@ class RollingDuel {
      if(front>0&&front<12&&Math.abs(x*fz-z*fx)<1.7)target=Math.min(target,Math.max(2,n.speed+(front-6)*.6));
    }
    this.speed+=clamp(target-this.speed,-11*dt,5.8*dt);
+   if(this.opponent-this.player>125)this.speed=Math.max(0,this.speed-14*dt);
    this.opponent=Math.min(this.length,this.opponent+this.speed*dt);this.pose();
    while(this.path.length>2&&this.path[0].to<Math.min(this.player,this.opponent)-40)this.path.shift();
    return this.player-start;
