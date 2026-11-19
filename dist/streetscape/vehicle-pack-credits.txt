@@ -1,0 +1,17 @@
+Classic GT coupe, rally hatch and urban taxi by tevy, CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+gt-coupe.glb: Classic Coupe, version 1, LOD1
+https://tevy.dev/models/classic-coupe/v1/lod1.glb
+
+rally-car.glb: Rally Car, version 1, LOD1
+https://tevy.dev/models/rally-car/v1/lod1.glb
+
+city-taxi.glb: City Taxi, version 1, LOD1
+https://tevy.dev/models/city-taxi/v1/lod1.glb
+
+Meshes decoded from Meshopt and textures transcoded for baseline glTF loading.
+Window transmission changed to tinted alpha blending. Wheel and steering pivots
+retain the original articulated hierarchy. Paint and tail light material names
+were normalized for game control.
+City taxi body repainted in golden yellow.

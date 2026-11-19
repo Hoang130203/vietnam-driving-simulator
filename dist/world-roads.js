@@ -1,0 +1,148 @@
+﻿'use strict';
+async function fetchMapTile(url){
+ const response=await fetch(url);
+ if(!response.ok)throw Error('Không tải được vùng bản đồ.');
+ const bytes=new Uint8Array(await response.arrayBuffer());
+ if(bytes[0]!==31)return JSON.parse(new TextDecoder().decode(bytes));
+ return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
+}
+// Keep only the tiles around the current drive. OSM node IDs, rather than coordinates,
+// connect edges so an overpass does not accidentally become a turn.
+class VietnamRoads {
+ constructor(index,lon,lat){
+   this.available=new Set(index.tiles);this.splits=index.splits||{};this.subtiles=new Set(index.subtiles||[]);
+   this.remote=index.tileBase;this.local=new Set(index.localTiles||[]);this.lon=lon;this.lat=lat;
+   this.mx=111320*Math.cos(lat*Math.PI/180);this.my=110900;
+   this.cache=new Map();this.edges=new Map();this.nodes=new Map();this.buckets=new Map();
+   this.stamp=0;
+ }
+ point(lon,lat){return {x:(lon-this.lon)*this.mx,z:(this.lat-lat)*this.my};}
+ geo(x,z){return [this.lon+x/this.mx,this.lat-z/this.my];}
+ async tile(key){
+   if(!this.cache.has(key)){
+     const pending=(async()=>{
+       const base=this.remote&&!this.local.has(key)?this.remote:'vn-roads/';
+       return fetchMapTile(base+key+'.gz');
+     })().catch(e=>{this.cache.delete(key);throw e;});
+     this.cache.set(key,pending);
+   }return this.cache.get(key);
+ }
+ async load(x,z,wide=false){
+   const [lon,lat]=this.geo(x,z),r=wide?.13:.022,keys=[];
+   for(let a=Math.floor((lon-r)*4);a<=Math.floor((lon+r)*4);a++)
+     for(let b=Math.floor((lat-r)*4);b<=Math.floor((lat+r)*4);b++){
+       const key=a+'_'+b;if(!this.available.has(key))continue;
+       const split=this.splits[key];
+       if(!split){keys.push(key);continue;}
+       for(let i=Math.max(0,Math.floor(((lon-r)*4-a)*split));i<=Math.min(split-1,Math.floor(((lon+r)*4-a)*split));i++)
+         for(let j=Math.max(0,Math.floor(((lat-r)*4-b)*split));j<=Math.min(split-1,Math.floor(((lat+r)*4-b)*split));j++){
+           const part=key+'_'+i+'_'+j;if(this.subtiles.has(part))keys.push(part);
+         }
+     }
+   const signature=keys.join(',');if(this.signature===signature)return;
+   const stamp=++this.stamp,tiles=await Promise.all(keys.map(k=>this.tile(k)));
+   if(stamp!==this.stamp)return;
+   const fresh=new Map(),nodes=new Map(),buckets=new Map();
+   for(const rows of tiles)for(const row of rows){
+     const [id,start,end,name,kind,oneway,coords]=row;if(fresh.has(id))continue;
+     let edge=this.edges.get(id);
+     if(!edge){
+       const points=[],dist=[];let length=0;
+       for(let i=0;i<coords.length;i+=2){
+         const p=this.point(coords[i]/100000,coords[i+1]/100000),last=points.at(-1);
+         if(last){const d=Math.hypot(last.x-p.x,last.z-p.z);if(d<.1)continue;length+=d;}
+         points.push(p);dist.push(length);
+       }
+       if(length<.5)continue;
+       edge={id,start,end,name,kind,oneway:Boolean(oneway),points,dist,length};
+     }
+     fresh.set(id,edge);
+     for(const n of new Set([start,end])){if(!nodes.has(n))nodes.set(n,[]);nodes.get(n).push(edge);}
+     // Sample a long straight segment too, so the spatial index covers its middle.
+     const cells=new Set();
+     for(let i=1;i<edge.points.length;i++){
+       const a=edge.points[i-1],b=edge.points[i],count=Math.ceil((edge.dist[i]-edge.dist[i-1])/120);
+       for(let j=0;j<=count;j++){const f=j/count;cells.add(Math.floor((a.x+(b.x-a.x)*f)/300)+','+Math.floor((a.z+(b.z-a.z)*f)/300));}
+     }
+     for(const k of cells){if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(edge);}
+   }
+   this.edges=fresh;this.nodes=nodes;this.buckets=buckets;this.signature=signature;
+   for(const k of this.cache.keys())if(!keys.includes(k))this.cache.delete(k);
+ }
+ nearby(x,z,r){
+   const unique=new Set();
+   for(let a=Math.floor((x-r)/300);a<=Math.floor((x+r)/300);a++)
+     for(let b=Math.floor((z-r)/300);b<=Math.floor((z+r)/300);b++)
+       for(const e of this.buckets.get(a+','+b)||[])unique.add(e);
+   return [...unique];
+ }
+ nearest(x,z){
+   let best=null;
+   for(const edge of this.edges.values()){
+     for(let i=1;i<edge.points.length;i++){
+       const a=edge.points[i-1],b=edge.points[i],vx=b.x-a.x,vz=b.z-a.z;
+       const f=Math.max(0,Math.min(1,((x-a.x)*vx+(z-a.z)*vz)/(vx*vx+vz*vz)));
+       const error=(a.x+vx*f-x)**2+(a.z+vz*f-z)**2;
+       if(!best||error<best.error)best={edge,s:edge.dist[i-1]+f*(edge.dist[i]-edge.dist[i-1]),dir:1,error};
+     }
+   }return best;
+ }
+ sample(c,lane=0){
+   const {edge,s,dir}=c,d=Math.max(0,Math.min(s,edge.length));
+   let lo=0,hi=edge.dist.length-1;
+   while(hi-lo>1){const m=(hi+lo)>>1;if(edge.dist[m]<=d)lo=m;else hi=m;}
+   const a=edge.points[lo],b=edge.points[hi],f=(d-edge.dist[lo])/(edge.dist[hi]-edge.dist[lo]);
+   const yaw=Math.atan2((b.x-a.x)*dir,(a.z-b.z)*dir);
+   return {x:a.x+(b.x-a.x)*f+Math.cos(yaw)*lane,z:a.z+(b.z-a.z)*f+Math.sin(yaw)*lane,yaw};
+ }
+ options(c){
+   const node=c.dir>0?c.edge.end:c.edge.start,base=this.sample({...c,s:c.dir>0?c.edge.length:0}).yaw,list=[];
+   for(const edge of this.nodes.get(node)||[])for(const dir of [1,-1]){
+     if(dir<0&&edge.oneway||edge.id===c.edge.id&&dir===-c.dir)continue;
+     if((dir>0?edge.start:edge.end)!==node)continue;
+     const next={edge,dir,s:dir>0?0:edge.length};
+     const turn=this.sample(next).yaw-base;
+     list.push({...next,angle:Math.atan2(Math.sin(turn),Math.cos(turn))});
+   }
+   return list.sort((a,b)=>Math.abs(a.angle)-Math.abs(b.angle));
+ }
+ advance(c,meters,choose){
+   let moved=0;
+   while(meters>0){
+     const left=c.dir>0?c.edge.length-c.s:c.s;
+     const step=Math.min(meters,Math.max(0,left));c.s+=c.dir*step;meters-=step;moved+=step;
+     if(meters<=.00001)break;
+     const options=this.options(c);
+     let next=options.length?choose(options):null;
+     if(!next&&!c.edge.oneway)next={edge:c.edge,s:c.s,dir:-c.dir};
+     if(!next)break;
+     Object.assign(c,{edge:next.edge,dir:next.dir,s:next.s});
+   }return moved;
+ }
+}
+class VietnamWater {
+ constructor(index,roads){this.tiles=new Set(index.tiles);this.cache=new Map();this.roads=roads;this.features=[];this.request=0;}
+ async load(x,z){
+   const [lon,lat]=this.roads.geo(x,z),keys=[];
+   for(let a=Math.floor((lon-.012)*4);a<=Math.floor((lon+.012)*4);a++)
+     for(let b=Math.floor((lat-.012)*4);b<=Math.floor((lat+.012)*4);b++){const k=a+'_'+b;if(this.tiles.has(k))keys.push(k);}
+   const sig=keys.join('/');if(this.signature===sig)return false;
+   const request=++this.request,rows=await Promise.all(keys.map(k=>{
+     if(!this.cache.has(k))this.cache.set(k,fetchMapTile('vn-water/'+k+'.gz').catch(e=>{this.cache.delete(k);throw e;}));
+     return this.cache.get(k);
+   }));
+   if(request!==this.request)return false;
+   const features=[],seen=new Set();
+   for(const tile of rows)for(const [kind,name,coords] of tile){
+     const key=kind+coords.length+':'+coords[0]+','+coords[1]+','+coords[2]+','+coords[3]+','+coords.at(-3);
+     if(seen.has(key))continue;seen.add(key);
+     const points=[];let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
+     for(let i=0;i<coords.length;i+=2){const p=this.roads.point(coords[i]/1e5,coords[i+1]/1e5);points.push(p);x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);z0=Math.min(z0,p.z);z1=Math.max(z1,p.z);}
+     features.push({kind,name,points,x0,z0,x1,z1});
+   }
+   this.features=features;this.signature=sig;
+   for(const k of this.cache.keys())if(!keys.includes(k))this.cache.delete(k);
+   return true;
+ }
+ nearby(x,z){return this.features.filter(f=>f.x1>x-720&&f.x0<x+720&&f.z1>z-720&&f.z0<z+720);}
+}
