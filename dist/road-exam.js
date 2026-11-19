@@ -1,6 +1,7 @@
 'use strict';
 const T=THREE, $=id=>document.getElementById(id), clamp=T.MathUtils.clamp;
 const query=new URLSearchParams(location.search);
+const arcade=document.body.classList.contains('arcade');
 const exam=query.get('mode')==='exam';
 const routes={
   river:{id:'river',name:'Tuyến ven sông',finish:2240,crossing:820,bridge:[665,825],near:'Cầu Bến Lau',turn:'Ngã ba bến chợ',junction:1450,sign:1,
@@ -193,16 +194,28 @@ for(const side of [-1,1]){
   const angle=junction.h+side*Math.PI/2;
   scatter('box',0x757670,junction.x+Math.sin(angle)*29,junction.y-.09,junction.z-Math.cos(angle)*29,8,.16,64,-angle);
 }
-function board(d,l,text,bg='#235642',w=5){
+function board(d,l,text,bg='#235642',w=5,mount=3){
   const p=at(d,l),c=document.createElement('canvas');c.width=768;c.height=192;const g=c.getContext('2d');
   g.fillStyle=bg;g.fillRect(0,0,c.width,c.height);g.strokeStyle='#fff5cb';g.lineWidth=7;g.strokeRect(7,7,754,178);
   g.fillStyle='#fff';g.font='bold 76px Arial';g.textAlign='center';g.fillText(text,384,124,725);
   const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
-  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,p.y+3,p.z);face.rotation.y=-p.h;scene.add(face);
-  beside(d,l,'pole',0x797c74,.12,3,.12);
+  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,p.y+mount,p.z);face.rotation.y=-p.h;scene.add(face);
+  if(mount===3)beside(d,l,'pole',0x797c74,.12,3,.12);
 }
 board(36,7,route.name.toLocaleUpperCase('vi'));board(route.bridge[0]-17,7.9,route.near);board(route.junction-42,8,route.sign>0?'BẾN CHỢ  →':'←  NÔNG TRƯỜNG');
-board(route.finish-35,8,'ĐIỂM DỪNG XE','#365c70');board(115,7,'TỐI ĐA 50 km/h','#625b46');
+if(arcade){
+ for(let d=3;d<route.finish;d+=3){
+   if(Math.abs(heading(d+10)-heading(d))<.027 && d>65 && d<route.finish-36)continue;
+   const paint=Math.floor(d/3)%2?0xf5dfbe:0xd94e30;
+   for(const side of [-1,1])beside(d,side*5.94,'box',paint,.48,.075,3.04);
+ }
+ for(const [d,label] of [[36,'XUẤT PHÁT'],[route.finish/2,'NỬA CHẶNG'],[route.finish,'VỀ ĐÍCH']]){
+   for(const side of [-1,1])beside(d,side*6.5,'box',0xff4e24,.5,6,.6);
+   beside(d,0,'box',0x252a36,13.4,1.15,.65,5.45);
+   board(d-.4,0,label,'#bc381c',5.1,6);
+   for(let n=0;n<14;n++)for(let row=0;row<2;row++)beside(d+row*.73,n*.84-5.46,'box',(n+row)%2?0x252630:0xf0efdc,.84,.025,.73,.018);
+ }
+}else{board(route.finish-35,8,'ĐIỂM DỪNG XE','#365c70');board(115,7,'TỐI ĐA 50 km/h','#625b46');}
 for(const b of batches.values()){
  const m=new T.InstancedMesh(geom[b.kind],b.kind==='leaf'?leafMaterial:new T.MeshLambertMaterial({color:b.color}),b.matrices.length);b.matrices.forEach((mat,i)=>m.setMatrixAt(i,mat));scene.add(m);
 }
@@ -216,7 +229,7 @@ const fallback=new T.Mesh(new T.BoxGeometry(1.8,1.1,4),new T.MeshStandardMateria
  model.scale.setScalar(scale);model.rotation.y=Math.PI;model.position.y=-bounds.min.y*scale;outer.clear();outer.add(model);
 })().catch(()=>{});
 const traffic=[];
-for(const [name,first,velocity] of [['hatchback',140,-8],['kei-van',350,-7],['motor-scooter',570,-5]]){
+for(const [name,first,velocity] of arcade?[]:[['hatchback',140,-8],['kei-van',350,-7],['motor-scooter',570,-5]]){
  TrafficModels.load.loadAsync('traffic/'+name+'.glb').then(({scene:model})=>{
    const bounds=new T.Box3().setFromObject(model);model.scale.setScalar((name==='motor-scooter'?1.85:3.8)/(bounds.max.z-bounds.min.z));
    scene.add(model);traffic.push({model,first,velocity,d:first});
@@ -363,6 +376,10 @@ function mapPoint(x,z){return [87+(x-(minX+maxX)/2)*mapScale,60+(z-(minZ+maxZ)/2
 function mapDraw(){
  map.clearRect(0,0,175,121);map.lineWidth=3;map.strokeStyle='#acc58c';map.beginPath();
  for(let i=0;i<points.length;i+=4){const p=mapPoint(points[i].x,points[i].z);if(i)map.lineTo(...p);else map.moveTo(...p);}map.stroke();
+ if(arcade){
+   map.fillStyle='#ff7959';
+   for(const r of rivals){const [x,y]=mapPoint(r.car.position.x,r.car.position.z);map.beginPath();map.arc(x,y,2.5,0,Math.PI*2);map.fill();}
+ }
  const [x,y]=mapPoint(state.x,state.z);map.fillStyle='#ffcc65';map.beginPath();map.arc(x,y,4,0,Math.PI*2);map.fill();
 }
 const yawQ=new T.Quaternion(),axisY=new T.Vector3(0,1,0),eye=new T.Vector3(),look=new T.Vector3();
@@ -376,19 +393,21 @@ const mirrorAdapter={
 let w=0,h=0,lastHud=0;
 function render(now){
  const dt=clamp((now-lastFrame)/1000,0,.1);lastFrame=now;
- update(dt);
+ if(arcade)raceUpdate(dt);else update(dt);
  const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
  if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
  rig.position.set(s.x,ground.y,s.z);rig.rotation.y=-s.h;yawQ.setFromAxisAngle(axisY,-s.h);
  outer.visible=!inside;cabin.update(inside,s.v*3.6,s.steer,s.d,route);
  eye.set(inside?-.31:0,inside?1.10:3.4,inside?.53:7.6).applyQuaternion(yawQ).add(rig.position);
  look.set(inside?-.31:0,inside?.02:.6,inside?-12:-6).applyQuaternion(yawQ).add(rig.position);camera.position.copy(eye);camera.lookAt(look);
+ if(arcade)raceCamera(dt,now);
  for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.y=-p.h;}
  ripples.offset.x=(now*.000009)%1;
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);renderer.render(scene,camera);
  driveAudio.update({speed:s.v*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':'ready'});
- if(now-lastHud>90){hud();mapDraw();lastHud=now;}requestAnimationFrame(render);
+ if(now-lastHud>90){if(arcade)raceHud();else hud();mapDraw();lastHud=now;}requestAnimationFrame(render);
 }
+if(!arcade){
 $('start').onclick=start;$('again').onclick=reset;$('submit').onclick=submit;
 $('camera').onclick=()=>{inside=!inside;$('camera').textContent=inside?'Góc tài xế':'Góc sau xe';};
 $('sound').onclick=()=>{sound=driveAudio.toggle();if(!sound)window.speechSynthesis?.cancel();$('sound').textContent=sound?'Tắt âm':'Bật âm';};
@@ -404,3 +423,4 @@ window.addEventListener('blur',()=>{keys.clear();if(state.mode==='drive')start()
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>action(b.dataset.action));
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);};b.onlostpointercapture=()=>keys.delete(b.dataset.key);});
 reset();requestAnimationFrame(render);
+}
