@@ -1,8 +1,10 @@
-/* Interior sound mix. The audio graph starts only after a user enables sound. */
+/* Unlock the engine mix on a browser-authorized user gesture. */
 (() => {
   'use strict';
   let sound;
-  let enabled = false;
+  const preference='taylai.audio.muted';
+  let enabled = true;
+  try { enabled=localStorage.getItem(preference)!=='1'; } catch {}
   let nextTick = 0;
   let lowTick = false;
 
@@ -47,7 +49,7 @@
   }
 
   function tone(frequency, endFrequency, length, volume, offset = 0, shape = 'sine') {
-    if (!enabled || sound.ctx.state !== 'running') return;
+    if (!enabled || sound?.ctx.state !== 'running') return;
     const { ctx, output } = sound;
     const start = ctx.currentTime + offset;
     const source = ctx.createOscillator();
@@ -64,33 +66,39 @@
     source.onended = () => { source.disconnect(); envelope.disconnect(); };
   }
 
-  function toggle() {
+  function unlock() {
+    if(!enabled)return;
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) return false;
     try {
       if (!sound || sound.ctx.state === 'closed') sound = makeCabin(new Audio());
-      enabled = !enabled;
       const { ctx, output } = sound;
       if (enabled && ctx.state !== 'running') ctx.resume().catch(() => {});
       output.gain.setTargetAtTime(enabled ? .55 : 0, ctx.currentTime, .045);
-    } catch {
-      enabled = false;
-    }
+    } catch {}
+  }
+  function toggle() {
+    enabled=!enabled;
+    try{localStorage.setItem(preference,enabled?'0':'1');}catch{}
+    if(enabled)unlock();else if(sound)sound.output.gain.setTargetAtTime(0,sound.ctx.currentTime,.025);
     return enabled;
   }
+  for(const event of ['pointerdown','keydown','click'])window.addEventListener(event,()=>{
+    if(enabled&&sound?.ctx.state!=='running')unlock();
+  },{capture:true});
 
   function update({ speed, throttle, braking, signal, mode }) {
-    if (!enabled || sound.ctx.state !== 'running') return;
+    if (!enabled || sound?.ctx.state !== 'running') return;
     const { ctx, engine, engineGain, intake, roadGain, tire } = sound;
     const now = ctx.currentTime;
     const driving = mode === 'driving';
-    const velocity = Math.max(0, Math.min(90, speed || 0));
+    const velocity = Math.max(0, Math.min(190, speed || 0));
     const load = driving && throttle && !braking ? 1 : 0;
     const kmhPerThousandRpm = velocity < 19 ? 8.4 : velocity < 37 ? 14 : velocity < 58 ? 22 : 30;
     const rpm = Math.max(760, velocity / kmhPerThousandRpm * 1000) + load * 260;
     engine.frequency.setTargetAtTime(rpm / 30 + Math.sin(now * 6.8) * .26, now, .12);
     intake.frequency.setTargetAtTime(145 + rpm * .067 + load * 145, now, .12);
-    engineGain.gain.setTargetAtTime(driving ? .068 + load * .038 : 0, now, .14);
+    engineGain.gain.setTargetAtTime(driving ? .068 + load * .038 : mode==='idling' ? .038 : 0, now, .14);
     tire.frequency.setTargetAtTime(260 + velocity * 8, now, .16);
     roadGain.gain.setTargetAtTime(driving ? velocity / 170 + (braking ? velocity / 340 : 0) : 0, now, .16);
     if (!driving || !signal) {
@@ -112,7 +120,7 @@
     }
   }
   function impact(strength,type) {
-    if (!enabled || sound.ctx.state !== 'running') return;
+    if (!enabled || sound?.ctx.state !== 'running') return;
     tone(94,28,.24,.20+strength*.28);
     if(type==='person')return;
     const {ctx,output}=sound, source=ctx.createBufferSource(), filter=ctx.createBiquadFilter(), gain=ctx.createGain();
@@ -124,5 +132,5 @@
     gain.gain.value=.4+strength*.45;source.connect(filter).connect(gain).connect(output);source.start();
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
-  window.driveAudio = { toggle, update, cue, impact };
+  window.driveAudio = { toggle, update, cue, impact, get enabled(){return enabled;} };
 })();

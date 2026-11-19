@@ -13,3 +13,9 @@ https://tevy.dev/models/hiker
 https://tevy.dev/models/road-worker
 
 GLTFLoader and SkeletonUtils are from three.js r160, MIT. The license is in ../THREE-LICENSE.txt.
+
+Leafy Grass by Charlotte Baglioni and Brown Mud by Rob Tuytel, Poly Haven, CC0. The diffuse maps were converted to WebP for the roadside grass and earth.
+https://polyhaven.com/a/leafy_grass
+https://polyhaven.com/a/brown_mud
+
+The roadside rain tree and coconut palm are original AI-generated cutout assets, exported as transparent WebP images for the game.

@@ -280,6 +280,7 @@ el('nextCourse').onclick=()=>{el('report').close();selectCourse(courses[(courses
 el('recover').onclick=recover;
 el('reviewDrive').onclick=()=>{el('report').close();openRouteReview(routeQuestions);};
 el('askCoach').onclick=consult;
+el('audio').textContent=driveAudio.enabled?'Âm thanh bật':'Âm thanh tắt';el('audio').setAttribute('aria-pressed',String(driveAudio.enabled));
 el('camera').onclick=camera;el('audio').onclick=toggleSound;el('blinkMobile').onclick=()=>signal('right');el('blinkLeft').onclick=()=>signal('left');el('start').onclick=el('fullStart').onclick=el('mobileStart').onclick=start;
 el('theory').onclick=el('lesson').onclick=()=>{pause();openQuiz();};
 el('driveNav').onclick=()=>el('road').scrollIntoView({block:'center',behavior:'smooth'});

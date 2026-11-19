@@ -10,6 +10,29 @@ function addShadow(parent){
  const mesh=new T.Mesh(new T.PlaneGeometry(3.1,5.6),shadowMaterial);mesh.rotation.x=-Math.PI/2;mesh.position.y=.075;parent.add(mesh);
 }
 addShadow(rig);
+const coupeAsset=TrafficModels.load.loadAsync('streetscape/race-car.glb');
+const animatedCars=[];
+async function fitCoupe(parent,paint,isPlayer){
+ const {scene:template}=await coupeAsset,model=template.clone(true);
+ const finish=new Map();
+ model.traverse(part=>{
+   if(!part.isMesh)return;
+   part.castShadow=true;part.receiveShadow=true;
+   const src=part.material;
+   if(!['paint','light_rear'].includes(src.name))return;
+   if(!finish.has(src.name)){
+     const m=src.clone();
+     if(src.name==='paint'){m.color.set(paint);m.envMapIntensity=1.35;m.clearcoat=1;m.clearcoatRoughness=.11;}
+     else{m.emissive.set(0xff1604);m.emissiveIntensity=.6;}
+     finish.set(src.name,m);
+   }
+   part.material=finish.get(src.name);
+ });
+ model.rotation.y=Math.PI;
+ parent.add(model);
+ animatedCars.push({model,isPlayer,wheels:['FL','FR','RL','RR'].map(id=>model.getObjectByName('wheel_'+id)),front:['FL','FR'].map(id=>model.getObjectByName('steer_'+id)),rear:finish.get('light_rear')});
+}
+fitCoupe(outer,0xcb331e,true).then(()=>outer.remove(fallback)).catch(()=>loadSedan().catch(()=>{}));
 const chips=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:0xffc878,size:.085}));
 const positions=new Float32Array(54),velocities=new Float32Array(54);
 chips.geometry.setAttribute('position',new T.BufferAttribute(positions,3));chips.frustumCulled=false;chips.visible=false;scene.add(chips);
@@ -30,23 +53,32 @@ for(const rival of rivals){
   rival.car=new T.Group();scene.add(rival.car);addShadow(rival.car);
   const shell=new T.Mesh(new T.BoxGeometry(1.78,1.12,3.9),new T.MeshLambertMaterial({color:rival.color}));
   shell.position.y=.7;rival.car.add(shell);
-  TrafficModels.load.loadAsync('traffic/'+rival.asset+'.glb').then(({scene:model})=>{
+  if(rival===rivals[2]){
+    fitCoupe(rival.car,0x427383,false).then(()=>rival.car.remove(shell)).catch(()=>{});
+  }else TrafficModels.load.loadAsync('traffic/'+rival.asset+'.glb').then(({scene:model})=>{
     const bounds=new T.Box3().setFromObject(model),scale=4.05/(bounds.max.z-bounds.min.z);
     model.scale.setScalar(scale);model.rotation.y=Math.PI;model.position.y=-bounds.min.y*scale;
+    model.traverse(n=>{if(n.isMesh){n.castShadow=true;n.receiveShadow=true;}});
     rival.car.remove(shell);rival.car.add(model);
   }).catch(()=>{});
   const label=document.createElement('canvas');label.width=320;label.height=64;
   const ctx=label.getContext('2d');ctx.fillStyle='#202127';ctx.fillRect(0,0,320,64);
   ctx.fillStyle='#ffe079';ctx.font='bold 32px Arial';ctx.textAlign='center';ctx.fillText(rival.name,160,42);
   const tex=new T.CanvasTexture(label);tex.colorSpace=T.SRGBColorSpace;
-  const tag=new T.Sprite(new T.SpriteMaterial({map:tex}));tag.scale.set(2.9,.58,1);tag.position.y=2.55;rival.car.add(tag);
+  const tag=new T.Sprite(new T.SpriteMaterial({map:tex,opacity:.82,transparent:true}));tag.scale.set(1.75,.35,1);tag.position.y=2.35;rival.car.add(tag);
 }
-const questions={
-  car:[162,158,159,160,161],
-  curve:[215,47],
-  shoulder:[44,78,187],
-  downhill:[213,214,223]
-};
+let questionDeck=[];
+function drawQuestion(){
+ if(!questionDeck.length){
+   questionDeck=[...window.driveBank];
+   for(let i=questionDeck.length-1;i>0;i--){
+     const j=Math.floor(Math.random()*(i+1));
+     [questionDeck[i],questionDeck[j]]=[questionDeck[j],questionDeck[i]];
+   }
+   if(questionDeck.at(-1).id===previousQuestion)questionDeck.reverse();
+ }
+ return questionDeck.pop();
+}
 let vitality=100,boost=100,lateral=0,grace=0,shake=0,countdown=3,penalty=0,repairs=0;
 let lastRank=4,previousQuestion=null,answered=false,resumePhase='drive',checkpoint=0;
 const held=(...codes)=>codes.some(code=>keys.has(code));
@@ -71,15 +103,16 @@ function beginRace(){
 }
 function startCountdown(){
  $('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('pause').hidden=false;
- setMode('countdown');keys.clear();$('count').textContent='3';
+ setMode('countdown');keys.clear();$('count').textContent='3';driveAudio.cue(false);
 }
 function openPit(kind){
  setMode('pit');state.v=0;lateral=0;keys.clear();repairs++;
- const pool=questions[kind].filter(id=>id!==previousQuestion);
- const id=pool[Math.floor(Math.random()*pool.length)],q=window.driveBank.find(item=>item.id===id);
- previousQuestion=id;answered=false;
+ const q=drawQuestion();
+ previousQuestion=q.id;answered=false;
+ const diagram=$('pitImage');diagram.hidden=!q.image;
+ if(q.image){diagram.src=q.image;diagram.alt='Hình minh họa câu '+q.id;}else diagram.removeAttribute('src');
  $('remark').textContent=kind==='car'?'Cản sau đâu phải nút bấm còi!':kind==='downhill'?'Đổ đèo, đừng đổ phụ tùng!':kind==='curve'?'Cua trái, cản trước đi thẳng.':'Lề đường vừa xin chữ ký.';
- $('prompt').textContent=q.prompt;$('reply').textContent='Chú Tư đang mở nắp ca-pô. Chọn cách xử lý để chú ráp xe.';$('choices').replaceChildren();$('repair').hidden=true;
+ $('prompt').textContent=q.prompt;$('reply').textContent='Chú Tư đang mở nắp ca-pô. Trả lời câu này để chú ráp xe.';$('choices').replaceChildren();$('repair').hidden=true;
  q.choices.forEach((choice,i)=>{
    const b=document.createElement('button');b.textContent=choice;b.onclick=()=>{
      if(answered)return;
@@ -113,7 +146,8 @@ function finishRace(){
 }
 function raceUpdate(dt){
  if(state.mode==='countdown'){
-   countdown-=dt;$('count').textContent=countdown>0?Math.ceil(countdown):'';
+   const before=Math.ceil(countdown);countdown-=dt;
+   if(Math.ceil(countdown)!==before)driveAudio.cue(countdown<=0);$('count').textContent=countdown>0?Math.ceil(countdown):'';
    if(countdown<=0){setMode('drive');tellRace('Bánh nóng ra lò!');}return;
  }
  if(state.mode!=='drive')return;
@@ -158,17 +192,33 @@ function raceHud(){
  $('callout').textContent=state.mode==='drive'&&state.time<feedbackUntil?message:'';
 }
 function raceCamera(dt,now){
+ const driving=state.mode==='drive',braking=held('s','arrowdown',' ');
+ for(const c of animatedCars){
+   const v=c.isPlayer?state.v:rivals[2].v,steer=c.isPlayer?state.steer:0;
+   if(driving)c.wheels.forEach((wheel,i)=>wheel?.rotateX((i%2?-1:1)*v*dt/.344));
+   c.front.forEach(joint=>{if(joint)joint.rotation.y=-steer*.36;});
+   if(c.rear)c.rear.emissiveIntensity=c.isPlayer&&braking?4:.68;
+   c.model.rotation.z=T.MathUtils.lerp(c.model.rotation.z,steer*Math.min(.033,v*.001),1-Math.exp(-dt*6));
+   const station=c.isPlayer?state.d:rivals[2].d;
+   c.model.rotation.x=Math.atan(height(station+1)-height(station))+(c.isPlayer&&braking&&v>2?.019:0);
+ }
  if(chipTime>0&&state.mode!=='paused'){
    chipTime-=dt;
    for(let i=0;i<positions.length;i+=3){velocities[i+1]-=dt*9;for(let j=0;j<3;j++)positions[i+j]+=dt*velocities[i+j];}
    chips.geometry.attributes.position.needsUpdate=true;chips.visible=chipTime>0;
  }
  if(state.mode==='grid'){
-   eye.set(-4.1,2.25,6.4).applyQuaternion(yawQ).add(rig.position);
-   look.set(-1.75,.84,-.6).applyQuaternion(yawQ).add(rig.position);
+   const portrait=camera.aspect<.85;
+   eye.set(portrait?-5.5:-4.0,portrait?1.85:1.42,portrait?8.4:5.18).applyQuaternion(yawQ).add(rig.position);
+   look.set(portrait?0:-1.28,.77,-.35).applyQuaternion(yawQ).add(rig.position);
    camera.position.copy(eye);camera.lookAt(look);
- }else if(shake>0&&state.mode==='drive')camera.rotateZ(Math.sin(now*.063)*shake*.055);
- const desired=inside?64:60+state.v*.32;
+ }else if(!inside){
+   eye.set(-state.steer*.38,1.85+state.v*.009,6.1+state.v*.021).applyQuaternion(yawQ).add(rig.position);
+   const ahead=at(state.d+10,state.offset);look.set(ahead.x,ahead.y+.84,ahead.z);
+   camera.position.copy(eye);camera.lookAt(look);
+ }
+ if(shake>0&&driving)camera.rotateZ(Math.sin(now*.063)*shake*.055);
+ const desired=inside?64:state.mode==='grid'?47:57+state.v*.29;
  if(Math.abs(camera.fov-desired)>.05){camera.fov+=(desired-camera.fov)*(1-Math.exp(-dt*5));camera.updateProjectionMatrix();}
 }
 function pauseRace(){
