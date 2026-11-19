@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   'use strict';
   const dialog = document.getElementById('quiz');
   const key = 'taylai.csgt2025.study.v1';
@@ -31,11 +31,12 @@
   let chapterIndex = 0;
 
   function mount(compact) {
-    const parent = document.fullscreenElement || document.body;
+    const parent = document.fullscreenElement || (compact ? document.getElementById('console') : document.body);
     if (dialog.parentNode !== parent) parent.append(dialog);
     dialog.classList.toggle('q-road', compact);
     dialog.setAttribute('aria-labelledby','quiz-title');
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) { if (compact) dialog.show(); else dialog.showModal(); }
+    if (compact && !document.fullscreenElement && matchMedia('(max-width:820px)').matches) dialog.scrollIntoView({block:'nearest'});
     dialog.scrollTop = 0;
   }
 
@@ -119,7 +120,7 @@
     if (choice !== undefined) {
       const q = road ? road.question : lookup(state.run.ids[state.run.index]);
       const picked = Number(choice);
-      if (road) road.answer = picked; else state.run.answers[state.run.index] = picked;
+      if (road) { road.answer = picked; window.driveAudio?.cue(picked === q.correct); } else state.run.answers[state.run.index] = picked;
       state.results[q.id] = picked;
       save(); return question();
     }
@@ -145,6 +146,20 @@
       begin(bank().filter(q=>q.id>=first && q.id<=last).map(q=>q.id));
     }
   });
+  document.addEventListener('fullscreenchange', () => {
+    if (road && dialog.open) mount(true);
+  });
+  document.addEventListener('keydown', event => {
+    if (!road || !dialog.open || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+    const index = '1234'.indexOf(event.key);
+    if (index < 0) return;
+    const choice = dialog.querySelector('[data-choice="' + index + '"]:enabled');
+    if (choice) { event.preventDefault(); choice.click(); }
+  });
+  window.openRouteReview = ids => {
+    if(road || !ids.length)return;
+    begin(ids.slice());mount(false);
+  };
   window.openQuiz = () => {
     if (road) return;
     library(); mount(false);

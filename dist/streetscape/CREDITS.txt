@@ -1,3 +1,5 @@
 The asphalt diffuse texture is adapted from Asphalt 04 by Sergej Majboroda and Jenelle van Heerden, Poly Haven, CC0. https://polyhaven.com/a/asphalt_04
 
 The sky panorama is resized from Kloofendal 48d Partly Cloudy (Pure Sky) by Greg Zaal and Jarod Guest, Poly Haven, CC0. https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky
+
+Family Sedan v1 LOD1 by tevy, CC0 1.0. Geometry grouped by material, scaled for the lesson and repainted. https://tevy.dev/models/family-sedan
