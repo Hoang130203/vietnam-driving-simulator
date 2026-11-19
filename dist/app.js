@@ -1,7 +1,7 @@
 'use strict';
 const el = id => document.getElementById(id);
 const clamp = (value,min,max) => Math.min(max,Math.max(min,value));
-const keys = new Set();
+const keys = createDriveInput();
 let course=courses[0], route=[], landmarks=[];
 let leftSignal=false, damage=0, collisions=0;
 const impactLog=[];
@@ -294,9 +294,5 @@ addEventListener('keydown',e=>{
   if(mode==='driving'&&['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d',' '].includes(k)){e.preventDefault();keys.add(k);}
 });
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-document.querySelectorAll('[data-key]').forEach(b=>{
-  b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);};
-  b.onlostpointercapture=()=>keys.delete(b.dataset.key);
-});
 selectCourse('city');
 requestAnimationFrame(frame);

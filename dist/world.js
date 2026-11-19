@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id),clamp=(x,min,max)=>Math.max(min,Math.min(max,x));
-const keySet=new Set(),held=(...names)=>names.some(n=>keySet.has(n));
+const keySet=createDriveInput(),held=(...names)=>names.some(n=>keySet.has(n));
 const featured=[['Hà Nội',105.8521,21.0277],['TP. Hồ Chí Minh',106.6994,10.7743],['Đà Nẵng',108.2204,16.0677],['Hải Phòng',106.6821,20.8587],['Huế',107.5887,16.4645],['Đà Lạt',108.4373,11.9418],['Cần Thơ',105.7831,10.0324],['Cà Mau',105.1507,9.1769],['Hà Giang',104.9844,22.8234],['Phú Quốc',103.959,10.2135]];
 const nameOf=e=>e.name||({motorway:'Đường cao tốc',trunk:'Đường trục chính',primary:'Đường chính',secondary:'Đường liên huyện',tertiary:'Đường địa phương',residential:'Đường dân cư',service:'Đường dịch vụ'}[e.kind]||'Đường địa phương');
 const fmt=d=>(d/1000).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
@@ -53,6 +53,12 @@ async function startAt(place,restore=null){
    if(!nearest||nearest.error>4000**2){await graph.load(start.x,start.z,true);nearest=graph.nearest(start.x,start.z);}
    if(token!==loadToken)return;
    if(!nearest||nearest.error>28000**2)throw Error('Chưa có đường ô tô gần điểm này. Hãy chọn điểm khác trên bản đồ.');
+   const sight=VietnamLandmarks.entries.find(v=>place[0]===v.name+' · '+v.city);
+   car.tourStop=Boolean(sight);
+   if(sight&&!restore&&!nearest.edge.oneway){
+     const target=graph.point(sight.lon,sight.lat),p=graph.sample(nearest);
+     if((target.x-p.x)*Math.sin(p.yaw)-(target.z-p.z)*Math.cos(p.yaw)<0)nearest.dir=-1;
+   }
    if(restore&&restore.edge===nearest.edge.id&&restore.dir===-1&&!nearest.edge.oneway)nearest.dir=-1;
    roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
    car.region=place[2]<10.8?'delta':place[2]>21.6||(place[1]>107&&place[2]>11&&place[2]<15)?'highlands':'city';
@@ -118,7 +124,7 @@ function fillTraffic(){
 function trafficStep(dt){
  for(const n of npcs){
    const dx=car.x-n.x,dz=car.z-n.z,fx=Math.sin(n.yaw),fz=-Math.cos(n.yaw);
-   let target=n.pace;
+   let target=n.recoil?.braking?0:n.pace;
    for(const other of npcs){
      if(other===n)continue;const ox=other.x-n.x,oz=other.z-n.z,long=ox*fx+oz*fz;
      if(long>0&&long<15&&Math.abs(ox*fz-oz*fx)<1.65)target=Math.min(target,Math.max(0,(long-4)*1.3));
@@ -128,9 +134,9 @@ function trafficStep(dt){
    n.speed+=clamp(target-n.speed,-9*dt,2.8*dt);
    const moved=roads.advance(n,n.speed*dt,opts=>opts.length>1&&Math.random()<.24?opts[Math.floor(Math.random()*opts.length)]:opts[0]);
    if(moved<.001)n.stopped+=dt;else n.stopped=0;
-   const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge.kind)*.75));n.kickX=(n.kickX||0)*Math.exp(-dt*2.2);n.kickZ=(n.kickZ||0)*Math.exp(-dt*2.2);
-   n.twist=(n.twist||0)*Math.exp(-dt*3.5);
-   Object.assign(n,pos);n.x+=n.kickX;n.z+=n.kickZ;n.yaw+=n.twist;
+   const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge.kind)*.75));
+   DriveBody.advanceRecoil(n,dt);Object.assign(n,pos);
+   if(n.recoil){n.x+=n.recoil.x;n.z+=n.recoil.z;n.yaw+=n.recoil.angle;}
    const along=(car.x-n.x)*fx+(car.z-n.z)*fz,across=(car.x-n.x)*fz-(car.z-n.z)*fx;
    const parallel=Math.cos(car.yaw-n.yaw)>.88&&Math.abs(across)<9;
    if(parallel&&along< -4&&along> -18)n.armed=true;
@@ -144,10 +150,11 @@ function trafficStep(dt){
 function hitVehicle(n){
  const bike=n.kind==='scooter',hit=DriveBody.contact(car,n,bike?.38:.91,bike?.95:1.98);
  if(!hit)return;
- const impact=DriveBody.resolve(car,hit,Math.sin(n.yaw)*n.speed,-Math.cos(n.yaw)*n.speed,true);
- if(impact>.7&&cooldown<=0){
+ const impact=DriveBody.resolve(car,hit,Math.sin(n.yaw)*n.speed+(n.recoil?.vx||0),-Math.cos(n.yaw)*n.speed+(n.recoil?.vz||0),true);
+ if(impact>.7){
    n.armed=false;n.passed=true;n.speed=Math.max(0,n.speed-impact*.35);
-   n.kickX=-hit.nx*Math.min(1,impact*.07);n.kickZ=-hit.nz*Math.min(1,impact*.07);n.twist=-car.spin*.22;
+   DriveBody.strikeTraffic(n,hit,impact,n.yaw,car.x,car.z,n.x,n.z);
+   if(n===duel?.actor)duel.speed=n.speed;
    hurt('car',impact,hit);
  }
 }
@@ -157,8 +164,10 @@ const pit=createPitQuiz($('pit'),()=>'Chú Tư lắc đầu. Chọn lại đáp 
 function hurt(kind,energy,hit){
  if(cooldown>0||energy<.7)return;
  const strength=clamp(energy/27,.06,1);
+ DriveBody.recordDent(car,hit,energy,car.yaw);
  hp=Math.max(0,hp-Math.round(energy*2.9));cooldown=.5;
- gfx.impact(car.x-hit.nx,car.z-hit.nz,hit.nx,hit.nz,strength,kind);
+ const x=hit.pointX??car.x-hit.nx,z=hit.pointZ??car.z-hit.nz;
+ gfx.reactToContact?.(hit,x,z,strength);gfx.impact(x,z,hit.nx,hit.nz,strength,kind);
  driveAudio.impact(strength,kind==='car'?'vehicle':'curb');
  if(hp===0){mode='crash';crashTime=.65;crashKind=kind;car.boost=false;keySet.clear();}
  else inform('Va chạm · thân xe còn '+hp+'%',1.1);
@@ -190,14 +199,17 @@ function tick(dt){
  snapshot+=dt;if(snapshot>4){save();snapshot=0;}
 }
 function updateHud(){
+ const landmark=gfx.nearLandmark(car.x,car.z);
+ $('landmark').hidden=!landmark;
+ if(landmark)$('landmark').textContent=landmark.data.name+' · '+Math.round(landmark.distance)+' m';
  $('street').textContent=nameOf(player.edge);$('speed').textContent=Math.round(Math.abs(car.speed)*3.6);$('trip').textContent=fmt(distance)+' · '+passes+' lượt vượt';$('hp').value=hp;$('nitro').value=nitro;
  const fork=branchAhead(),plan=duel&&fork?duel.nextAt(fork.node):null;
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';
  $('turnInfo').textContent=duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
- drawMini();
+ drawMini(landmark);
 }
-function drawMini(){
+function drawMini(landmark){
  const c=$('map'),g=c.getContext('2d'),scale=.43;
  g.clearRect(0,0,c.width,c.height);g.save();g.translate(c.width/2,c.height*.56);
  g.scale(scale,scale);g.rotate(-car.yaw);
@@ -210,6 +222,7 @@ function drawMini(){
    for(let d=0;d<=135;d+=3){const p=roads.sample(duel.at(duel.player+d));if(d)g.lineTo(p.x-car.x,p.z-car.z);else g.moveTo(p.x-car.x,p.z-car.z);}g.stroke();
    g.fillStyle='#ff6848';g.beginPath();g.arc(duel.actor.x-car.x,duel.actor.z-car.z,6,0,Math.PI*2);g.fill();
  }
+ if(landmark){g.fillStyle='#ffe7a5';g.strokeStyle='#423c28';g.lineWidth=2;g.beginPath();g.arc(landmark.x-car.x,landmark.z-car.z,7,0,Math.PI*2);g.fill();g.stroke();}
  g.fillStyle='#ffbe68';for(const n of npcs){g.beginPath();g.arc(n.x-car.x,n.z-car.z,4,0,2*Math.PI);g.fill();}
  g.restore();g.fillStyle='#e5ff9b';g.beginPath();g.moveTo(c.width/2,c.height*.56-7);g.lineTo(c.width/2+5,c.height*.56+5);g.lineTo(c.width/2-5,c.height*.56+5);g.fill();
 }
@@ -220,7 +233,13 @@ function frame(now){
      const steps=Math.max(1,Math.ceil(dt*90));
      for(let i=0;i<steps&&mode==='drive';i++)tick(dt/steps);
    }else if(mode==='crash'){
-     DriveBody.settle(car,dt);crashTime-=dt;if(crashTime<=0){mode='pit';pit(crashKind);}
+     DriveBody.settle(car,dt);
+     for(const actor of duel?[duel.actor,...npcs]:npcs){
+       const r=actor.recoil;if(!r)continue;
+       const {x,z,angle}=r;DriveBody.advanceRecoil(actor,dt);
+       actor.x+=r.x-x;actor.z+=r.z-z;actor.yaw+=r.angle-angle;
+     }
+     crashTime-=dt;if(crashTime<=0){mode='pit';pit(crashKind);}
    }
    car.driving=mode==='drive';car.showroom=mode==='grid';
    if(mode!=='loading'&&mode!=='error'&&!document.hidden)gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'?dt:0,inside);
@@ -259,17 +278,22 @@ window.addEventListener('keydown',e=>{
  if(['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown','shift',' '].includes(k)){keySet.add(k);e.preventDefault();}
 });
 window.addEventListener('keyup',e=>keySet.delete(e.key.toLowerCase()));
-for(const b of document.querySelectorAll('[data-key]')){
- b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keySet.add(b.dataset.key);e.preventDefault();};
- b.onlostpointercapture=()=>keySet.delete(b.dataset.key);
-}
 window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('pagehide',save);
 
 let pendingPlace=featured[0],atlasPromise,originatedInPause=false;
 const normalize=s=>s.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
-function choosePlace(place){pendingPlace=place;$('picked').textContent=place[0]+' · '+place[2].toFixed(3)+'° B, '+place[1].toFixed(3)+'° Đ';drawAtlas();}
+const sightPlaces=VietnamLandmarks.entries.map(site=>[site.name+' · '+site.city,...site.start]);
+for(const place of sightPlaces){
+ const b=document.createElement('button');b.type='button';b.textContent=place[0].split(' · ')[0];
+ b.onclick=()=>choosePlace(place);$('sightChoices').append(b);
+}
+function choosePlace(place){
+ pendingPlace=place;$('picked').textContent=place[0]+' · '+place[2].toFixed(3)+'° B, '+place[1].toFixed(3)+'° Đ';
+ [...$('sightChoices').children].forEach((b,i)=>b.setAttribute('aria-pressed',String(place[0]===sightPlaces[i][0])));
+ drawAtlas();
+}
 function placeList(){
- const q=normalize($('findPlace').value.trim()),all=[...featured,...(atlasData?.places||[])],list=$('places');list.replaceChildren();
+ const q=normalize($('findPlace').value.trim()),all=[...(q?sightPlaces:[]),...featured,...(atlasData?.places||[])],list=$('places');list.replaceChildren();
  const coords=q.match(/^(-?[\d.]+)\s*[,;]\s*(-?[\d.]+)$/);
  const picks=coords?[['Tọa độ đã nhập',Number(coords[2]),Number(coords[1])]]:all.filter(p=>!q||normalize(p[0]).includes(q));
  const seen=new Set();

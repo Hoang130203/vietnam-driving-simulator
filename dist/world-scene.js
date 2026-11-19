@@ -99,10 +99,13 @@
     const unitBox=new T.BoxGeometry(),unitPlane=new T.PlaneGeometry(),unitPole=new T.CylinderGeometry(.5,.5,1,8);
     const wireMaterial=new T.LineBasicMaterial({color:0x50554d,transparent:true,opacity:.64});
     const temp=new T.Object3D(),tone=new T.Color();
+    const roadsideImpact=createRoadsideImpact(T,scene);
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
+    const landmarks=window.VietnamLandmarks?.create(T,scene);
     let obstacleCells=new Map(),waterContact=()=>null;
     const obstacleKey=(x,z)=>Math.floor(x/15)+','+Math.floor(z/15);
     function registerObstacle(o){
+      roadsideImpact.register(o);
       const reach=o.radius||Math.hypot(o.w,o.d);
       for(let i=Math.floor((o.x-reach-3)/15);i<=Math.floor((o.x+reach+3)/15);i++)
         for(let j=Math.floor((o.z-reach-3)/15);j<=Math.floor((o.z+reach+3)/15);j++){
@@ -110,6 +113,7 @@
           if(!obstacleCells.has(key))obstacleCells.set(key,[]);
           obstacleCells.get(key).push(o);
         }
+      return o;
     }
     function contact(x,z,r=.95){
       const px=x-originX,pz=z-originZ;
@@ -129,19 +133,21 @@
           else{depth=r+o.d-Math.abs(v);a=0;b=v>=0?1:-1;}
           nx=a*o.fx-b*o.fz;nz=a*o.fz+b*o.fx;
         }
-        if(depth>0&&(!hit||depth>hit.depth))hit={nx,nz,depth,kind:o.kind};
+        if(depth>0&&(!hit||depth>hit.depth))hit={nx,nz,depth,kind:o.kind,id:o.id,pointX:x+nx*(depth-r),pointZ:z+nz*(depth-r)};
       }
-      return hit||waterContact(px,pz,r);
+      return hit||landmarks?.contact(x,z,r)||waterContact(px,pz,r);
     }
     function discardRoads(){
       if(!roadGroup)return;scene.remove(roadGroup);
       roadGroup.traverse(obj=>{if(obj.isInstancedMesh)obj.dispose();else if(obj.geometry)obj.geometry.dispose();});
     }
     function setRoads(edges,cx,cz,water=[],graph=null){
+      landmarks?.setOrigin(graph,cx,cz);
       discardRoads();roadGroup=new T.Group();scene.add(roadGroup);originX=cx;originZ=cz;
       land.material.map.offset.set((cx/2200*430)%1,(-cz/2200*430)%1);land.position.x=land.position.z=0;
       const segments=[],cells=new Map(),roadData=[],landData=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
       obstacleCells=new Map();
+      roadsideImpact.rebase(cx,cz);
       const cellSize=32,cutoff=650;
       // A small occupancy mask lets each generated building test its footprint in constant time.
       const maskSize=336,maskScale=.25,waterData=[];
@@ -204,6 +210,7 @@
           for(let iz=Math.floor((Math.min(seg.az,seg.bz)-pad)/cellSize);iz<=Math.floor((Math.max(seg.az,seg.bz)+pad)/cellSize);iz++)fn(ix+','+iz);
       }
       function blocked(x,z,r){
+        if(landmarks?.reserved(x+cx,z+cz,r))return true;
         if(wetMask&&(wet(x,z)||wet(x+r,z)||wet(x-r,z)||wet(x,z+r)||wet(x,z-r)))return true;
         const list=cells.get(nearbyCell(x,z))||[];
         for(const s of list){
@@ -225,9 +232,11 @@
         }
         return null;
       };
-      function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null){
-        if(!batches.has(mat))batches.set(mat,{geo,poses:[],colors:[]});
-        const b=batches.get(mat);temp.position.set(x,y,z);temp.rotation.set(0,yaw,0);temp.scale.set(sx,sy,sz);temp.updateMatrix();
+      function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null,owner=null){
+        const key=mat+':'+geo.id;
+        if(!batches.has(key))batches.set(key,{mat,geo,poses:[],colors:[],moving:[]});
+        const b=batches.get(key);temp.position.set(x,y,z);temp.rotation.set(0,yaw,0);temp.scale.set(sx,sy,sz);temp.updateMatrix();
+        if(owner)b.moving.push([b.poses.length,owner]);
         b.poses.push(temp.matrix.clone());b.colors.push(color);
       }
       function quad(points,ax,az,bx,bz,cx,cz,dx,dz){points.push(ax,az,bx,bz,cx,cz,cx,cz,bx,bz,dx,dz);}
@@ -289,16 +298,16 @@
           for(let station=9;station<end-4;station+=spacing){
             const px=s.ax+s.fx*station+s.nx*(s.w+1.7),pz=s.az+s.fz*station+s.nz*(s.w+1.7);
             if(blocked(px,pz,.45)){last=null;continue;}
-            registerObstacle({kind:'pole',x:px,z:pz,radius:.12});
-            instance('concrete',unitPole,px,3.65,pz,.17,7.3,.17);
+            const pole=registerObstacle({id:s.seed+':pole:'+station,kind:'pole',x:px,z:pz,radius:.12,parts:[]});
+            instance('concrete',unitPole,px,3.65,pz,.17,7.3,.17,0,null,pole);
             const rot=Math.atan2(s.nx,s.nz);
             if(s.w>6){
-              instance('steel',unitBox,px-s.nx*.9,7.18,pz-s.nz*.9,.095,.09,1.98,rot);
-              instance('glass',unitBox,px-s.nx*1.91,7.13,pz-s.nz*1.91,.34,.14,.68,rot);
+              instance('steel',unitBox,px-s.nx*.9,7.18,pz-s.nz*.9,.095,.09,1.98,rot,null,pole);
+              instance('glass',unitBox,px-s.nx*1.91,7.13,pz-s.nz*1.91,.34,.14,.68,rot,null,pole);
             }else{
-              instance('steel',unitBox,px,6.89,pz,.085,.095,1.66,rot);
+              instance('steel',unitBox,px,6.89,pz,.085,.095,1.66,rot,null,pole);
               for(const side of [-1,1]){
-                instance('roof',unitPole,px+s.nx*side*.67,7.04,pz+s.nz*side*.67,.1,.23,.1);
+                instance('roof',unitPole,px+s.nx*side*.67,7.04,pz+s.nz*side*.67,.1,.23,.1,0,null,pole);
                 if(last)for(let j=0;j<6;j++){
                   const f=j/6,t=(j+1)/6;
                   for(const u of [f,t])wires.push(last.x+(px-last.x)*u+s.nx*side*.67,7.13-2.8*u*(1-u),last.z+(pz-last.z)*u+s.nz*side*.67);
@@ -337,7 +346,7 @@
         if(obscured)continue;
         const {house,s,sign,hx,hz,width,depth,type,random}=c;
             if(house){
-              registerObstacle({kind:'building',x:hx,z:hz,fx:s.fx,fz:s.fz,w:width/2,d:depth/2});
+              registerObstacle({id:c.key,kind:'building',x:hx,z:hz,fx:s.fx,fz:s.fz,w:width/2,d:depth/2});
               const h=(shopTypes[type][3]?6.7:3.65)+random()*.62;
               // Local +Z faces the road, with the façade just outside the wall.
               const sx=-s.nx*sign,sz=-s.nz*sign,rot=Math.atan2(sx,sz);
@@ -357,9 +366,9 @@
               instance('concrete',unitPole,hx+sx*porch+s.fx*width*.45,1.32,hz+sz*porch+s.fz*width*.45,.09,2.62,.09);
               if(type%3===0)instance('steel',unitPole,hx,h+.65,hz,1.2,1.0,1.2);
             }else{
-              registerObstacle({kind:'tree',x:hx,z:hz,radius:.27});
               const palm=random()<.26,height=(palm?7.5:5)+random()*5,w=height*(palm?.59:.92),r=random()*Math.PI;
-              for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle);}
+              const tree=registerObstacle({id:c.key,kind:'tree',x:hx,z:hz,radius:.27,height,parts:[]});
+              for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle,null,tree);}
             }
       }
       function surface(data,mat,y,freq){
@@ -378,8 +387,9 @@
         const lines=new T.BufferGeometry();lines.setAttribute('position',new T.Float32BufferAttribute(wires,3));
         roadGroup.add(new T.LineSegments(lines,wireMaterial));
       }
-      for(const [key,b] of batches){
-        const m=new T.InstancedMesh(b.geo,material[key],b.poses.length);
+      for(const b of batches.values()){
+        const m=new T.InstancedMesh(b.geo,material[b.mat],b.poses.length);
+        for(const [index,o] of b.moving)o.parts.push({index,mesh:m,rest:b.poses[index]});
         b.poses.forEach((pose,i)=>{m.setMatrixAt(i,pose);if(b.colors[i]!==null)m.setColorAt(i,tone.set(b.colors[i]));});
         m.castShadow=true;m.receiveShadow=true;roadGroup.add(m);
       }
@@ -456,7 +466,7 @@
                 else if(kind!=='taxi')m.color.setHex(colors[idx%colors.length]);
                 tints.set(src,m);
               }n.material=tints.get(src);
-            }else if(player&&src.name==='light_rear'){
+            }else if(src.name==='light_rear'){
               if(!item.light){item.light=src.clone();item.light.emissive.setHex(0xff210b);}
               n.material=item.light;
             }
@@ -485,7 +495,7 @@
         c.quaternion.premultiply(mirrorRotation);renderer.render(s,c);
       }
     };
-    let player=null,version=0,width=0,height=0,totalDriven=0,lastPaint=0;
+    let player=null,version=0,width=0,height=0,totalDriven=0,lastPaint=0,slowFrames=0;
     const players=new Map(),trafficItems=new Map(),pools=new Map();
     function resize(){
       const w=canvas.clientWidth||innerWidth,h=canvas.clientHeight||innerHeight;
@@ -500,7 +510,8 @@
       if(detailed){
         item.wheels.forEach(({n,id})=>n.rotateX((id.endsWith('R')&&id.length===2?-1:1)*car.speed*dt/.33));
         for(const steer of item.front)steer.rotation.y=-(car.steer||0)*.34;
-        if(item.light)item.light.emissiveIntensity=car.brake?3.5:.55;
+        if(item.light)item.light.emissiveIntensity=car.brake||car.recoil?.braking?3.5:.55;
+        updateBodywork(T,item.detail,car.dent,car.yaw);
       }
     }
     const driveFx=createDrivingFX(T,scene);
@@ -526,7 +537,9 @@
         let item=trafficItems.get(a.id);
         if(item&&item.kind!==kind){trafficItems.delete(a.id);item.root.visible=false;(pools.get(item.kind)||pools.set(item.kind,[]).get(item.kind)).push(item);item=null;}
         if(!item){item=pools.get(kind)?.pop()||makeVehicle(kind,Math.abs(Number(a.id)||index));trafficItems.set(a.id,item);}
-        item.tick=version;item.root.visible=true;pose(item,a,dt,index<(small?3:5)&&d<115*115);
+        item.tick=version;item.root.visible=true;
+        item.outside.rotation.set(-(a.recoil?.pitch||0),0,-(a.recoil?.roll||0));
+        pose(item,a,dt,index<(small?3:5)&&d<115*115);
       }
       for(const [id,item] of trafficItems)if(item.tick!==version){
         trafficItems.delete(id);item.root.visible=false;
@@ -547,15 +560,27 @@
         eye.set(-(car.steer||0)*.32,2.08+speed*.007,back);look.set(0,.9,-10);
       }
       eye.applyQuaternion(mirrorRotation).add(playerRig.position);look.applyQuaternion(mirrorRotation).add(playerRig.position);
+      if(car.showroom&&car.tourStop){
+        const stop=landmarks.nearest(car.x,car.z);
+        if(stop&&stop.distance>3){
+          const dx=(stop.x-car.x)/stop.distance,dz=(stop.z-car.z)/stop.distance;
+          eye.set(x-dx*7+dz*1.5,2.15,z-dz*7-dx*1.5);
+          look.set(x+dx*15,2.7,z+dz*15);
+        }
+      }
       camera.position.copy(eye);camera.lookAt(look);
       const fov=(inside?64:car.showroom?47:57+Math.min(15,speed*.28))+(car.boost?5:0);
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
-      driveFx.update(car,dt,originX,originZ,inside,camera);
+      roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
       renderer.render(scene,camera);
-      if(lastPaint&&now-lastPaint>100&&version%40===0&&renderer.getPixelRatio()>.78)renderer.setPixelRatio(Math.max(.78,renderer.getPixelRatio()*.88));
+      const elapsed=now-lastPaint;
+      slowFrames=lastPaint&&elapsed>48&&elapsed<500?slowFrames+1:Math.max(0,slowFrames-1);
+      if(slowFrames>=18&&renderer.getPixelRatio()>.78){
+        renderer.setPixelRatio(Math.max(.78,renderer.getPixelRatio()*.88));slowFrames=0;
+      }
       lastPaint=now;
     }
-    return {setRoads,render,resize,contact,impact:driveFx.impact,resetFx:driveFx.reset};
+    return {setRoads,render,resize,contact,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:driveFx.impact,resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();

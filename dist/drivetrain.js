@@ -1,7 +1,35 @@
 ﻿'use strict';
 // The chassis moves in world metres. Navigation may measure its pose, but never supplies a steering angle.
 window.DriveBody={
+ recordDent(body,hit,speed,heading){
+   if(speed<=4)return;
+   body.dent={side:-hit.nx*Math.cos(heading)-hit.nz*Math.sin(heading),
+     front:-hit.nx*Math.sin(heading)+hit.nz*Math.cos(heading),strength:Math.min(1,speed/22)};
+ },
+ strikeTraffic(actor,hit,speed,yaw,attackerX,attackerZ,targetX,targetZ){
+   if(speed<1.1||actor.recoil?.braking>.25)return;
+   const s=Math.sin(yaw),c=Math.cos(yaw),side=-hit.nx*c-hit.nz*s,front=-hit.nx*s+hit.nz*c;
+   const dx=attackerX-targetX,dz=attackerZ-targetZ,lever=dx*s-dz*c,lateral=dx*c+dz*s;
+   const a=actor.recoil??={x:0,z:0,angle:0,vx:0,vz:0,spin:0,age:0};
+   const force=Math.min(actor.bike||actor.kind==='scooter'?17:12,speed*.51);
+   a.vx-=hit.nx*force;a.vz-=hit.nz*force;
+   a.spin+=Math.max(-2.2,Math.min(2.2,(lever*side-lateral*front)*speed*.055));
+   a.age=0;a.side=side;a.front=front;a.force=Math.min(1,speed/22);a.braking=.45+a.force*1.5;
+   this.recordDent(actor,{nx:-hit.nx,nz:-hit.nz},speed,yaw);
+ },
+ advanceRecoil(actor,dt){
+   const a=actor.recoil;if(!a)return;
+   a.braking=Math.max(0,a.braking-dt);a.age+=dt;
+   // Tyres scrub off the initial impulse before the driver recovers the lane.
+   for(const [p,v] of [['x','vx'],['z','vz'],['angle','spin']]){
+     a[v]+=(a.braking?0:-a[p]*3.2)*dt;a[v]*=Math.exp(-dt*(a.braking?3.8:3.2));a[p]+=a[v]*dt;
+   }
+   const wave=Math.sin(a.age*12)*Math.exp(-a.age*3.3)*a.force;
+   a.roll=a.side*wave*(actor.bike||actor.kind==='scooter'?.65:.21);a.pitch=a.front*wave*.14;
+   if(a.age>7)delete actor.recoil;
+ },
  reset(c){
+   delete c.dent;
    c.vx=0;c.vz=0;c.speed=0;c.steer=0;c.spin=0;c.slip=0;c.pitch=0;c.roll=0;c.boost=false;c.brake=false;c.offroad=false;c.reverseDelay=0;
  },
  settle(c,dt){

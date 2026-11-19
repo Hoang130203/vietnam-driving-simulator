@@ -203,7 +203,7 @@ async function loadSedan(){
 }
 loadSedan().catch(()=>{});
 const car={x:0,y:0,h:0,v:0,steer:0,gear:1,signal:'',belt:false,hazard:false};
-const input=new Set(),penalties=[],mapCtx=$('map').getContext('2d');
+const input=createDriveInput(),penalties=[],mapCtx=$('map').getContext('2d');
 let index=0,s=0,oldS=0,mode='ready',score=100,wallStart=0,time=0,stageStart=0,overhead=false;
 let done=new Set(),flags={},emergency=null,emergencyIndex=6,emergencyOnly=false,lastTime=performance.now();
 let note='',noteUntil=0,lastHud='',lastWidth=0,lastHeight=0;
@@ -413,10 +413,6 @@ addEventListener('keydown',e=>{
  if(!e.repeat&&controls[key])action(controls[key]);if(!e.repeat&&key==='c')changeCamera();
 });
 addEventListener('keyup',e=>input.delete(e.key.toLowerCase()));addEventListener('blur',()=>input.clear());
-for(const b of document.querySelectorAll('[data-key]')){
- b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);input.add(b.dataset.key);b.classList.add('active');};
- b.onlostpointercapture=()=>{input.delete(b.dataset.key);b.classList.remove('active');};
-}
 for(const b of document.querySelectorAll('[data-act]'))b.onclick=()=>action(b.dataset.act);
 $('go').onclick=start;$('again').onclick=()=>scenario(exam?0:Number(pick.value));
 pick.onchange=()=>scenario(Number(pick.value));$('camera').onclick=changeCamera;

@@ -60,9 +60,11 @@ class RollingDuel {
      const x=n.x-this.actor.x,z=n.z-this.actor.z,front=x*fx+z*fz;
      if(front>0&&front<12&&Math.abs(x*fz-z*fx)<1.7)target=Math.min(target,Math.max(2,n.speed+(front-6)*.6));
    }
+   if(this.actor.recoil?.braking)target=0;
    this.speed+=clamp(target-this.speed,-11*dt,5.8*dt);
    if(this.opponent-this.player>125)this.speed=Math.max(0,this.speed-14*dt);
-   this.opponent=Math.min(this.length,this.opponent+this.speed*dt);this.pose();
+   this.opponent=Math.min(this.length,this.opponent+this.speed*dt);this.pose();DriveBody.advanceRecoil(this.actor,dt);
+   const kick=this.actor.recoil;if(kick){this.actor.x+=kick.x;this.actor.z+=kick.z;this.actor.yaw+=kick.angle;}
    while(this.path.length>2&&this.path[0].to<Math.min(this.player,this.opponent)-40)this.path.shift();
    return this.player-start;
  }

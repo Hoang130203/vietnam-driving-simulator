@@ -67,7 +67,8 @@ for(let i=0;i<12;i++){
  const oncoming=i%3===1,kind=['city-taxi','kei-van','hatchback','motor-scooter'][i%4];
  const path=kind==='city-taxi'?'streetscape/city-taxi.glb':'traffic/'+kind+'.glb';
  if(!civilianAssets.has(path))civilianAssets.set(path,TrafficModels.load.loadAsync(path));
- const npc={bike:kind==='motor-scooter',d:95+i*174,lane:oncoming?-3.65:(i%2?3.8:2.45),v:oncoming?-13:9+i%4,model:null};roadTraffic.push(npc);
+ const cruise=oncoming?-13:9+i%4;
+ const npc={bike:kind==='motor-scooter',d:95+i*174,lane:oncoming?-3.65:(i%2?3.8:2.45),v:cruise,cruise,model:null};roadTraffic.push(npc);
  civilianAssets.get(path).then(({scene:base})=>{
    const mesh=base.clone(true),bounds=new T.Box3().setFromObject(mesh);
    const scale=(kind==='motor-scooter'?1.9:kind==='city-taxi'?4.7:3.95)/(bounds.max.z-bounds.min.z);
@@ -77,7 +78,10 @@ for(let i=0;i<12;i++){
 }
 function placeCivilian(n){
  if(!n.model)return;
- const p=at(n.d,n.lane+(n.kick||0));n.model.position.set(p.x,p.y,p.z);n.model.rotation.y=-p.h+(n.v>0?Math.PI:0)+(n.twist||0);
+ const p=at(n.d,n.lane),r=n.recoil,angle=p.h+(r?.angle||0);
+ n.model.position.set(p.x+(r?.x||0),p.y,p.z+(r?.z||0));
+ n.model.rotation.set(-(r?.pitch||0),-angle+(n.cruise>0?Math.PI:0),-(r?.roll||0));
+ updateBodywork(T,n.model,n.dent,angle+(n.cruise<0?Math.PI:0));
  n.model.visible=n.d>0&&n.d<route.finish&&Math.abs(n.d-(state?.d||0))<340;
 }
 let vitality=100,boost=100,grace=0,countdown=3,penalty=0,repairs=0,drafting=false;
@@ -97,7 +101,8 @@ function syncCup(){
 }
 function placeRivals(){
  for(const r of rivals){
-   const p=at(r.d,r.offset+(r.kick||0));r.car.position.set(p.x,p.y,p.z);r.car.rotation.y=-p.h+(r.twist||0);
+   const p=at(r.d,r.offset),k=r.recoil;
+   r.car.position.set(p.x+(k?.x||0),p.y,p.z+(k?.z||0));r.car.rotation.set(k?.pitch||0,-p.h-(k?.angle||0),k?.roll||0);
  }
 }
 function beginRace(){
@@ -124,6 +129,7 @@ function repair(){
 function collision(kind,hit,vx=0,vz=0){
  const relative=DriveBody.resolve(cupBody,hit,vx,vz,kind==='car');syncCup();
  if(grace>0||relative<1.3)return;
+ DriveBody.recordDent(cupBody,hit,relative,cupBody.yaw);
  const damage=Math.min(100,Math.round(relative*2.7));vitality=Math.max(0,vitality-damage);
  const reach=Math.abs(hit.nx*Math.sin(state.h)-hit.nz*Math.cos(state.h))>.65?1.9:.91;
  cupFx.impact(state.x-hit.nx*reach,state.z-hit.nz*reach,hit.nx,hit.nz,Math.min(1,relative/29),kind,height(state.d));
@@ -134,17 +140,17 @@ function collision(kind,hit,vx=0,vz=0){
 }
 function trafficContact(actor,lane,dt){
  const {d,v,bike}=actor;
- actor.kick=(actor.kick||0)*Math.exp(-dt*2.1);actor.twist=(actor.twist||0)*Math.exp(-dt*3);
- if(Math.abs(d-state.d)>6)return;
- const p=at(d,lane+actor.kick),hit=DriveBody.contact(cupBody,{x:p.x,z:p.z,yaw:p.h-actor.twist},bike?.4:.9,bike?1:2.1);
+ DriveBody.advanceRecoil(actor,dt);
+ if(Math.abs(d-state.d)>11)return;
+ const p=at(d,lane),r=actor.recoil,heading=p.h+(actor.cruise<0?Math.PI:0)+(r?.angle||0);
+ const other={x:p.x+(r?.x||0),z:p.z+(r?.z||0),yaw:heading};
+ const hit=DriveBody.contact(cupBody,other,bike?.4:.9,bike?1:2.1);
  if(!hit)return;
- const vx=v*Math.sin(p.h),vz=-v*Math.cos(p.h),closing=Math.max(0,(vx-cupBody.vx)*hit.nx+(vz-cupBody.vz)*hit.nz);
+ const vx=v*Math.sin(p.h)+(r?.vx||0),vz=-v*Math.cos(p.h)+(r?.vz||0);
+ const closing=Math.max(0,(vx-cupBody.vx)*hit.nx+(vz-cupBody.vz)*hit.nz);
  collision('car',hit,vx,vz);
- if(closing>1){
-   const side=hit.nx*Math.cos(p.h)+hit.nz*Math.sin(p.h);
-   actor.kick-=side*Math.min(.8,closing*.06);actor.twist+=side*Math.min(.22,closing*.014);
-   actor.v-=Math.sign(v)*Math.min(Math.abs(v)*.35,closing*.4);
- }
+ DriveBody.strikeTraffic(actor,hit,closing,heading,state.x,state.z,other.x,other.z);
+ if(closing>1)actor.v-=Math.sign(v)*Math.min(Math.abs(v)*.45,closing*.45);
 }
 function finishRace(){
  setMode('done');keys.clear();state.v=0;$('pause').hidden=true;$('touch').hidden=true;
@@ -155,7 +161,10 @@ function finishRace(){
  $('finish').showModal();
 }
 function raceUpdate(dt){
- if(state.mode==='crash'){DriveBody.settle(cupBody,dt);syncCup();crashTime-=dt;if(crashTime<=0)openPit(crashKind);return;}
+ if(state.mode==='crash'){
+   for(const n of roadTraffic){DriveBody.advanceRecoil(n,dt);placeCivilian(n);}
+   for(const r of rivals)DriveBody.advanceRecoil(r,dt);placeRivals();
+   DriveBody.settle(cupBody,dt);syncCup();crashTime-=dt;if(crashTime<=0)openPit(crashKind);return;}
  if(state.mode==='countdown'){
    const before=Math.ceil(countdown);countdown-=dt;
    if(Math.ceil(countdown)!==before)driveAudio.cue(countdown<=0);$('count').textContent=countdown>0?Math.ceil(countdown):'';
@@ -182,6 +191,8 @@ function raceUpdate(dt){
  }
  if(s.mode!=='drive')return;
  for(const n of roadTraffic){
+   const target=n.recoil?.braking?0:n.cruise,step=(n.recoil?.braking?10:2)*dt;
+   n.v+=clamp(target-n.v,-step,step);
    n.d+=n.v*dt;placeCivilian(n);
    if(n.d>0&&n.d<route.finish)trafficContact(n,n.lane,dt);
    if(s.mode!=='drive')return;
@@ -192,7 +203,7 @@ function raceUpdate(dt){
    const line=slower?(slower.lane>0?-.35:.9):r.lane;
    r.offset+=(line+.42*Math.sin(r.d/49+i)-r.offset)*(1-Math.exp(-dt*2.5));
    const blocked=roadTraffic.find(n=>n.d>r.d&&n.d-r.d<11&&Math.abs(n.lane-r.offset)<1.6);
-   const target=blocked?Math.max(4,blocked.v*.9):r.pace*(1-.55*curve);
+   const target=r.recoil?.braking?0:blocked?Math.max(4,blocked.v*.9):r.pace*(1-.55*curve);
    r.v+=clamp(target-r.v,-11*dt,(5.3+i*.34)*dt);r.d+=r.v*dt;
    if(r.d>=route.finish)r.finished=true;r.d=Math.min(r.d,route.finish+38+i*6);
    trafficContact(r,r.offset,dt);
@@ -216,7 +227,8 @@ function raceCamera(dt,now){
    const v=c.isPlayer?state.v:c.driver.v,steer=c.isPlayer?state.steer:0;
    if(driving)c.wheels.forEach((wheel,i)=>wheel?.rotateX((i%2?-1:1)*v*dt/.344));
    c.front.forEach(joint=>{if(joint)joint.rotation.y=-steer*.36;});
-   if(c.rear)c.rear.emissiveIntensity=c.isPlayer&&braking?4:.68;
+   if(c.rear)c.rear.emissiveIntensity=(c.isPlayer?braking:c.driver.recoil?.braking)?4:.68;
+   updateBodywork(T,c.model,c.isPlayer?cupBody.dent:c.driver.dent,c.isPlayer?cupBody.yaw:at(c.driver.d).h+(c.driver.recoil?.angle||0));
    c.model.rotation.z=c.isPlayer?-cupBody.roll:0;
    const station=c.isPlayer?state.d:c.driver.d;
    c.model.rotation.x=Math.atan(height(station+1)-height(station))-(c.isPlayer?cupBody.pitch:0);
@@ -256,8 +268,4 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur',pauseRace);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseRace();});
-for(const b of document.querySelectorAll('[data-key]')){
- b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);e.preventDefault();};
- b.onlostpointercapture=()=>keys.delete(b.dataset.key);
-}
 beginRace();

@@ -117,9 +117,10 @@ window.createDrivingFX = function (T, scene) {
     const y=Number.isFinite(groundY)?groundY:(lastCar?.y||0),ground=y;
     const len=Math.hypot(nx,nz)||1;nx=(nx||0)/len;nz=(nz||0)/len;
     kick=Math.max(kick,hit);kickX=nx;kickZ=nz;
-    const metal=['car','vehicle','pole','wall','building','rail','barrier'].includes(kind);
+    const metal=['car','vehicle','pole','rail','barrier'].includes(kind);
+    const plaster=kind==='building'||kind==='wall';
     const water=kind==='water';
-    const dustTint=water?[.76,.88,.92]:metal?[.69,.66,.62]:[.65,.54,.38];
+    const dustTint=water?[.76,.88,.92]:plaster?[.80,.73,.62]:metal?[.69,.66,.62]:[.65,.54,.38];
     for(let i=0;i<4+hit*12;i++){
       const lateral=(Math.random()-.5)*3;
       puff(x+(Math.random()-.5)*.45,y+.18+Math.random()*.55,z+(Math.random()-.5)*.45,
@@ -135,7 +136,7 @@ window.createDrivingFX = function (T, scene) {
       const life=.7+Math.random()*1.1,glass=metal&&hit>.56&&i%3===0;
       Object.assign(chips[iChip],{x,y:y+.45,z,ground,dx:nx*hit*3+nz*side,dy:1+Math.random()*(1+hit*4),
         dz:nz*hit*3-nx*side,spin:Math.random()*17-8,life,total:life,size:(.035+Math.random()*.058)*(.7+hit*.5)});
-      chipMesh.setColorAt(iChip,chipTint.setHex(glass?0xc1d8d9:metal?(i%2?0x575353:0x8e8275):0x796a57));
+      chipMesh.setColorAt(iChip,chipTint.setHex(glass?0xc1d8d9:metal?(i%2?0x575353:0x8e8275):plaster?(i%2?0xe0ccac:0xac8e72):0x796a57));
     }
     if(chipMesh.instanceColor)chipMesh.instanceColor.needsUpdate=true;
   }

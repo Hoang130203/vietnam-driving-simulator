@@ -44,7 +44,7 @@ function roadCoordinates(x,z,near){
   return {d,offset};
 }
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas:$('world'),antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
+renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.25:1.55));scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
 const sky=new T.TextureLoader().load('streetscape/sky.jpg',tex=>{tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.background=tex;if(!scene.environment)scene.environment=tex;});
 if(arcade)new T.TextureLoader().load('streetscape/'+route.id+'-reflection.jpg',tex=>{
  tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.environment=tex;
@@ -266,7 +266,7 @@ for(const [name,first,velocity] of arcade?[]:[['hatchback',140,-8],['kei-van',35
    scene.add(model);traffic.push({model,first,velocity,d:first});
  }).catch(()=>{});
 }
-const keys=new Set(),gearCaps=[0,25,42,62,80,96];
+const keys=createDriveInput(),gearCaps=[0,25,42,62,80,96];
 let state,inside=true,sound=driveAudio.enabled,lastFrame=performance.now(),message='',feedbackUntil=0;
 function reset(){
  const p=at(0,3.7);
@@ -460,6 +460,5 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur',()=>{keys.clear();if(state.mode==='drive')start();});
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>action(b.dataset.action));
-document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);};b.onlostpointercapture=()=>keys.delete(b.dataset.key);});
 reset();requestAnimationFrame(render);
 }

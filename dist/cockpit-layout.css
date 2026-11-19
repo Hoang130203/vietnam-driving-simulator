@@ -1,0 +1,78 @@
+.arcade {
+  --left: max(12px, env(safe-area-inset-left));
+  --right: max(12px, env(safe-area-inset-right));
+  --top: max(6px, env(safe-area-inset-top));
+  --bottom: max(8px, env(safe-area-inset-bottom));
+  overscroll-behavior: none;
+}
+.arcade header {
+  padding: var(--top) max(var(--right), 2vw) 5px max(var(--left), 2vw);
+  pointer-events: none;
+}
+.arcade header > * {pointer-events: auto}
+.arcade .grid {overflow-y: auto; overscroll-behavior: contain}
+.arcade .gridcopy {margin-block: auto}
+.arcade .hud {top: calc(var(--top) + 53px)}
+.arcade .telemetry, .arcade .rank, .arcade .chrono {font-variant-numeric: tabular-nums}
+.arcade .telemetry strong {letter-spacing: -.06em;line-height: 1}
+.arcade #street {overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
+.arcade dialog {overscroll-behavior: contain;max-height: calc(100dvh - var(--top) - var(--bottom) - 12px)}
+.arcade .touch {pointer-events: none;z-index: 2}
+.arcade .touch > div {display:flex;align-items:flex-end;gap:clamp(4px,1vw,9px)}
+.arcade .touch button {
+  pointer-events:auto; -webkit-touch-callout:none; -webkit-user-select:none;
+  min-width:44px; min-height:50px; padding:8px;
+  border:1px solid #d6e2de80; border-bottom:3px solid #96a39f;
+  border-radius:12px; background:linear-gradient(155deg,#2d373bec,#151b20ef);
+  box-shadow:0 3px 10px #0005; font-size:14px;
+}
+.arcade .touch [data-key="w"] {min-height:61px;min-width:54px;background:var(--fire);border-color:var(--fire);color:#101916}
+.arcade .touch [data-key="shift"] {color:var(--yellow);border-color:color-mix(in srgb,var(--yellow) 65%,transparent)}
+.arcade .touch button.active {transform:translateY(2px);background:var(--yellow);color:#122019;border-color:#fff}
+.arcade .osm-credit {right:var(--right);bottom:max(0px,env(safe-area-inset-bottom))}
+.sights {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 14px;padding-block:8px;border-block:1px solid #516467}
+.sights strong, .journey #landmark {color:#ffe2a5;font-size:13px}
+#sightChoices {display:flex;flex-wrap:wrap;gap:4px}
+#sightChoices button {font-size:13px;padding:7px 9px}
+#sightChoices [aria-pressed="true"] {color:#162220;background:#e8d6a7}
+@media (any-pointer:coarse), (max-width:700px) {
+  .arcade .tools button, .arcade dialog button, .arcade .grid select, .arcade .grid button {min-height:44px}
+  .arcade .tools button {padding-inline:8px;font-size:13px}
+  .arcade .brand {font-size:clamp(15px,4.2vw,20px)}
+  .arcade .touch {display:flex;left:var(--left);right:var(--right);bottom:calc(var(--bottom) + 4px)}
+  .journey .touch {bottom:calc(var(--bottom) + 15px)}
+  .arcade .keyboardHint, .arcade .keys {display:none}
+  .arcade .telemetry, .arcade .track {bottom:calc(var(--bottom) + 80px)}
+  .journey .telemetry, .journey .track {bottom:calc(var(--bottom) + 91px)}
+  .arcade .track,.arcade .rank,.arcade .routeInfo {left:var(--left)}
+  .arcade .chrono {left:calc(var(--left) + 72px)}
+  .arcade .telemetry,.arcade #map {right:var(--right)}
+  .arcade .telemetry {padding:7px 10px}
+  .arcade .telemetry strong {font-size:31px}
+  .arcade .telemetry meter {width:54px}
+  .arcade .routeInfo {max-width:calc(100% - var(--left) - var(--right) - 108px)}
+  .arcade #callout {top:auto;bottom:calc(var(--bottom) + 166px);max-width:calc(100% - 28px);width:max-content}
+  .arcade #places button {min-height:44px}
+  .arcade #findPlace {font-size:16px}
+}
+@media (max-width:650px) and (orientation:portrait) {
+  .arcade .grid {padding:max(62px,calc(var(--top) + 55px)) var(--right) calc(var(--bottom) + 15px) var(--left)}
+  .arcade .gridcopy {height:auto;min-height:100%;flex-shrink:0}
+  .arcade .gridcopy > p {margin-bottom:auto;padding-bottom:12px}
+  .arcade .gridcopy > select {flex-shrink:0}
+  .arcade .extra a {display:grid;align-items:center;min-height:40px;margin:0}
+  .arcade #atlas .atlasCols {grid-template-columns:minmax(0, .8fr) minmax(0,1.2fr)}
+  .arcade .track {width:auto;max-width:47%;padding:7px 9px}
+}
+@media (orientation:landscape) and (max-height:590px) {
+  .arcade .grid {align-items:flex-start;padding:calc(var(--top) + 49px) var(--right) calc(var(--bottom) + 12px) max(var(--left),3vw)}
+  .arcade .gridcopy {margin:0;max-width:min(46vw,390px)}
+  .arcade .gridcopy h1 br {display:none}
+  .arcade .gridcopy h1 i {margin-left:.16em}
+  .arcade .gridcopy h1 {font-size:36px;margin:0}
+  .arcade .hud {top:calc(var(--top) + 48px)}
+  .arcade .track {top:0;bottom:auto;left:50%;transform:translateX(-50%);max-width:24vw}
+  .arcade .routeInfo {max-width:30vw}
+  .arcade #callout {top:calc(var(--top) + 108px);bottom:auto}
+  .arcade .telemetry {bottom:calc(var(--bottom) + 78px)}
+}
