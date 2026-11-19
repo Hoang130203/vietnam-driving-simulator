@@ -3,3 +3,13 @@ The asphalt diffuse texture is adapted from Asphalt 04 by Sergej Majboroda and J
 The sky panorama is resized from Kloofendal 48d Partly Cloudy (Pure Sky) by Greg Zaal and Jarod Guest, Poly Haven, CC0. https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky
 
 Family Sedan v1 LOD1 by tevy, CC0 1.0. Geometry grouped by material, scaled for the lesson and repainted. https://tevy.dev/models/family-sedan
+
+Traffic models from tevy, CC0 1.0, version 1. Assets converted to baseline glTF with JPEG maps, transparent windows, varied paints and posed helmeted riders for this game.
+https://tevy.dev/models/hatchback
+https://tevy.dev/models/kei-van
+https://tevy.dev/models/motor-scooter
+https://tevy.dev/models/casual-walker
+https://tevy.dev/models/hiker
+https://tevy.dev/models/road-worker
+
+GLTFLoader and SkeletonUtils are from three.js r160, MIT. The license is in ../THREE-LICENSE.txt.

@@ -3,6 +3,7 @@
   const T = THREE;
   const canvas = document.getElementById('road');
   const scene = new T.Scene();
+  const impactFX = window.createImpactEffects(scene, canvas);
   scene.fog = new T.FogExp2(0xf1cfac, 0.0061);
   const renderer = new T.WebGLRenderer({canvas, antialias:true, alpha:false, powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.35));
@@ -41,14 +42,19 @@
   }
   const box=new T.BoxGeometry(), leaf=new T.IcosahedronGeometry(1,1);
   const staticParts=new Map();
+  const routeSets={city:new T.Group(),school:new T.Group(),works:new T.Group()};
+  Object.values(routeSets).forEach(group=>scene.add(group));
+  let sceneryParent=scene;
+  const signalGroup=new T.Group(), speedGroup=new T.Group(), parkingGroup=new T.Group();
+  scene.add(signalGroup,speedGroup,parkingGroup);
   function part(geo,mat,x,y,z,w,h,d,ry=0,rz=0,parent=null) {
     mat=typeof mat==='object'?mat:material(mat);
     const mesh=new T.Mesh(geo,mat);
     mesh.position.set(x,y,z); mesh.scale.set(w,h,d); mesh.rotation.set(0,ry,rz); mesh.updateMatrix();
     if(parent) parent.add(mesh);
     else {
-      const key=geo.uuid+mat.uuid;
-      if(!staticParts.has(key)) staticParts.set(key,{geo,mat,matrices:[]});
+      const key=sceneryParent.uuid+geo.uuid+mat.uuid;
+      if(!staticParts.has(key)) staticParts.set(key,{geo,mat,matrices:[],host:sceneryParent});
       staticParts.get(key).matrices.push(mesh.matrix);
     }
     return mesh;
@@ -99,16 +105,20 @@
   });
   block(roadMaterial,0,-.12,-120,16,.22,420);
   block(0xaaa28e,0,-.29,-110,200,.2,420);
-  block(0x595b58,0,-.04,-101,170,.05,14);
-  for(let z=20;z>-300;z-=6){
-    if(z<-90&&z>-113)continue;
-    block(0xe9ae37,0,.012,z,.12,.02,3.4);
-    for(const side of [-1,1]) block(0xece8dc,side*4,.012,z,.11,.02,2.4);
+  function roadMarkings(crossing){
+    block(roadMaterial,0,-.055,-crossing-10.5,125,.05,13.5);
+    for(let z=20;z>-300;z-=6){
+      if(z<-crossing+1&&z>-crossing-23)continue;
+      block(0xe9ae37,0,.012,z,.12,.02,3.4);
+      for(const side of [-1,1])block(0xece8dc,side*4,.012,z,.11,.02,2.4);
+    }
+    for(const z of [-crossing-3,-crossing-20]){
+      for(let x=-7.6;x<8;x+=1.05)block(0xf6f0df,x,.026,z,.51,.023,3);
+    }
+    block(0xf4ead9,4,.03,-crossing,7.9,.025,.30);
   }
-  for(const z of [-93,-110]){
-    for(let i=-7.6;i<8;i+=1.05)block(0xf6f0df,i,.026,z,.51,.023,3);
-  }
-  block(0xf4ead9,4,.03,-90,7.9,.025,.30);
+  sceneryParent=routeSets.city;
+  roadMarkings(90);
   const shopNames=['CÀ PHÊ PHỐ','BÁNH MÌ','HOA TƯƠI','NHÀ SÁCH','PHỞ HÀ NỘI','TRÀ VIỆT','TẠP HÓA','TIỆM ẢNH'];
   const paints=['#e4c190','#cbd8c5','#e2b9a1','#e7dbbe','#c9cbbb','#e3cc9d','#b4c6bf','#ecd4b5'];
   const boards=['#12594f','#ae4c35','#3d6862','#394e63','#9a342d','#39614a','#ab7031','#374653'];
@@ -302,7 +312,7 @@
         const points=[];
         for(let k=0;k<=8;k++)points.push(new T.Vector3(side*(10.8+j*.15),7.4-.49*Math.sin(Math.PI*k/8),z-3*k));
         const wire=new T.Line(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:0x605c50}));
-        scene.add(wire);
+        sceneryParent.add(wire);
       }
     }
   }
@@ -314,6 +324,7 @@
   block(0x71766f,8.25,3.7,-36,.15,7.4,.15);
   block(0x71766f,6.6,7.1,-36,3.4,.15,.18);
   part(panel,signMat,5.4,6.45,-35.9,4.8,1.5,1);
+  sceneryParent=signalGroup;
   block(0x56625e,8,3.5,-92,.2,7,.19);
   block(0x56625e,5.1,6.85,-92,6,.15,.18);
   block(0x242e30,3,5.97,-92,.61,1.8,.4);
@@ -323,23 +334,200 @@
     bulbs.push(mat);
     part(leaf,mat,3,6.51-i*.53,-91.76,.20,.20,.09);
   }
-  const speedSign=texture(256,256,c=>{
+  const speedFace=limit=>texture(256,256,c=>{
     c.fillStyle='#bf281e';c.beginPath();c.arc(128,128,124,0,Math.PI*2);c.fill();
     c.fillStyle='#f8f5e9';c.beginPath();c.arc(128,128,100,0,Math.PI*2);c.fill();
-    c.fillStyle='#242424';c.font='bold 120px Arial';c.textAlign='center';c.fillText('40',127,169);
+    c.fillStyle='#242424';c.font='bold 120px Arial';c.textAlign='center';c.fillText(String(limit),127,169);
   });
+  const speed40=speedFace(40),speed30=speedFace(30);
+  const speedMaterial=new T.MeshBasicMaterial({map:speed40,alphaTest:.5});
+  sceneryParent=speedGroup;
   block(0xb5b7af,7.95,1.78,-25,.09,3.56,.09);
-  part(panel,new T.MeshBasicMaterial({map:speedSign,alphaTest:.5}),7.95,3.32,-24.92,1.02,1.02,1);
+  part(panel,speedMaterial,7.95,3.32,-24.92,1.02,1.02,1);
   // Mark the curbside bay as it appears in the final parking exercise.
   const parkingSign=basic(texture(200,236,c=>{
     c.fillStyle='#f3eee6';c.fillRect(0,0,200,236);
     c.fillStyle='#1d5994';c.fillRect(6,6,188,224);
     c.fillStyle='white';c.textAlign='center';c.font='bold 196px Arial';c.fillText('P',100,188);
   }));
+  sceneryParent=parkingGroup;
   block(0xafb7b7,8.18,1.62,-162,.085,3.24,.085);
   part(panel,parkingSign,8.18,3.18,-161.92,.72,.86,1);
   for(let z=-161;z>-186;z-=3)block(0xe9e6d7,5.68,.032,z,.10,.018,1.6);
   for(const z of [-160,-186])block(0xe9e6d7,6.79,.032,z,2.34,.018,.11);
+  const worksObstacles=[];
+  function caption(title,color,ink,subtitle=''){
+    return basic(texture(768,192,(c,w,h)=>{
+      c.fillStyle=color;c.fillRect(0,0,w,h);
+      c.strokeStyle=ink;c.lineWidth=3;c.strokeRect(7,7,w-14,h-14);
+      c.fillStyle=ink;c.textAlign='center';
+      c.font='bold 70px Arial';c.fillText(title,w/2,subtitle?96:123,w-35);
+      if(subtitle){c.font='bold 30px Arial';c.fillText(subtitle,w/2,152,w-35);}
+    }));
+  }
+  function lamp(x,z){
+    const direction=-Math.sign(x);
+    block(0x707c79,x,3.7,z,.13,7.4,.14);
+    block(0x81928b,x+direction*.88,7.37,z,1.85,.09,.13);
+    block(0xe6e7d5,x+direction*1.7,7.29,z,.66,.12,.42);
+  }
+  function sidewalks(crossing){
+    for(const side of [-1,1]){
+      for(let d=-18;d<296;d+=5){
+        if(d>crossing+1&&d<crossing+21)continue;
+        block(0xbab6a4,side*9.75,.05,-d,3.5,.24,4.99);
+      }
+      for(let d=-8;d<295;d+=30)if(Math.abs(d-crossing-10)>11)lamp(side*8.7,-d);
+    }
+  }
+  function schoolRoute(){
+    sceneryParent=routeSets.school;roadMarkings(60);sidewalks(60);
+    const stucco=0xefc881,trim=0xf6e7c9,tile=0xa04f36,gate=0x36645e;
+    block(0x89a45d,10,-.16,-100,130,.17,370);
+    block(0xd4ae83,27,.035,-27,32,.14,69);
+    // Open-air galleries and clay tile roofs overlook the school courtyard.
+    for(const [x,z,length] of [[34,-24,52],[29,-88,24]]){
+      block(stucco,x,4,z,9,8,length);
+      block(tile,x,8.22,z,10.1,.45,length+.85);
+      block(trim,x-4.9,4.1,z,2.9,.28,length+.4);
+      for(let d=-length/2+1.5;d<length/2;d+=3.1){
+        for(const y of [1.85,5.8]){
+          block(0x3b625d,x-4.52,y,z+d,.07,2.55,1.95);
+          block(trim,x-4.56,y,z+d,.08,2.55,.08);
+          block(trim,x-5.9,y,z+d,.28,3.9,.28);
+        }
+      }
+      block(stucco,x-5.85,4.78,z,.17,1.15,length);
+    }
+    for(let d=-9;d<60;d+=3){
+      if(d>17&&d<36)continue;
+      block(0xe6c78d,11.8,.62,-d,.43,1.22,3);
+      block(trim,11.8,1.6,-d,.55,3.2,.47);
+      for(let n=0;n<6;n++)block(gate,11.8,1.75,-d+n*.5,.09,1.18,.055);
+      block(gate,11.8,2.25,-d,.08,.09,3);
+    }
+    for(const d of [17,36]){
+      block(stucco,12,2.55,-d,1.25,5.1,1.15);
+      block(tile,12,5.1,-d,1.65,.28,1.55);
+      block(trim,12,.55,-d,1.4,1.05,1.32);
+    }
+    block(stucco,12,4.74,-26.5,1,1.06,19.6);
+    block(tile,12,5.35,-26.5,1.4,.24,20.4);
+    part(panel,caption('TRƯỜNG TIỂU HỌC HOA SEN','#91442e','#ffe9bd'),11.46,4.72,-26.5,18,.95,1,-Math.PI/2);
+    const entrance=caption('CỔNG TRƯỜNG','#205751','#fff5cf','GIẢM TỐC ĐỘ');
+    block(0x6c7871,8.85,1.7,-6,.11,3.4,.12);
+    part(panel,entrance,8.85,2.8,-5.93,2.9,.85,1);
+    block(0x96988b,20,5,-25,.1,10,.1);
+    part(panel,flagMaterial,20.8,9.1,-25,1.6,1.02,1);
+    for(let d=-10;d<245;d+=10){
+      if(Math.abs(d-72)<12)continue;
+      tree(-10.4,-d);
+      if(d<16||d>35)tree(15.3,-d);
+      if(d%30===0)flowerPot(12,.2,-d-2);
+    }
+    for(let d=-10;d<230;d+=19){
+      if(Math.abs(d-72)<15)continue;
+      const k=Math.abs(Math.floor(d/19))%8,h=5.4+k*.35;
+      block(paints[k],-18,h*.5,-d,9,h,10.5);
+      part(panel,facades[k],-13.47,h*.5,-d,10.5,h,1,Math.PI/2);
+      block(tile,-18,h,-d,10,.38,11.5);
+      if(d>103){block(stucco,19,h*.5,-d,11,h,12);part(panel,facades[(k+3)%8],13.47,h*.5,-d,12,h,1,-Math.PI/2);}
+    }
+  }
+  const cone=new T.ConeGeometry(.24,.78,20);
+  const band=new T.CylinderGeometry(.091,.145,.16,20);
+  const drum=new T.CylinderGeometry(.68,.68,1.25,28);
+  const wheelGeo=new T.CylinderGeometry(.58,.58,.30,28);
+  const barPattern=basic(texture(512,96,c=>{
+    c.fillStyle='#e8e5da';c.fillRect(0,0,512,96);
+    c.fillStyle='#cb532f';for(let x=-75;x<575;x+=96){c.beginPath();c.moveTo(x,96);c.lineTo(x+47,96);c.lineTo(x+95,0);c.lineTo(x+48,0);c.fill();}
+  }));
+  function barrier(id,x,d,w,l){
+    block(0xb2aca0,x,.18,-d,w+.2,.36,l+.14);
+    block(0xdbd5c3,x,.58,-d,w,.67,l);
+    part(panel,barPattern,x,.61,-d+l*.5+.012,w,.32,1);
+    if(l>1)part(panel,barPattern,x-w*.5-.012,.61,-d,l,.32,1,-Math.PI/2);
+    worksObstacles.push({id,type:'barrier',x,distance:d,halfWidth:(w+.2)/2,halfLength:(l+.14)/2,velocity:0});
+  }
+  function roadworks(){
+    sceneryParent=routeSets.works;roadMarkings(125);sidewalks(125);
+    block(0xb9ab8b,22,-.175,-98,110,.18,360);
+    const steel=0x656f6a,yellow=0xe4aa3d;
+    const depot=caption('BẾN VẬT LIỆU','#345261','#f7ebbd');
+    for(let d=-9;d<255;d+=26){
+      if(Math.abs(d-136)<17)continue;
+      block(0x9da4a0,-19,2.7,-d,13,5.4,20);
+      block(0x637676,-19,5.46,-d,14.2,.32,21.1);
+      for(let n=0;n<24;n++)block(0x818d87,-12.47,2.6,-d+n*.76-9,.08,4.8,.11);
+      block(0x4c5450,-12.39,1.68,-d,.11,3.3,3.3);
+      if(d<60)part(panel,depot,-12.36,4,-d,5,.98,1,Math.PI/2);
+      if(d>103)tree(11.6,-d);
+    }
+    for(const [x,d,width] of [[22,44,13],[33,75,16],[25,95,12]]){
+      for(let y=0;y<16;y+=3.5){
+        block(0xa29c90,x,y+.18,-d,width,.33,15);
+        for(const dx of [-width/2+1,0,width/2-1])for(const dz of [-6,0,6])block(0xb5a99b,x+dx,y+1.86,-d+dz,.55,3.44,.55);
+      }
+      for(let dz=-7;dz<=7;dz+=2.2)block(steel,x-width*.5,7.8,-d+dz,.12,16,.12);
+      for(let y=1;y<17;y+=2.1)block(steel,x-width*.5,y,-d,.14,.12,15);
+    }
+    // A lattice crane silhouetted above the unfinished slabs.
+    for(const dx of [-.9,.9])for(const dz of [-.9,.9])block(yellow,23+dx,13,-56+dz,.2,26,.2);
+    for(let y=1;y<26;y+=2.2){
+      block(yellow,23,y,-56.9,2,.15,.14);
+      block(yellow,23,y,-55.1,2,.15,.14);
+      block(yellow,23,y,-56.9,.11,2.8,.11,0,.68);
+    }
+    block(yellow,23,26,-58,1.85,.32,35);
+    block(yellow,23,27.25,-58,.3,.22,35);
+    for(let d=41;d<76;d+=2)block(yellow,23,26.6,-d,.16,1.1,.16);
+    block(0x62645e,23,26.8,-42,2.6,2.1,4);
+    block(steel,23,20,-72,.05,12,.05);
+    // Trench, roller, barrels and the physical limits of the work enclosure.
+    block(0x5d4935,6.94,.023,-73,2.1,.032,46);
+    for(let d=45;d<=100;d+=5){
+      const x=d<55?6.6-(d-45)*.10:5.6;
+      block(0x312e2a,x,.07,-d,.57,.12,.57);part(cone,0xfa7130,x,.5,-d,1,1,1);part(band,0xfff5d5,x,.51,-d,1,1,1);
+      worksObstacles.push({id:'cone-'+d,type:'barrier',x,distance:d,halfWidth:.28,halfLength:.28,velocity:0});
+    }
+    barrier('works-entry',6.85,42,1.75,.56);
+    for(let d=57;d<=95;d+=6)barrier('works-wall-'+d,5.9,d,.42,4.9);
+    const machine=new T.Group();sceneryParent.add(machine);
+    machine.position.set(7.03,0,-72);machine.rotation.y=.04;
+    block(yellow,0,1.0,0,1.36,.86,3.6,0,0,machine);
+    block(0x293537,0,1.68,.24,1.18,.73,1.8,0,0,machine);
+    block(0x476068,0,2.2,.36,1.12,.61,1.28,0,0,machine);
+    block(yellow,0,2.59,.37,1.35,.14,1.53,0,0,machine);
+    const roller=new T.Mesh(drum,material(0x4e5755));roller.rotation.z=Math.PI/2;roller.position.set(0,.68,-1.25);machine.add(roller);
+    for(const dx of [-.58,.58]){const wheel=new T.Mesh(wheelGeo,material(0x323a38));wheel.rotation.z=Math.PI/2;wheel.position.set(dx,.58,1.08);machine.add(wheel);}
+    worksObstacles.push({id:'roller',type:'barrier',x:7.03,distance:72,halfWidth:.75,halfLength:1.95,velocity:0});
+    for(let d=17;d<106;d+=4){
+      block(0x8f9c90,10.3,1.12,-d,.16,2.2,3.95);
+      for(let k=0;k<8;k++)block(0x77877c,10.19,1.13,-d+k*.48-1.75,.06,2.2,.07);
+    }
+    const worksSign=caption('CÔNG TRƯỜNG','#cd702b','#171d1c','LÀN PHẢI ĐANG THI CÔNG');
+    block(steel,8.65,1.7,-12,.12,3.4,.12);
+    part(panel,worksSign,8.65,2.85,-11.92,3.5,.99,1);
+    const clearSign=caption('HẾT CÔNG TRƯỜNG','#2b5b50','#fff4d9');
+    block(steel,8.55,1.85,-225,.12,3.7,.12);
+    part(panel,clearSign,8.55,3.13,-224.92,3.6,.92,1);
+  }
+  schoolRoute();roadworks();sceneryParent=scene;
+  let selectedCourse='city';
+  window.courseObstacles=()=>selectedCourse==='works'?worksObstacles:[];
+  window.setDriveCourse=course=>{
+    selectedCourse=course.id;
+    for(const [id,group] of Object.entries(routeSets))group.visible=id===selectedCourse;
+    signalGroup.position.z=90-course.crossing;
+    speedGroup.position.z=25-course.sign;
+    speedMaterial.map=course.limit===30?speed30:speed40;
+    parkingGroup.position.z=180-course.finish;
+    parkingGroup.visible=selectedCourse!=='works';
+    sun.color.setHex(selectedCourse==='school'?0xffedc9:selectedCourse==='works'?0xffdda9:0xffce8a);
+    scene.fog.color.setHex(selectedCourse==='school'?0xe1e5c9:selectedCourse==='works'?0xe4cfb8:0xf1cfac);
+    renderer.shadowMap.needsUpdate=true;
+  };
+  window.setDriveCourse({id:'city',crossing:90,finish:180,limit:40,sign:25});
   function hull(group,mat,rings) {
     const vertices=[],indices=[];
     const sides=8;
@@ -409,6 +597,8 @@
     scene.add(group);return group;
   }
   const player=car(0xd8a652,true);
+  const cabinRig=new T.Group();scene.add(cabinRig);
+  const driverCabin=window.buildDriverCabin(T,cabinRig);
   // The compact fallback is immediately available while the full vehicle loads.
   async function loadPlayerSedan(){
     const response=await fetch('streetscape/sedan.json.gz');
@@ -443,129 +633,16 @@
     player.add(groundShadow,model);
   }
   loadPlayerSedan().catch(()=>{ /* Keep the lightweight car on older browsers or offline file URLs. */ });
-  const opposing=[car(0x96bcab),car(0xd7d8d0),car(0xa0523c)];
-  const scooters=[];
-  for(let i=0;i<5;i++){
-    const g=new T.Group();scene.add(g);scooters.push(g);
-    for(const z of [-.53,.56])part(tire,0x252d2e,0,.26,z,.14,.26,.26,0,0,g);
-    block(i%2?0xaf3e32:0x306967,0,.54,0,.38,.46,1.13,0,0,g);
-    part(leaf,i%2?0x355e79:0xac795d,0,1.01,.1,.27,.44,.20,0,0,g);
-    part(leaf,0xf3ba8e,0,1.52,.09,.18,.20,.17,0,0,g);
-    part(leaf,i%2?0xe2d3af:0x529ba3,0,1.62,.09,.2,.15,.19,0,0,g);
-  }
-  for(const {geo,mat,matrices} of staticParts.values()){
+  const traffic=window.createStreetTraffic(scene,shadowTex);
+  for(const {geo,mat,matrices,host} of staticParts.values()){
     const mesh=new T.InstancedMesh(geo,mat,matrices.length);
     matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));
     mesh.receiveShadow=true;
     mesh.castShadow=mat!==roadMaterial && mat!==flagMaterial && matrices[0].elements[5]>.03;
-    scene.add(mesh);
-  }
-  const pedestrian=new T.Group();
-  scene.add(pedestrian);
-  const sphere=new T.SphereGeometry(1,12,10);
-  const hips=[];
-  const shoulders=[];
-  function ellipsoid(group,color,x,y,z,w,h,d){
-    return part(sphere,color,x,y,z,w,h,d,0,0,group);
-  }
-  pedestrian.rotation.y=Math.PI/2;
-  ellipsoid(pedestrian,0xa34539,0,1.13,0,.235,.35,.14);
-  ellipsoid(pedestrian,0xcda385,0,1.61,0,.115,.145,.115);
-  ellipsoid(pedestrian,0x2e221c,0,1.69,.01,.12,.085,.117);
-  for(const side of [-1,1]){
-    const leg=new T.Group(),arm=new T.Group();
-    leg.position.set(side*.108,.88,0);arm.position.set(side*.208,1.35,0);
-    pedestrian.add(leg,arm);hips.push(leg);shoulders.push(arm);
-    ellipsoid(leg,0x283749,0,-.36,0,.088,.42,.098);
-    ellipsoid(leg,0x3b3936,0,-.77,.04,.085,.075,.15);
-    ellipsoid(arm,0xa34539,0,-.11,0,.083,.16,.085);
-    ellipsoid(arm,0xc99c7e,0,-.34,0,.058,.17,.062);
-  }
-  let crossingTime=0, previousDistance=0, previousTime=0;
-  function animateCrossing(distance,time,green){
-    if(distance<previousDistance-2 || time<previousTime)crossingTime=0;
-    const delta=Math.max(0,Math.min(.2,time-previousTime));
-    if(distance>=65 && !green)crossingTime+=delta;
-    const progress=green?1:Math.min(1,crossingTime/10.5);
-    pedestrian.position.set(-8.6+progress*17.2,0,-93);
-    const stride=progress>0 && progress<1?Math.sin(crossingTime*7.4)*.48:0;
-    hips[0].rotation.x=stride;hips[1].rotation.x=-stride;
-    shoulders[0].rotation.x=-stride;shoulders[1].rotation.x=stride;
-    previousDistance=distance;previousTime=time;
+    host.add(mesh);
   }
 
-  // Separate camera-space cabin keeps the eye point and dashboard proportions fixed.
-  const interior=new T.Scene();
-  const dashCamera=new T.OrthographicCamera(-1,1,1,-1,.01,8);
-  dashCamera.position.z=4;
-  interior.add(new T.HemisphereLight(0xe8f6ff,0x77726a,1.8));
-  const cabinLight=new T.DirectionalLight(0xffe0ae,2.1);
-  cabinLight.position.set(-3,5,4);interior.add(cabinLight);
-  const leather=texture(128,128,(c,w,h)=>{
-    c.fillStyle='#363a3b';c.fillRect(0,0,w,h);
-    for(let i=0;i<8300;i++){c.fillStyle=random()>.5?'#46494a':'#292c2d';c.fillRect(random()*w,random()*h,1+random(),1);}
-  });
-  leather.wrapS=leather.wrapT=T.RepeatWrapping;
-  leather.repeat.set(5,1);
-  const softTrim=new T.MeshPhongMaterial({map:leather,shininess:12,specular:0x454846});
-  const darkTrim=new T.MeshPhongMaterial({color:0x22282b,shininess:20});
-  const chrome=new T.MeshPhongMaterial({color:0xa9b2b6,shininess:100});
-  const consoleGroup=new T.Group();
-  interior.add(consoleGroup);
-  consoleGroup.position.y=.105;
-  function surface(group,points,depth,mat,z=0,bevel=.01){
-    const shape=new T.Shape();
-    points.forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y));
-    shape.closePath();
-    const geo=new T.ExtrudeGeometry(shape,{depth,bevelEnabled:bevel>0,bevelThickness:bevel,bevelSize:bevel,bevelSegments:2});
-    const mesh=new T.Mesh(geo,mat);mesh.position.z=z;group.add(mesh);return mesh;
-  }
-  const dash=surface(consoleGroup,[[-3,-.84],[-2,-.76],[-1.2,-.68],[-.65,-.64],[.05,-.66],[1.3,-.72],[3,-.82],[3,-1.2],[-3,-1.2]],.09,softTrim);
-  dash.rotation.x=-.07;
-  surface(consoleGroup,[[-3,-.95],[-1,-.83],[.2,-.85],[3,-1.02],[3,-1.06],[.2,-.89],[-1,-.87],[-3,-.99]],.02,chrome,.1,.003);
-  const cluster=new T.Group();consoleGroup.add(cluster);
-  cluster.position.set(-.28,-.745,.12);
-  surface(cluster,[[-.39,-.1],[-.35,.10],[-.25,.145],[.25,.145],[.35,.095],[.39,-.10]],.055,darkTrim);
-  const gauge=texture(640,180,c=>{
-    const bg=c.createLinearGradient(0,0,0,180);bg.addColorStop(0,'#16252c');bg.addColorStop(1,'#080e14');
-    c.fillStyle=bg;c.fillRect(0,0,640,180);c.textAlign='center';
-    for(const [cx,max,step,label] of [[147,80,10,'km/h'],[495,8,1,'×1000 r/min']]){
-      for(let n=0;n<=40;n++){
-        const a=Math.PI*(.84+n/40*1.33),major=n%5===0;
-        c.strokeStyle=n>33?'#f58f62':'#ccdcde';c.lineWidth=major?3:1;
-        c.beginPath();c.moveTo(cx+Math.cos(a)*80,105+Math.sin(a)*80);
-        c.lineTo(cx+Math.cos(a)*(major?67:74),105+Math.sin(a)*(major?67:74));c.stroke();
-        if(major){c.fillStyle='#e9f0ed';c.font='17px Arial';c.fillText(n/5*step,cx+Math.cos(a)*54,111+Math.sin(a)*54);}
-      }
-      c.fillStyle='#c1cdcf';c.font='15px Arial';c.fillText(label,cx,139);
-    }
-    c.fillStyle='#8ad9b4';c.font='bold 44px Arial';c.fillText('D',320,85);
-    c.fillStyle='#cbd8d5';c.font='14px Arial';c.fillText('DRIVE',320,111);
-  });
-  part(panel,basic(gauge),0,.012,.065,.68,.195,1,0,0,cluster);
-  const needles=[];
-  for(const cx of [147,495]){
-    const pivot=new T.Group();
-    pivot.position.set((cx/640-.5)*.68,.012+(.5-105/180)*.195,.073);
-    cluster.add(pivot);
-    surface(pivot,[[0,.003],[.070,.0006],[0,-.003]],.001,new T.MeshBasicMaterial({color:0xff914c}),0,0);
-    needles.push(pivot);
-  }
-  const wheel=new T.Group();
-  wheel.position.set(-.284,-1.014,.44);consoleGroup.add(wheel);
-  const rim=new T.Mesh(new T.TorusGeometry(.315,.034,12,72),softTrim);wheel.add(rim);
-  for(const angle of [-1.38,1.38,Math.PI]){
-    const spoke=surface(wheel,[[-.03,.02],[-.025,.29],[.027,.29],[.056,.03]],.022,chrome);
-    spoke.rotation.z=angle;
-  }
-  surface(wheel,[[-.152,.065],[-.12,.096],[.12,.096],[.152,.065],[.115,-.062],[.06,-.092],[-.065,-.092],[-.124,-.055]],.04,darkTrim,.023,.015);
-  block(chrome,0,.01,.09,.085,.009,.006,0,0,wheel);
-  for(let i=0;i<8;i++)block(darkTrim,.66,-.80-i*.012,.12,.42,.005,.02,0,-.005,consoleGroup);
-  const pillars=[];
-  for(const side of [-1,1]){
-    const g=new T.Group();interior.add(g);pillars.push(g);
-    surface(g,[[0,-.86],[-side*.072,-.73],[-side*.39,1.1],[-side*.26,1.1],[side*.06,-.76]],.05,darkTrim);
-  }
+
   let cockpit=true;
   let previewOverridden=false;
   window.toggleDriveCamera=()=>{
@@ -582,13 +659,18 @@
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
   const offset=new T.Vector3(),aim=new T.Vector3();
   const desiredOffset=new T.Vector3(),desiredAim=new T.Vector3();
-  let previousFrame=0, cabinAmount=0, previousView='';
+  let previousFrame=0, cabinAmount=0, previousView='', vehicleYaw=0;
   function positionCamera(distance,lateral,time,steering,mode,speed){
     const view=mode==='ready'&&!previewOverridden?'reveal':cockpit?'inside':'follow';
     const now=performance.now();
     const dt=Math.min(.12,(now-previousFrame)/1000);
     const ease=reducedMotion.matches||previousView===''?1:1-Math.exp(-dt*4.8);
     previousFrame=now;previousView=view;
+    const heading=steering*Math.min(speed*.14,2.9)/Math.max(.01,speed/3.6);
+    vehicleYaw=T.MathUtils.lerp(vehicleYaw,-Math.atan(heading)*Math.min(1,speed/6),ease);
+    player.rotation.y=vehicleYaw;
+    cabinRig.position.copy(player.position);
+    cabinRig.rotation.y=vehicleYaw;
     let fov;
     if(view==='reveal'){
       const arc=reducedMotion.matches?0:Math.sin(time*.13);
@@ -597,9 +679,14 @@
       fov=47;
     }else if(view==='inside'){
       const sway=reducedMotion.matches?0:Math.min(speed/40,1)*.008*Math.sin(distance*1.25);
-      desiredOffset.set(-.32,1.43+sway,2.6);
-      desiredAim.set(-.32+steering*.55,1.12,-12);
-      fov=61;
+      desiredOffset.set(-.31,1.095+sway,2.66);
+      desiredAim.set(-.31,-.40,-12);
+      const c=Math.cos(vehicleYaw),sn=Math.sin(vehicleYaw);
+      for(const local of [desiredAim,desiredOffset]){
+        const x=local.x,z=local.z-2.13;
+        local.x=x*c+z*sn;local.z=-x*sn+z*c+2.13;
+      }
+      fov=camera.aspect<1?72:67;
     }else{
       desiredOffset.set(.55,3.25,9);
       desiredAim.set(-.35,1.72,-8);
@@ -608,6 +695,7 @@
     offset.lerp(desiredOffset,ease);aim.lerp(desiredAim,ease);
     camera.position.set(lateral+offset.x,offset.y,offset.z-distance);
     camera.lookAt(lateral+aim.x,aim.y,aim.z-distance);
+    if(view==='inside'&&!reducedMotion.matches)camera.rotateZ(vehicleYaw*.035);
     const nextFov=T.MathUtils.lerp(camera.fov,fov,ease);
     if(Math.abs(nextFov-camera.fov)>.002){
       camera.fov=nextFov;camera.updateProjectionMatrix();
@@ -616,7 +704,7 @@
     const entering=view==='inside'&&nearCabin;
     player.visible=offset.z>4.85||Math.abs(offset.x)>1.6;
     cabinAmount=T.MathUtils.lerp(cabinAmount,entering?1:0,ease);
-    interior.position.y=-(1-cabinAmount)*1.85;
+
     return cabinAmount>.012;
   }
   let width=0,height=0;
@@ -627,26 +715,21 @@
       width=w;height=h;renderer.setSize(w,h,false);
       const aspect=w/h;
       camera.aspect=aspect;camera.updateProjectionMatrix();
-      dashCamera.left=-aspect;dashCamera.right=aspect;dashCamera.updateProjectionMatrix();
-      pillars[0].position.x=-aspect;pillars[1].position.x=aspect;
+
     }
     player.position.set(lateral,0,-distance+2.13);
     const showCabin=positionCamera(distance,lateral,time,steering,mode,speed);
     camera.updateMatrixWorld();
-    animateCrossing(distance,time,green);
+    traffic.update(distance,time,green,lateral,speed);
+    impactFX.update(camera);
     sky.position.copy(camera.position);
     bulbs[0].color.setHex(green?0x4d3533:0xff3823);bulbs[2].color.setHex(green?0x41ff82:0x29443b);
-    opposing.forEach((g,i)=>{g.rotation.y=Math.PI;g.position.set(-2.25-i%2*3,0,22-(264+i*77-time*5%264)%264);});
-    scooters.forEach((g,i)=>{const forward=i%2===0;g.rotation.y=forward?0:Math.PI;const z=15-((i*51+36+(forward?1:-1)*time*3)%260+260)%260;g.position.set(forward?6.55:-6.45,0,z);g.visible=!forward || z>-130;});
     renderer.autoClear=true;
-    renderer.render(scene,camera);
-    if(showCabin){
-      needles[0].rotation.z=-Math.PI*(.84+1.33*T.MathUtils.clamp(speed/80,0,1));
-      const rpm=speed>0?1.1+(speed%18)/18*1.9:.8;
-      needles[1].rotation.z=-Math.PI*(.84+1.33*rpm/8);
-      wheel.rotation.z=T.MathUtils.lerp(wheel.rotation.z,-steering*.9,.16);
-      renderer.autoClear=false;renderer.clearDepth();renderer.render(interior,dashCamera);
+    if(driverCabin){
+      driverCabin.update(showCabin,speed,steering,distance,courses.find(c=>c.id===selectedCourse)||courses[0]);
+      if(showCabin)driverCabin.reflect(renderer,scene,cabinRig,distance,lateral);
     }
+    renderer.render(scene,camera);
   };
   window.renderDrive(0,2,0,false,0,0,'ready');
 })();

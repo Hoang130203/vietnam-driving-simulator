@@ -1,4 +1,4 @@
-﻿/* Interior sound mix. The audio graph starts only after a user enables sound. */
+/* Interior sound mix. The audio graph starts only after a user enables sound. */
 (() => {
   'use strict';
   let sound;
@@ -111,5 +111,18 @@
       tone(330, 294, .18, .072);
     }
   }
-  window.driveAudio = { toggle, update, cue };
+  function impact(strength,type) {
+    if (!enabled || sound.ctx.state !== 'running') return;
+    tone(94,28,.24,.20+strength*.28);
+    if(type==='person')return;
+    const {ctx,output}=sound, source=ctx.createBufferSource(), filter=ctx.createBiquadFilter(), gain=ctx.createGain();
+    const duration=.12+strength*.28;
+    const buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*duration),ctx.sampleRate);
+    const samples=buffer.getChannelData(0);
+    for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-5*i/samples.length);
+    source.buffer=buffer;filter.type='bandpass';filter.frequency.value=type==='curb'?480:1500;filter.Q.value=.65;
+    gain.gain.value=.4+strength*.45;source.connect(filter).connect(gain).connect(output);source.start();
+    source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+  }
+  window.driveAudio = { toggle, update, cue, impact };
 })();
