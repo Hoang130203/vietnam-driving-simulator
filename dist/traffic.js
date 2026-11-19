@@ -18,7 +18,7 @@ window.createStreetTraffic = function(scene,contactMap) {
     shadow.rotation.x=-Math.PI/2;shadow.scale.set(width*3,length*2.8,1);
     shadow.position.y=.04;group.add(shadow);scene.add(group);
     const body={id,type,x,distance,halfWidth:width,halfLength:length,velocity,vx:0};
-    const item={body,group,homeX:x,initial:distance,cruise:velocity,wheels:[],loaded:false};
+    const item={body,group,shadow,homeX:x,initial:distance,cruise:velocity,wheels:[],loaded:false};
     actors.push(item);
     return item;
   }
@@ -133,10 +133,17 @@ window.createStreetTraffic = function(scene,contactMap) {
   ];
   for(const [person,name] of people)attachPerson(person,name).catch(e=>console.warn(name,e));
   const vehicles=cars.concat(bikes);
+  let previousFrame=performance.now();
+  window.strikeStreetTraffic=(other,hit,event,x,z)=>{
+    const item=vehicles.find(a=>a.body.id===other.id);if(!item)return;
+    item.bike=other.type==='bike';
+    DriveBody.strikeTraffic(item,hit,event,item.cruise<0?Math.PI:0,x,z,other.x,-other.distance);
+  };
   const axle=new T.Vector3(1,0,0),wheelAngle=new T.Quaternion();
   function updateVehicles(course,dt,red,playerDistance,playerX,playerSpeed){
     for(const a of vehicles){
       const b=a.body,sign=Math.sign(a.cruise);
+      if(a.recoil?.fallen){b.velocity=b.vx=0;continue;}
       const limit=course.finish+48;
       const requiredStop=sign>0?course.crossing-2.5-b.halfLength:course.crossing+15+b.halfLength;
       let target=a.cruise;
@@ -177,12 +184,14 @@ window.createStreetTraffic = function(scene,contactMap) {
     }
   }
   function update(distance,time,green,playerX=2,playerSpeed=0){
+    const now=performance.now(),visualDt=document.hidden?0:Math.min(.06,(now-previousFrame)/1000);previousFrame=now;
     const c=window.activeCourse || {id:'city',crossing:90,finish:180};
     const reset=courseId!==c.id || time<previousTime || distance<previousDistance-3;
     let dt=Math.min(.15,Math.max(0,time-previousTime));
     if(reset){
       for(const a of actors){
         a.body.x=a.homeX;a.body.distance=a.initial;a.body.velocity=a.cruise;a.body.vx=0;
+        delete a.recoil;
       }
       courseId=c.id;crossingElapsed=0;dt=0;
     }
@@ -210,12 +219,20 @@ window.createStreetTraffic = function(scene,contactMap) {
     roadUsers.length=0;
     for(const a of actors){
       const b=a.body;
+      DriveBody.advanceRecoil(a,visualDt);const r=a.recoil;
       a.group.position.set(b.x,b.type==='person' && Math.abs(b.x)>8.2?.12:0,-b.distance);
+      if(b.type!=='person'){
+        a.group.position.x+=r?.x||0;a.group.position.z+=r?.z||0;
+        a.group.position.y=(r?.y||0)+(r?.fallen ? .25*Math.abs(Math.sin(r.roll)) : 0);
+        a.group.rotation.set(-(r?.pitch||0),(a.cruise>0?Math.PI:0)-(r?.angle||0),-(r?.roll||0),'YXZ');
+        a.shadow.visible=!r?.fallen;
+      }
       b.velocityX=b.vx;
       const gateCrowd=b.id.startsWith('school-');
       if(gateCrowd && b.id!=='school-parent')a.group.scale.setScalar(.87);
       a.group.visible=(!gateCrowd || c.id==='school') && a.loaded && Math.abs(distance-b.distance)<125 && (a!==crossingPerson || hasCrossing);
-      if(a.group.visible)roadUsers.push(b);
+      if(a.group.visible&&!(r?.y>1.35))roadUsers.push(r?{...b,x:a.group.position.x,distance:-a.group.position.z,
+        velocityX:b.vx+r.vx,velocity:b.velocity-r.vz}:b);
     }
   }
   window.getDriveObstacles=()=>roadUsers;

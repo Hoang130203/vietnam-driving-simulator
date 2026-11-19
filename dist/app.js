@@ -41,12 +41,18 @@ function traffic(){return [...(window.getDriveObstacles?.() || []), ...(window.c
 const impactNames={person:'người đi bộ',bike:'xe máy',car:'ô tô',barrier:'rào chắn',curb:'bó vỉa'};
 function crash(hit,previous){
   const {other,relative,fraction}=hit;
-  const force=clamp(relative/65,.08,1);
+  const target=other.type==='bike'?{bike:true}:other.type==='car'?{kind:'sedan'}:other.type==='person'?{kind:'person'}:null;
+  const normal=hit.nx===undefined?{nx:-Math.sign(lateral),nz:0,depth:0,kind:'curb'}:hit;
+  const body={x:lateral,z:-distance,yaw:0};DriveBody.reset(body);
+  body.vx=hit.vx??Math.sign(lateral)*relative/3.6;body.vz=hit.vz??-speed/3.6;
+  const event=DriveBody.resolve(body,normal,other.velocityX||0,-(other.velocity||0),target);
+  const force=event.strength;
+  if(other.type==='bike'||other.type==='car')window.strikeStreetTraffic?.(other,normal,event,lateral,2.1-distance);
   const direction=Math.sign(other.x-lateral) || 1;
   // Stop at first contact rather than advancing through the obstacle.
   distance=previous.d+(distance-previous.d)*Math.max(0,fraction-.015);
   lateral=previous.x+(lateral-previous.x)*Math.max(0,fraction-.015);
-  const loss=Math.max(2,Math.round(force*36));
+  const loss=event.damage;
   damage=Math.min(100,damage+loss);collisions++;
   impactLog.push(Math.round(distance)+' m · '+(impactNames[other.type] || 'chướng ngại vật'));
   window.showDriveImpact?.({x:lateral+direction*.77,distance:distance-.28,intensity:force,type:other.type,direction});
@@ -56,6 +62,7 @@ function crash(hit,previous){
   el('incidentTitle').textContent=title;
   el('incidentDetails').textContent='Mốc '+Math.round(distance)+' m · tốc độ tiếp xúc tương đối '+Math.round(relative)+' km/h. '+(other.type==='person'?'Hãy dừng trước lối sang đường và nhường người qua hết.':other.type==='curb'?'Giảm tốc và chỉnh lái sớm khi đến gần lề.':'Giảm tốc, quan sát khoảng trống trước khi đánh lái.');
   el('damage').hidden=false;el('damage').textContent='Va chạm '+collisions+' · hư hại '+damage+'%';
+  el('incidentDetails').textContent+=' Năng lượng va chạm '+(event.energy/1000).toLocaleString('vi-VN',{maximumFractionDigits:1})+' kJ.';
   el('recover').textContent=damage>=100?'Sửa xe và tập tiếp':'Luyện tiếp từ vị trí an toàn';el('recover').focus({preventScroll:true});
 }
 function recover(){

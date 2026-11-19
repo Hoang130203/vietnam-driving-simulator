@@ -71,23 +71,25 @@ function beside(d,l,kind,color,w,h,depth,base=0,angle=0){
 }
 let seed=route.id==='pass'?732:351;
 function random(){seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;}
-function ribbon(left,right,color,raise,texture){
+function ribbon(left,right,color,raise,roadMaterial){
   const verts=[],uv=[],indices=[];
   for(let i=0;i<points.length;i++){
     for(const [edge,u] of [[left,0],[right,1]]){const p=at(i*step,edge);verts.push(p.x,p.y+raise,p.z);uv.push(u,i*step/9);}
     if(i){const n=i*2;indices.push(n-2,n-1,n,n-1,n+1,n);}
   }
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
-  const material=new T.MeshLambertMaterial({color,map:texture||null,side:T.DoubleSide});
-  if(texture)material.onBeforeCompile=shader=>{
+  const material=roadMaterial||new T.MeshLambertMaterial({color,side:T.DoubleSide});
+  if(roadMaterial)material.onBeforeCompile=shader=>{
     shader.vertexShader='varying vec2 roadUv;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n roadUv=uv;');
     shader.fragmentShader='varying vec2 roadUv;\n'+shader.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n float lane=fract(roadUv.x*2.);vec2 tracks=(vec2(lane)-vec2(.28,.72))*11.;float tires=exp(-tracks.x*tracks.x)+exp(-tracks.y*tracks.y);diffuseColor.rgb*=1.-tires*(.11+.04*sin(roadUv.y*.7));');
   };
   const surface=new T.Mesh(geo,material);surface.receiveShadow=true;scene.add(surface);
 }
-const asphalt=new T.TextureLoader().load('streetscape/asphalt.jpg');asphalt.wrapS=asphalt.wrapT=T.RepeatWrapping;asphalt.colorSpace=T.SRGBColorSpace;
-asphalt.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());asphalt.repeat.set(2,1.55);
-ribbon(-6.7,6.7,0x8a856e,-.06);ribbon(-6,6,0xb4b8b8,0,asphalt);ribbon(-5.83,-5.74,0xf1eee0,.015);ribbon(5.74,5.83,0xf1eee0,.015);
+const surfaces=createRoadSurfaces(T,renderer),roadSurface=surfaces.scanned('asphalt',0xaeb2b3,.41);
+roadSurface.side=T.DoubleSide;surfaces.transform(roadSurface,3,2.25);
+// Race.js also uses the road texture for the starting apron.
+const asphalt=roadSurface.map;
+ribbon(-6.7,6.7,0x8a856e,-.06);ribbon(-6,6,0xb4b8b8,0,roadSurface);ribbon(-5.83,-5.74,0xf1eee0,.015);ribbon(5.74,5.83,0xf1eee0,.015);
 const river=route.id==='river', [bridgeStart,bridgeEnd]=route.bridge;
 const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 function nearest(x,z){

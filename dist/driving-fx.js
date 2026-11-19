@@ -112,12 +112,12 @@ window.createDrivingFX = function (T, scene) {
   const air=new T.LineSegments(airGeo,new T.LineBasicMaterial({color:0xe2edf5,transparent:true,opacity:0,depthWrite:false,toneMapped:false}));air.frustumCulled=false;root.add(air);
   let flow=0;
 
-  function impact(x,z,nx,nz,strength,kind,groundY){
+  function impact(x,z,nx,nz,strength,kind,groundY,cameraGain=1){
     const hit=clamp(strength||0,0,1);if(!hit)return;
     const y=Number.isFinite(groundY)?groundY:(lastCar?.y||0),ground=y;
     const len=Math.hypot(nx,nz)||1;nx=(nx||0)/len;nz=(nz||0)/len;
-    kick=Math.max(kick,hit);kickX=nx;kickZ=nz;
-    const metal=['car','vehicle','pole','rail','barrier'].includes(kind);
+    if(hit*cameraGain>=kick){kick=hit*cameraGain;kickX=nx;kickZ=nz;}
+    const metal=['car','vehicle','scooter','scrape','pole','rail','barrier'].includes(kind);
     const plaster=kind==='building'||kind==='wall';
     const water=kind==='water';
     const dustTint=water?[.76,.88,.92]:plaster?[.80,.73,.62]:metal?[.69,.66,.62]:[.65,.54,.38];
@@ -139,6 +139,17 @@ window.createDrivingFX = function (T, scene) {
       chipMesh.setColorAt(iChip,chipTint.setHex(glass?0xc1d8d9:metal?(i%2?0x575353:0x8e8275):plaster?(i%2?0xe0ccac:0xac8e72):0x796a57));
     }
     if(chipMesh.instanceColor)chipMesh.instanceColor.needsUpdate=true;
+  }
+  function scrape(x,y,z,vx,vz){
+    const speed=Math.hypot(vx,vz);if(speed<3)return;
+    const dx=vx/speed,dz=vz/speed;
+    mark(x-dx*1.4,y,z-dz*1.4,x,y,z,.48);
+    for(let i=0;i<Math.min(9,2+speed*.29);i++){
+      const side=(Math.random()-.5)*3,trail=1+Math.random()*Math.min(7,speed*.55),life=.1+Math.random()*.22;
+      Object.assign(sparks[sparkIndex++%sparkCount],{x,y:y+.13,z,ground:y,dx:-dx*trail+dz*side,
+        dy:.3+Math.random()*2.5,dz:-dz*trail-dx*side,life,total:life});
+    }
+    puff(x,y+.12,z,-dx*.55,.38,-dz*.55,.2,.55,[.54,.52,.49],.25);
   }
   function reset(){
     for(const pool of [smoke,sparks,chips])for(const p of pool)p.life=0;
@@ -236,5 +247,5 @@ window.createDrivingFX = function (T, scene) {
     kick*=Math.exp(-dt*8);
   }
   reset();
-  return {update,impact,reset};
+  return {update,impact,scrape,reset};
 };

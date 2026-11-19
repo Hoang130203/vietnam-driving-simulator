@@ -19,3 +19,20 @@ https://polyhaven.com/a/leafy_grass
 https://polyhaven.com/a/brown_mud
 
 The roadside rain tree and coconut palm are original AI-generated cutout assets, exported as transparent WebP images for the game.
+
+Scanned road, verge, upland ground, meadow and plaster materials are adapted from the following Poly Haven assets. Color, OpenGL normal and roughness maps are stored locally in WebP format. Poly Haven assets are CC0.
+https://polyhaven.com/license
+https://polyhaven.com/a/asphalt_04
+https://polyhaven.com/a/brown_mud_leaves_01
+https://polyhaven.com/a/aerial_grass_rock
+https://polyhaven.com/a/leafy_grass
+https://polyhaven.com/a/plastered_wall_04
+
+The distant terrain mesh uses Mapzen Terrain Tiles on AWS, accessed 2026-11-19. Global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey. Global ETOPO1 terrain data courtesy of the U.S. National Oceanic and Atmospheric Administration. Heights are quantized from the Terrarium tiles in the Vietnam extent. The local ground under the car is blended flat.
+https://registry.opendata.aws/terrain-tiles/
+https://github.com/tilezen/joerd/blob/master/docs/attribution.md
+
+Regional terrain colour is adapted from NASA Blue Marble Next Generation, accessed through NASA GIBS. It is a historical satellite composite.
+https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/
+
+The six Vietnamese shopfront elevations are AI-generated architectural illustrations of fictional shops.

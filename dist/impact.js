@@ -16,7 +16,11 @@ window.firstRoadContact = function (before, after, dt, obstacles) {
       }
     }
     if (entry <= exit && (!first || entry < first.fraction)) {
-      first = {other, fraction: entry, relative: Math.hypot(vx,vz) / Math.max(.001,dt) * 3.6};
+      const atX=dx+entry*vx,atD=dz+entry*vz;
+      const side=Math.abs(atX)/(.93+other.halfWidth)>Math.abs(atD)/(2.07+other.halfLength);
+      first = {other,fraction:entry,relative:Math.hypot(vx,vz)/Math.max(.001,dt)*3.6,
+        nx:side?(Math.sign(atX)||1):0,nz:side?0:-(Math.sign(atD)||1),depth:0,
+        vx:(after.x-before.x)/Math.max(dt,.001),vz:-(after.d-before.d)/Math.max(dt,.001)};
     }
   }
   return first;

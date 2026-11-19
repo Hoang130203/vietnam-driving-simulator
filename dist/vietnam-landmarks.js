@@ -10,7 +10,25 @@ window.VietnamLandmarks=(()=>{
       source:'https://danangfantasticity.com/en/culture-en/danang-cathedral'},
     {id:'market',name:'Chợ Bến Thành',city:'TP. Hồ Chí Minh',lon:106.698017,lat:10.772568,yaw:.532,width:89,depth:122,
       start:[106.698484,10.771409],map:'https://www.openstreetmap.org/way/39514795',
-      source:'https://visithcmc.vn/vi/kham-pha-cho-ben-thanh-tphcm-tu-a-z-5-phut-doc/'}
+      source:'https://visithcmc.vn/vi/kham-pha-cho-ben-thanh-tphcm-tu-a-z-5-phut-doc/'},
+    {id:'sapa',name:'Nhà thờ đá Sa Pa',city:'Sa Pa',lon:103.8423215,lat:22.335102,yaw:-2.31,width:12.6,depth:38.5,scale:[1.11,1,1.24],
+      start:[103.841426,22.335771],map:'https://www.openstreetmap.org/way/1379648108',source:'https://vietnamtourism.gov.vn/en/post/11269'},
+    {id:'coal',name:'Bảo tàng Quảng Ninh',city:'Hạ Long',lon:107.097448,lat:20.9485596,yaw:1.386,width:62,depth:45,scale:[1.09,1,.98],
+      start:[107.098402,20.949146],map:'https://www.openstreetmap.org/way/674061974',source:'https://dulichso.quangninh.gov.vn/article/bao-tang-quang-ninh-bieu-tuong-than-da-giua-long-ha-long-2d1'},
+    {id:'flag',name:'Kỳ Đài',city:'Huế',lon:107.5802849,lat:16.4663006,yaw:.623,width:78,depth:49,scale:[1.18,1,.79],
+      start:[107.581668,16.465841],map:'https://www.openstreetmap.org/way/218427614',source:'https://svhtt.hue.gov.vn/tin-trong-tinh/khanh-thanh-cong-trinh-chieu-sang-my-thuat-ky-dai-hue.html'},
+    {id:'ponagar',name:'Tháp Bà Po Nagar',city:'Nha Trang',lon:109.195463,lat:12.265371,yaw:1.56,width:47,depth:58,
+      start:[109.196350,12.265950],map:'https://www.openstreetmap.org/way/146780347',source:'https://vietnam.travel/vi/things-to-do/vietnams-cham-legacy/'},
+    {id:'nghinh',name:'Tháp Nghinh Phong',city:'Tuy Hòa',lon:109.307256,lat:13.1163162,yaw:-2.13,width:38,depth:14,
+      start:[109.306441,13.115609],map:'https://www.openstreetmap.org/node/11055944805',source:'https://vietnamtourism.gov.vn/printer/54780?type=1'},
+    {id:'rong',name:'Nhà rông Kon Klor',city:'Kon Tum',lon:108.0344241,lat:14.3482379,yaw:-1.32,width:16.7,depth:9.9,
+      start:[108.033765,14.347389],map:'https://www.openstreetmap.org/node/4133919102',source:'https://nongthon.vietnamtourism.gov.vn/thanh-pho-kon-tum-bao-ton-va-phat-huy-gia-tri-nghe-truyen-thong/'},
+    {id:'station',name:'Ga Đà Lạt',city:'Đà Lạt',lon:108.4544254,lat:11.9415757,yaw:-.99,width:66,depth:17,scale:[1.27,1,1.07],
+      start:[108.453436,11.941116],map:'https://www.openstreetmap.org/relation/17877171',source:'https://vietnamtourism.gov.vn/post/33922'},
+    {id:'bat',name:'Chùa Dơi',city:'Sóc Trăng',lon:105.9724502,lat:9.5789424,yaw:-1.219,width:13.1,depth:19.7,scale:[.8,1,.68],
+      start:[105.972331,9.580009],map:'https://www.openstreetmap.org/way/669125218',source:'https://dantoc.vietnamtourism.gov.vn/kham-pha-chua-doi-noi-hoi-tu-van-hoa-khmer-viet-hoa/'},
+    {id:'dinh',name:'Dinh Cậu',city:'Phú Quốc',lon:103.9564106,lat:10.2172171,yaw:1.01,width:11,depth:13,
+      start:[103.957484,10.217047],map:'https://www.openstreetmap.org/way/1491082316',source:'https://vietnamtourism.gov.vn/post/54798'}
   ];
   const churchRails=[[-14.7,39,.29,16.4],[14.7,39,.29,16.4],[-10.05,55.1,4,.38],[10.05,55.1,4,.38]];
 
@@ -52,12 +70,12 @@ window.VietnamLandmarks=(()=>{
       s.lineTo(span,0);s.lineTo(width/2,0);s.lineTo(width/2,height);s.lineTo(-width/2,height);s.closePath();
       profile(s,tint,x,y,z,.28,angle);
     }
-    function sign(title,x,y,z,width,height){
+    function sign(title,x,y,z,width,height,glass=false){
       const canvas=document.createElement('canvas');canvas.width=768;canvas.height=128;
-      const g=canvas.getContext('2d');g.fillStyle='#f2dfa7';g.fillRect(0,0,768,128);
-      g.fillStyle='#703d39';g.font='bold 76px Georgia, serif';g.textAlign='center';g.textBaseline='middle';g.fillText(title,384,67,732);
+      const g=canvas.getContext('2d');if(!glass){g.fillStyle='#f2dfa7';g.fillRect(0,0,768,128);}
+      g.fillStyle=glass?'#f1f2ef':'#703d39';g.font=glass?'bold 78px Arial':'bold 76px Georgia, serif';g.textAlign='center';g.textBaseline='middle';g.fillText(title,384,67,732);
       const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
-      const panel=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,roughness:.86}));
+      const panel=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,transparent:glass,alphaTest:glass?.32:0,roughness:.86}));
       panel.position.set(x,y,z);group.add(panel);
     }
     if(id==='turtle'){
@@ -180,6 +198,187 @@ window.VietnamLandmarks=(()=>{
       box(glass,0,3.35,61,6.6,6.4,.28);arch(trim,0,.24,61.21,9.4,7.2);
       sign('CHỢ BẾN THÀNH',0,10.65,61.04,8.65,1.44);
     }
+    // The following pieces share the same baked mesh and metric coordinates as the original three sites.
+    const stone=0xa3937c,ochre=0xd3a451,cream=0xf3deb0,tileRed=0x95513d,wood=0x633e2e;
+    function gable(x,eaves,z,w,h,d,tint){
+      outline([[-w/2,0],[0,h],[w/2,0]],tint,x,eaves,z-d/2,d);
+    }
+    function steps(x,z,width,count){
+      for(let i=0;i<count;i++)box(i%2?0xc1b49a:0xb7ac97,x,(count-i)*.085,z+i*.36,width,(count-i)*.17,.39);
+    }
+    function dial(x,y,z,r){
+      stamp(round,0x6d6253,x,y,z,r,.14,r,0,Math.PI/2);
+      stamp(round,0xf2e7c9,x,y,z+.13,r*.89,.09,r*.89,0,Math.PI/2);
+      for(let i=0;i<12;i++){
+        const a=i*Math.PI/6;box(wood,x+r*.74*Math.sin(a),y+r*.74*Math.cos(a),z+.21,.07,r*.16,.07,0,0,-a);
+      }
+      for(const [a,l] of [[-.78,.42],[1.15,.7]])box(wood,x+Math.sin(a)*l*r/2,y+Math.cos(a)*l*r/2,z+.25,.08,r*l,.08,0,0,-a);
+    }
+    function stoneWindow(x,y,z,w,h,angle=0){
+      box(0x46504d,x,y+h/2,z,w,h,.16,angle);
+      arch(0xc4beb1,x+.13*Math.sin(angle),y,z+.13*Math.cos(angle),w+.3,h+.16,angle);
+    }
+    if(id==='sapa'){
+      const brick=0x9d998d,w=10.4;
+      box(brick,0,3.25,-2,w,6.5,27);gable(0,6.5,-2,w+1,4,28,0x71685b);
+      for(const side of [-1,1])for(let i=0;i<6;i++){
+        const z=-14+i*4.6;box(0xb3afa2,side*5.25,3,z,1.1,6.1,.64);
+        stoneWindow(side*5.23,1.6,z+1.9,1.45,3.5,side*Math.PI/2);
+      }
+      box(brick,0,8.45,12.0,4.9,16.9,5.3);
+      for(const h of [5.1,10.9,16.55])box(0xc4bfb3,0,h,12,5.34,.28,5.75);
+      stoneWindow(0,.35,14.7,2.45,4.3);stoneWindow(0,12.0,14.72,2.25,3.45);
+      dial(0,9.25,14.71,1.05);
+      tapered(0x5b5e5c,0,19.1,12,3.82,.12,4.6);box(cream,0,21.84,12,.12,1.4,.12);box(cream,0,22,12,.77,.12,.12);
+      for(const s of [-1,1]){box(brick,s*3.8,2.75,12.7,2.35,5.5,2.55);gable(s*3.8,5.5,12.7,2.6,1.8,2.8,0x827768);}
+      steps(0,15,7,4);
+    }
+    if(id==='coal'){
+      // Dark glass expansion joints catch different bands of sky and coastal haze.
+      box(0x93958e,0,.44,0,58,.88,48);
+      for(const s of [-1,1]){
+        const d=s===1?21:24,z=s*11.4;
+        box(0x263439,0,12.5,z,55,24,d);
+        for(let i=0;i<22;i++)for(let j=0;j<7;j++){
+          const floor=0x283e45+j*0x020202;
+          box(floor+(i%6)*0x010101,(i-10.5)*2.48,2.6+j*3.35,z+s*(d/2+.05),2.43,3.30,.08);
+        }
+      }
+      box(0x394346,0,3.3,22.15,18,6.6,2.3);steps(0,24.0,30,7);
+      sign('BẢO TÀNG QUẢNG NINH',0,19.8,22.1,32,2.75,true);
+    }
+    if(id==='flag'){
+      for(const [base,w,d,h] of [[0,66,62,5.5],[5.5,48,44,5.8],[11.3,32,29,5.8]]){
+        box(0x807c69,0,base+h/2,0,w,h,d);
+        box(0xa49a7f,0,base+h-.18,0,w+.42,.5,d+.42);
+        for(let z=-d*.45;z<d*.47;z+=4.3)for(const side of [-1,1])box(0x6e7060,side*w/2,base+h*.57,z,.11,.86,1.2);
+      }
+      stamp(round,0xa2957d,0,36,0,.29,38,.29);
+      // Folded red flag with the national star visible on either face.
+      const flagY=51.8;
+      const wave=x=>Math.sin(x*.42)*.57;
+      for(let i=0;i<16;i++){const x=(i+.5)*.63;box(0xc62827,x,flagY-i*.04,wave(x),.65,6,.055,-Math.atan(.24*Math.cos(x*.42)));}
+      const star=Array.from({length:10},(_,i)=>[Math.sin(i*Math.PI/5)*(i%2?.62:1.65),Math.cos(i*Math.PI/5)*(i%2?.62:1.65)]);
+      for(const side of [-1,1])outline(star,0xf3c837,4.7,flagY-.25,wave(4.7)+side*.32,.02);
+    }
+    if(id==='ponagar'){
+      const brick=0xa85339,dark=0x70402e;
+      // The surviving towers rise over the red-brick column hall on Cù Lao hill.
+      const mound=new T.SphereGeometry(1,40,10);stamp(mound,0x73834f,0,-3.5,0,29,10,30);mound.dispose();
+      const shrub=new T.IcosahedronGeometry(1,0);
+      for(let i=0;i<100;i++){
+        const a=i*2.4,r=.76+random()*.22,x=29*r*Math.cos(a),z=30*r*Math.sin(a);
+        if(Math.abs(x)<6&&z>0)continue;
+        stamp(shrub,i%4?0x5c753c:0x846d50,x,-3.5+10*Math.sqrt(1-r*r),z,1.1+random()*2,.65+random(),1.1+random(),a);
+      }
+      shrub.dispose();
+      function cham(x,z,w,h){
+        const y=5.85;box(0x986147,x,y,z,w+1.3,.65,w+1.5);
+        box(brick,x,y+h*.28,z,w,h*.56,w);
+        for(const s of [-1,1])for(const f of [-.37,-.13,.13,.37]){
+          box(0xb86445,x+f*w,y+h*.29,z+s*w*.5,w*.10,h*.53,.38);
+          box(0xb46143,x+s*w*.5,y+h*.29,z+f*w,.38,h*.53,w*.10);
+        }
+        for(let i=0;i<4;i++){
+          const k=1-i*.18,hh=h*(.107-i*.009),base=y+h*.56+h*(.11*i-.0045*i*(i-1));
+          box(dark,x,base,z,w*k*1.12,.34,w*k*1.12);
+          tapered(brick,x,base+hh*.5,z,w*k*.74,w*k*.53,hh);
+          for(const sx of [-1,1])for(const sz of [-1,1])tapered(0xa95a3e,x+sx*k*w*.39,base+hh*.55,z+sz*k*w*.39,w*k*.14,.05,hh*1.3);
+        }
+        tapered(0xb38a64,x,y+h*.98,z,w*.11,.05,h*.14,1,8);
+        box(0x422f29,x,y+h*.17,z+w*.5+.07,w*.34,h*.30,.17);arch(0xbb7050,x,y,z+w*.5+.2,w*.46,h*.38);
+      }
+      cham(4,-4,9.8,21);cham(-10,-4,5.3,11);cham(-10,8,4.1,8.5);cham(4,-11,4.5,9);
+      for(let i=0;i<5;i++)for(const x of [-5,5])tapered(brick,x,4.5,13+i*2.9,1.2,.9,5.15,1,8);
+    }
+    if(id==='nghinh'){
+      const grey=[0xbeb9aa,0xc6c1b6,0xb0aca1,0xaaa597];
+      // Basalt-inspired hexagonal shafts form two ascending fans separated by a wind slot.
+      for(const side of [-1,1])for(let i=0;i<7;i++)for(let j=0;j<5;j++){
+        const x=side*(1.63+i*2.46),z=(j-2+(i%2)*.5)*2.82;
+        const h=1.5+(side===1?34:29)*Math.pow(1-i/7,2.1)*Math.pow(1-Math.abs(j-2)/4,1.45);
+        tapered(grey[(i+j)%4],x,h/2,z,1.63,1.60,h,1,6);
+      }
+      box(0xc2bba9,0,.08,0,39,.16,21);
+    }
+    if(id==='rong'){
+      const straw=0x957749,bamboo=0xb08c5d;
+      for(const x of [-6.2,6.2])for(const z of [-3.8,0,3.8])stamp(round,wood,x,1.55,z,.32,3.1,.32);
+      box(wood,0,2.9,0,15,.4,9.8);box(bamboo,0,4.3,0,14,2.6,8.8);
+      const roofProfile=[[-5.5,0],[-4.9,.3],[-3.25,6.1],[-1.9,10.9],[-.24,16],[.24,16],[1.9,10.9],[3.25,6.1],[4.9,.3],[5.5,0]];
+      outline(roofProfile,straw,-7.8,5.25,0,15.6,Math.PI/2);
+      for(let i=0;i<18;i++)for(const side of [-1,1]){
+        const z=side*(4.7-1.6),x=-7.45+i*.87;
+        box(i%3?0x806b49:0xaf905a,x,9.5,z,.07,9.0,.11,0,-side*.29);
+      }
+      // Bands of bound thatch follow the taper rather than a rectangular texture.
+      for(let i=1;i<25;i++)for(const side of [-1,1]){
+        const t=i/25,z=side*(5.16-4.95*t);
+        box(i%5?0x9a8055:0x796745,0,5.4+t*15.75,z,15.6,.055,.14);
+      }
+      for(let i=0;i<26;i++)for(const side of [-1,1])box(0x806647,-6.8+i*.55,4.35,side*4.46,.10,2.48,.09);
+      box(wood,0,21.4,0,16.6,.25,.39);
+      for(const x of [-7.6,7.6])for(const s of [-1,1])box(wood,x,21.85,s*.32,.16,1.3,.15,0,s*.55);
+      for(let j=0;j<10;j++)box(bamboo,0,.24+j*.29,8-j*.31,1.55,.17,.36);
+      box(0x41352b,0,4.06,4.45,1.65,2.24,.15);
+    }
+    if(id==='station'){
+      box(ochre,0,2.8,0,51,5.6,13.2);
+      const amber=0xdcb469;gable(0,5.6,0,51.4,1.9,13.8,tileRed);
+      for(let i=-1;i<=1;i++){
+        const x=i*7.9,w=8.2;
+        gable(x,4.7,3.5,w,7.3,10.3,0x9e543c);
+        outline([[-w*.48,0],[0,7.05],[w*.48,0]],amber,x,4.7,8.7,.18);
+        for(let j=-2;j<=2;j++)box(0x85533c,x+j*.78,6.3-Math.abs(j)*.33,8.9,.18,3-Math.abs(j)*.52,.14);
+        box(0x555b50,x,2.25,6.71,4.4,4.15,.18);
+        for(let j=-1;j<=1;j++)box(cream,x+j*1.1,2.4,6.86,.12,4,.10);
+      }
+      dial(0,8.25,8.98,1.06);
+      for(const s of [-1,1])for(let i=0;i<3;i++){const x=s*(14.8+i*4);box(wood,x,3.35,6.7,2.6,2.65,.12);box(cream,x,3.35,6.8,.12,2.64,.08);}
+      sign('DALAT',0,4.1,8.95,4.7,1.0);
+    }
+    if(id==='bat'){
+      box(cream,0,.55,0,17,1.1,29);box(ochre,0,3.65,0,12,5.4,24);
+      for(const s of [-1,1])for(let i=0;i<7;i++){
+        const z=-12+i*4;box(cream,s*7.4,3.48,z,.72,4.95,.72);tapered(0xc69d47,s*7.4,6.1,z,.63,.83,.7);
+      }
+      for(const [w,d,y,h] of [[16.7,29,6.3,3.8],[13.5,23,8.4,3.6],[9,19,10.8,3.7]]){
+        gable(0,y,0,w,h,d,0xb66742);
+        for(const s of [-1,1])for(const end of [-1,1]){
+          const x=s*w*.51,z=end*d*.5;
+          outline([[0,0],[s*.38,.12],[s*.69,.6],[s*.78,1.4],[s*.27,.8]],0xd5ab4e,x,y,z,.23);
+          box(0xe2c16c,s*w*.25,y+h*.5,z,.23,Math.hypot(w/2,h),.23,0,0,s*Math.atan2(w/2,h));
+        }
+      }
+      for(const end of [-1,1]){
+        outline([[-5,0],[0,4.2],[5,0]],0xcf9a4c,0,6.25,end*12.3,.2);box(wood,0,3.1,end*12.04,2.5,3.9,.12);
+        for(let j=0;j<5;j++)for(let k=-4+j;k<=4-j;k+=2){
+          outline([[0,0],[.27,.3],[0,.64],[-.27,.3]],0xffcf63,k*.72,6.4+j*.58,end*(12.55),.13);
+        }
+      }
+      steps(0,13.3,5.4,5);
+    }
+    if(id==='dinh'){
+      const rock=new T.IcosahedronGeometry(1,1);
+      for(let i=0;i<29;i++){
+        const a=i*2.39996,r=Math.sqrt(i/29),x=10.6*r*Math.cos(a),z=10*r*Math.sin(a);
+        stamp(rock,i%4===0?0xa79478:0x8e806e,x,1.3-r,z,3.6,2.8+(1-r)*2,3.25,i);
+      }
+      rock.dispose();box(0xbd9a74,0,3.25,0,11,.68,14.2);box(0xe4b886,0,4.95,-.5,8.2,3.3,8.8);
+      for(const [w,d,y,h] of [[10.5,11,6.4,2.35],[6.7,6.3,8.05,1.7]]){
+        tapered(tileRed,0,y+h*.48,-.5,w*.72,w*.17,h,d/w);
+        for(const sx of [-1,1])for(const sz of [-1,1])box(0x995432,sx*w*.47,y+.23,-.5+sz*d*.46,.21,.27,1.3,sx*sz*.67,-sz*.30);
+      }
+      for(const x of [-3.5,3.5])stamp(round,0xa6533b,x,5.0,4.55,.24,3.45,.24);
+      steps(0,6.5,2.25,14);
+      const canopy=new T.IcosahedronGeometry(1,1);
+      stamp(round,0x736450,-6.7,5.27,-2,.75,6.8,.65,0,.09,-.17);
+      for(let i=0;i<14;i++){
+        const a=i*2.399,r=Math.sqrt(i/14)*3.5;
+        stamp(canopy,[0x54693f,0x6b794b,0x607748][i%3],-7+Math.cos(a)*r,9.7-r*.28+random()*.5,-2+Math.sin(a)*r,2.6,1.54,2.15,a);
+      }
+      canopy.dispose();
+    }
     const geometry=new T.BufferGeometry();
     for(const [name,values] of [['position',positions],['normal',normals],['color',colours]])geometry.setAttribute(name,new T.Float32BufferAttribute(values,3));
     geometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geometry.computeBoundingSphere();
@@ -196,7 +395,7 @@ window.VietnamLandmarks=(()=>{
       }
     }
     const map=new T.CanvasTexture(tile);map.wrapS=map.wrapT=T.RepeatWrapping;map.colorSpace=T.SRGBColorSpace;
-    const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({map,vertexColors:true,roughness:.88}));mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
+    const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({map,vertexColors:true,roughness:id==='coal'?.22:.88,metalness:id==='coal'?.42:0}));mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
     cube.dispose();round.dispose();group.name=id;return group;
   }
   function create(T,scene){
@@ -209,6 +408,7 @@ window.VietnamLandmarks=(()=>{
         const {x,z}=graph.point(data.lon,data.lat);if(Math.hypot(x-cx,z-cz)>1050)continue;
         if(!cached.has(data.id)){const mesh=model(T,data.id);scene.add(mesh);cached.set(data.id,mesh);}
         const mesh=cached.get(data.id);mesh.position.set(x-cx,0,z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
+        if(data.scale)mesh.scale.fromArray(data.scale);
         active.push({data,x,z,mesh,c:Math.cos(data.yaw),s:Math.sin(data.yaw)});
       }
     }

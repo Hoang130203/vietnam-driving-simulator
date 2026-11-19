@@ -30,11 +30,15 @@
 .arcade .touch [data-key="shift"] {color:var(--yellow);border-color:color-mix(in srgb,var(--yellow) 65%,transparent)}
 .arcade .touch button.active {transform:translateY(2px);background:var(--yellow);color:#122019;border-color:#fff}
 .arcade .osm-credit {right:var(--right);bottom:max(0px,env(safe-area-inset-bottom))}
-.sights {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 14px;padding-block:8px;border-block:1px solid #516467}
-.sights strong, .journey #landmark {color:#ffe2a5;font-size:13px}
-#sightChoices {display:flex;flex-wrap:wrap;gap:4px}
-#sightChoices button {font-size:13px;padding:7px 9px}
-#sightChoices [aria-pressed="true"] {color:#162220;background:#e8d6a7}
+.journey #landmark {color:#ffe2a5;font-size:13px}
+.journey #tourView{pointer-events:auto;margin-top:4px;padding:4px 8px;font-size:12px}
+#tourCamera{position:fixed;bottom:calc(var(--bottom) + 16px);left:50%;transform:translateX(-50%);display:flex;
+  gap:16px;align-items:center;justify-content:space-between;max-width:94vw;width:max-content;padding:10px 14px;
+  border:1px solid #697974;border-radius:9px;background:#142125ed}
+#tourCamera strong,#tourCamera small{display:block}
+#tourCamera small{color:#c7d6ce}
+#backToCar{min-height:44px;white-space:nowrap}
+body:has(#tourCamera:not([hidden])) #world{touch-action:none;cursor:grab}
 @media (any-pointer:coarse), (max-width:700px) {
   .arcade .tools button, .arcade dialog button, .arcade .grid select, .arcade .grid button {min-height:44px}
   .arcade .tools button {padding-inline:8px;font-size:13px}
@@ -75,4 +79,27 @@
   .arcade .routeInfo {max-width:30vw}
   .arcade #callout {top:calc(var(--top) + 108px);bottom:auto}
   .arcade .telemetry {bottom:calc(var(--bottom) + 78px)}
+}
+#atlas .atlasBrowse{min-width:0;display:flex;flex-direction:column;gap:5px}
+#atlas .atlasBrowse label{font-size:13px;color:#bfd2cb;font-weight:650}
+#atlas .atlasBrowse input,#atlas .atlasBrowse select{width:100%;min-width:0;margin:0 0 4px;padding:9px;background:#22383a;color:#fff;border:1px solid #526b69;border-radius:6px}
+#atlas #resultCount{font-size:12px;letter-spacing:.04em;color:#c6dfc6;margin:3px 0}
+#atlas #places{max-height:clamp(120px,31dvh,290px);overscroll-behavior:contain;scrollbar-gutter:stable}
+#atlas #places button{display:grid;gap:3px;padding:9px 11px;background:#213438;border-color:#3c5356}
+#atlas #places strong{font-size:14px}
+#atlas #places span{color:#b8ceca;font-size:12px}
+#atlas #places [aria-pressed=true]{border-color:#b6f665;background:#2c443c}
+#atlas .atlasFoot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid #405557}
+#atlas .atlasFoot p{margin:0;font-size:14px;color:#e3e8db}
+#atlas .atlasFoot button{flex-shrink:0;margin:0}
+@media(max-width:650px) and (orientation:portrait){
+ #atlas .atlasCols{grid-template-columns:minmax(0, .75fr) minmax(0,1.25fr)}
+ #atlas #country{height:100%;min-height:235px;max-height:53dvh}
+ #atlas #places{max-height:26dvh}
+ #atlas .atlasFoot{display:grid;grid-template-columns:1fr;gap:7px}
+}
+@media(max-height:490px) and (orientation:landscape){
+ #atlas .atlasCols{grid-template-columns:1fr 1.3fr}
+ #atlas #places{max-height:100px}
+ #atlas .atlasFoot{position:sticky;bottom:-24px;background:#162429;padding:8px 0}
 }
