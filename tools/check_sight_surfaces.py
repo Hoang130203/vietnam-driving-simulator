@@ -87,10 +87,13 @@ def main():
     with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server, sync_playwright() as pw:
         Thread(target=server.serve_forever, daemon=True).start()
         try:
-            browser = pw.chromium.launch(executable_path=str(args.browser) if args.browser else None)
+            executable = args.browser or Path(pw.chromium.executable_path)
+            browser = pw.chromium.launch(executable_path=str(executable) if executable.is_file() else None)
             page = browser.new_page()
             base = f'http://127.0.0.1:{server.server_port}/'
-            page.goto(base + 'sight-landscapes/index.json')
+            page.route('**/surface-codec-qa', lambda route: route.fulfill(
+                content_type='text/html', body='<!doctype html><title>Surface codec audit</title>'))
+            page.goto(base + 'surface-codec-qa')
             page.add_script_tag(url=base+'three.min.js')
             page.add_script_tag(url=base+'sight-landscapes.js')
             print(json.dumps(page.evaluate(AUDIT, stops()), indent=2))
