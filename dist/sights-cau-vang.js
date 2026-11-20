@@ -10,7 +10,7 @@
   const photo='https://danangfantasticity.com/en/cau-vang-thuong-hieu-moi-cua-du-lich-da-nang';
   const rail=2.52,round=Math.PI*2;
   const views=[
-    {name:'Hai bàn tay nâng cầu',offset:[7,-20],viewAngle:-1.17,viewElevation:.27,viewRadius:52,height:20},
+    {name:'Hai bàn tay nâng cầu',offset:[7,-20],viewAngle:-1.06,viewElevation:.55,viewRadius:58,height:20},
     {name:'Trên lối đi lát gỗ',offset:[22,-17],viewAngle:1.15,viewElevation:.025,viewRadius:14,height:25},
     {name:'Toàn cảnh từ sườn núi',offset:[4,-5],viewAngle:1.98,viewElevation:.42,viewRadius:113,height:16}
   ];
@@ -31,7 +31,7 @@
     });
   }
   const stop={...site,catalogId,id:'cau-vang-ba-na',name:'Cầu Vàng Bà Nà',city:'Đà Nẵng',yaw:0,width:98,depth:82,
-    boundary,solids:[],approachMeters:3274,viewDistance:3900,photo,source,views,viewAngle:views[0].viewAngle,viewElevation:.27,viewRadius:52,
+    boundary,solids:[],approachMeters:3274,viewDistance:3900,photo,source,views,viewAngle:views[0].viewAngle,viewElevation:views[0].viewElevation,viewRadius:views[0].viewRadius,
     description:'Từ ga Marseille, lối đi lát gỗ uốn quanh sườn Bà Nà qua hai bàn tay khổng lồ. Bảy trụ thép đỡ tám nhịp cầu, hai hàng hoa nằm dưới lan can màu vàng.',
     reserve(x,z,pad=0){
       if(Math.hypot(x-14.97,z-35.06)<14.0+pad)return true;
