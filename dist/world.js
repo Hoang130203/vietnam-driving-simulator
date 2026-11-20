@@ -61,7 +61,14 @@ async function startAt(place,restore=null){
  document.body.toggleAttribute('data-lakeside',firstDrive);
  if(!firstDrive)$('openingStill').hidden=true;
  gfx.preloadVehicle(car.model);
- $('journeyTitle').textContent=firstDrive?'Tam Chúc':place[3]?.name||place[0];
+ const site=place[3]||destinations.find(entry=>restore?.destination===entry.id);
+ $('journeyTitle').textContent=firstDrive?'Tam Chúc':site?.name||place[0];
+ $('journeyTitle').classList.toggle('longTitle',$('journeyTitle').textContent.length>25);
+ $('journeyCaption').textContent=restore?'Tiếp tục hành trình đã lưu · '+fmt(restore.distance):
+   firstDrive||site?.id==='tam-chuc'?'Theo đường ven hồ tới quần thể chùa Tam Chúc.':
+   site?.km?'Chinh phục '+fmt(site.km*1000)+' đường đèo.':[site?.kind,site?.city].filter(Boolean).join(' · ')||'Khám phá những con đường quanh điểm xuất phát.';
+ $('departureCoords').textContent=place[2].toFixed(4)+'° N  /  '+place[1].toFixed(4)+'° E';
+ $('departureMap').getContext('2d').clearRect(0,0,$('departureMap').width,$('departureMap').height);
  const token=++loadToken;mode='loading';keySet.clear();$('grid').hidden=false;$('hud').hidden=true;$('touch').hidden=true;
  $('pause').hidden=true;$('camera').hidden=true;document.body.dataset.phase='grid';
  $('launch').disabled=true;$('challenge').disabled=true;$('launch').textContent='Đang tải đường…';$('loadStatus').textContent='';
@@ -90,7 +97,7 @@ async function startAt(place,restore=null){
    if(Number.isFinite(restore?.yaw)){car.x=start.x;car.z=start.z;car.yaw=restore.yaw;trackRoad();}
    loadX=car.x;loadZ=car.z;streamRetry=0;
    await Promise.all([gfx.terrainReady,streamWater(graph,false),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
-   refreshView();seedTraffic();mode='grid';
+   refreshView();drawDepartureMap();seedTraffic();mode='grid';
    $('challenge').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Lái tiếp':'Cầm lái';
  }catch(e){if(token===loadToken){$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
 }
@@ -315,13 +322,36 @@ function updateHud(){
  $('turnInfo').textContent=car.flood?'Xe ngập nước · chờ cứu hộ':car.wading?'Đang lội nước':duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
  drawMini(landmark);
 }
+function traceMapLine(g,points){
+ g.beginPath();
+ points.forEach((p,i)=>i?g.lineTo(p.x-car.x,p.z-car.z):g.moveTo(p.x-car.x,p.z-car.z));
+}
+function drawDepartureMap(){
+ const c=$('departureMap'),g=c.getContext('2d');
+ // North-up overview of the actual starting roads. The driving map follows the car.
+ g.save();g.translate(c.width/2,c.height/2);g.scale(.39,.39);
+ for(const feature of water?.nearby(car.x,car.z)||[]){
+   traceMapLine(g,feature.points);
+   if(feature.kind==='lake'){g.fillStyle='#376267';g.fill();}
+   else{g.strokeStyle='#437278';g.lineWidth=9;g.stroke();}
+ }
+ for(const edge of nearby){
+   const selected=edge.id===player.edge.id;
+   traceMapLine(g,edge.points);g.strokeStyle=selected?'#dbfa90':'#94aa93';
+   g.lineWidth=selected?8:3.5;g.stroke();
+ }
+ g.restore();
+ g.beginPath();g.arc(c.width/2,c.height/2,15,0,Math.PI*2);
+ g.strokeStyle='#dcf89a';g.lineWidth=2;g.fillStyle='#d6f58932';g.fill();g.stroke();
+ g.beginPath();g.arc(c.width/2,c.height/2,5,0,Math.PI*2);g.fillStyle='#f2ffca';g.fill();
+}
 function drawMini(landmark){
  const c=$('map'),g=c.getContext('2d'),scale=.43;
  g.clearRect(0,0,c.width,c.height);g.save();g.translate(c.width/2,c.height*.56);
  g.scale(scale,scale);g.rotate(-car.yaw);
  for(const e of nearby){
-   g.strokeStyle=e.id===player.edge.id?'#abe9c9':'#809291';g.lineWidth=e.id===player.edge.id?7:3;g.beginPath();
-   e.points.forEach((p,i)=>i?g.lineTo(p.x-car.x,p.z-car.z):g.moveTo(p.x-car.x,p.z-car.z));g.stroke();
+   g.strokeStyle=e.id===player.edge.id?'#d8f791':'#93aba2';g.lineWidth=e.id===player.edge.id?7:3;
+   traceMapLine(g,e.points);g.stroke();
  }
  if(duel){
    g.strokeStyle='#a4ff63';g.lineWidth=5;g.beginPath();
@@ -472,7 +502,11 @@ $('raceMode').onclick=()=>{
 $('resume').onclick=()=>{$('rest').close();mode='drive';keySet.clear();};
 $('reverse').onclick=()=>{$('resume').click();recover();};
 $('camera').onclick=()=>{inside=!inside;$('camera').textContent=inside?'Góc tài xế':'Góc sau xe';};
-function soundLabel(){$('sound').textContent=driveAudio.enabled?'Tắt âm':'Bật âm';}
+function soundLabel(){
+ $('sound').textContent=driveAudio.enabled?'Tắt âm':'Bật âm';
+ $('sound').dataset.muted=String(!driveAudio.enabled);
+ $('sound').title=$('sound').textContent;
+}
 soundLabel();$('sound').onclick=()=>{driveAudio.toggle();soundLabel();};
 $('rest').oncancel=e=>{e.preventDefault();$('resume').click();};
 window.addEventListener('keydown',e=>{
@@ -618,7 +652,7 @@ async function openAtlas(filter='all'){
    catch{atlasPromise=null;$('picked').textContent='Chưa tải được bản đồ. Bạn vẫn có thể chọn địa danh trong danh sách.';}
  }
 }
-$('openMap').onclick=$('relocate').onclick=()=>openAtlas();
+$('openingAtlas').onclick=$('openMap').onclick=$('relocate').onclick=()=>openAtlas();
 $('openSights').onclick=e=>{e.preventDefault();openAtlas('model');};
 $('openPasses').onclick=$('pausedPasses').onclick=e=>{e.preventDefault();openAtlas('mountain');};
 $('atlas').onclose=()=>{if(originatedInPause&&mode==='paused')$('rest').showModal();originatedInPause=false;};
@@ -638,7 +672,7 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
  try{
    gfx=createWorldScene($('world'));indexData=await fetchJSON('vn-roads/index.json');
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
-   $('openMap').disabled=false;$('travel').disabled=false;
+   $('openingAtlas').disabled=false;$('openMap').disabled=false;$('travel').disabled=false;
    const valid=new URLSearchParams(location.search).get('intro')!=='tam-chuc'&&saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
    const params=new URLSearchParams(location.search),stage=mountainPlaces.find(p=>p.id===params.get('pass'));
    const collection=params.get('collection')==='ha-nam';

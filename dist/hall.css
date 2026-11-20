@@ -16,3 +16,42 @@ header{position:sticky;top:0;z-index:3;background:#152c29}
  .bar{gap:6px;padding-inline:10px}
  .practiceLinks a{font-size:13px}
 }
+
+/* Keep the mode switch in the same place throughout the simulator. */
+.bar .modes {
+  top: 50%; transform: translate(-50%, -50%); height: auto; gap: 2px;
+  padding: 4px; border: 1px solid #d9eddf42; border-radius: 30px; background: #142321;
+}
+.bar .modes a {
+  display: grid; min-height: 33px; min-width: 78px; padding: 0 16px; place-items: center;
+  border: 0; border-radius: 24px; color: #e3ebe3; font-size: 14px;
+}
+.bar .modes [aria-current] {color: #15261c; background: #d2f477}
+.bar .layoutButton {margin-left: auto; min-height: 42px; padding: 6px 12px; border: 1px solid #536759; border-radius: 8px; background: #20332b; color: #e9f1de; font-size: 14px}
+.copy p {line-height: 1.5}
+@media (max-width: 700px) {
+  .bar .modes {position: absolute}
+  .bar {height: 54px; padding-inline: max(15px, env(safe-area-inset-left)) max(15px, env(safe-area-inset-right))}
+  body.playing > header {display: none}
+  .playing .sessionbar {max-width: none; margin: 0; padding: max(3px,env(safe-area-inset-top)) 8px 3px; min-height: 44px; gap: 9px}
+  .sessionbar button {min-height: 40px; font-size: 13px}
+  .playing .sessionbar strong {font-size: 14px}
+  .practiceLinks {gap: 6px 14px}
+  .practiceLinks a {display: grid; align-items: center; min-height: 42px}
+  .bar .layoutButton {margin-left: auto; min-height: 44px}
+  .copy small {font-size: 11px}
+  .copy p {font-size: 14px}
+  .lessons a {min-height: 44px}
+}
+@media (max-width: 700px) and (orientation: portrait) {
+  body:not(.playing) .bar .modes {
+    position: fixed; inset: auto max(14px,env(safe-area-inset-right)) calc(max(8px,env(safe-area-inset-bottom)) + 17px) max(14px,env(safe-area-inset-left));
+    transform: none; display: grid; grid-template-columns: repeat(3,1fr); box-shadow: 0 4px 20px #0b140ec9;
+  }
+  .bar .modes a {min-height: 42px; min-width: 0; padding: 0 4px}
+  #hall {padding-bottom: calc(82px + env(safe-area-inset-bottom))}
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  body.playing > header {display: none}
+  .playing .sessionbar {margin: 0; max-width: none; min-height: 40px; padding-block: 2px}
+}

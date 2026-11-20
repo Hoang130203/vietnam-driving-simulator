@@ -282,9 +282,16 @@ $('launch').onclick=startCountdown;$('pause').onclick=pauseRace;
 $('resume').onclick=()=>{$('rest').close();keys.clear();setMode(resumePhase);};
 $('again').onclick=()=>location.reload();
 $('camera').onclick=()=>{if(state.mode!=='grid')inside=!inside;};
-$('sound').onclick=()=>{sound=driveAudio.toggle();$('sound').textContent=sound?'Tắt âm':'Bật âm';};
+function updateSoundButton(){
+ $('sound').textContent=sound?'Tắt âm':'Bật âm';
+ $('sound').dataset.muted=String(!sound);
+ $('sound').title=$('sound').textContent;
+}
+updateSoundButton();
+$('sound').onclick=()=>{sound=driveAudio.toggle();updateSoundButton();};
 for(const dialog of document.querySelectorAll('#rest,#finish,#pit'))dialog.oncancel=e=>{e.preventDefault();if(dialog.id==='rest')$('resume').click();};
 window.addEventListener('keydown',e=>{
+ if($('cockpitSettings').open)return;
  const key=e.key.toLowerCase();
  if(key==='p'&&!e.repeat){if(state.mode==='paused')$('resume').click();else pauseRace();return;}
  if(!['drive','countdown'].includes(state.mode))return;
