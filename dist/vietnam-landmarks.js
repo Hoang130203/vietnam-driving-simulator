@@ -30,6 +30,8 @@ window.VietnamLandmarks=(()=>{
     {id:'dinh',photo:'https://thegioianh.diendandoanhnghiep.vn/ngoi-den-nam-canh-ngon-hai-dang-o-phu-quoc-6607.html',name:'Dinh Cậu',city:'Phú Quốc',lon:103.9564106,lat:10.2172171,yaw:1.01,width:11,depth:13,
       start:[103.957484,10.217047],map:'https://www.openstreetmap.org/way/1491082316',source:'https://vietnamtourism.gov.vn/post/54798'}
   ];
+  const additions=new Map((window.VietnamSights||[]).map(site=>[site.id,site]));
+  entries.push(...additions.values());
   const churchRails=[[-14.7,39,.29,16.4],[14.7,39,.29,16.4],[-10.05,55.1,4,.38],[10.05,55.1,4,.38]];
 
   // Bake the masonry, roof tiles, trims and ornaments into one draw call per building.
@@ -77,6 +79,21 @@ window.VietnamLandmarks=(()=>{
       const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
       const panel=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,transparent:glass,alphaTest:glass?.32:0,roughness:.86}));
       panel.position.set(x,y,z);group.add(panel);
+    }
+    function wavingFlag(width,height,px,py,pz){
+      const canvas=document.createElement('canvas');canvas.width=192;canvas.height=128;
+      const pen=canvas.getContext('2d');pen.fillStyle='#b92628';pen.fillRect(0,0,192,128);pen.fillStyle='#ffcf3b';pen.beginPath();
+      for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?14:36;pen.lineTo(96+r*Math.cos(a),64+r*Math.sin(a));}
+      pen.closePath();pen.fill();
+      const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+      const cloth=new T.PlaneGeometry(width,height,24,6);cloth.translate(width/2,-height/2,0);
+      const flag=new T.Mesh(cloth,new T.MeshStandardMaterial({map:texture,side:T.DoubleSide,roughness:.94}));flag.position.set(px,py,pz);
+      const pos=cloth.attributes.position,rest=pos.array.slice();let frame=-1;
+      flag.onBeforeRender=()=>{const time=Math.floor(performance.now()/60);if(time===frame)return;frame=time;
+        for(let i=0;i<pos.count;i++){const x=rest[i*3],y=rest[i*3+1],f=x/width,phase=x*.69+y*.22-time*.16;
+          pos.setXYZ(i,x*(1-.07*f),y-f*(.7+.18*Math.sin(phase)),f*(1.25*Math.sin(phase)+.33*Math.sin(phase*2.1)));}
+        pos.needsUpdate=true;cloth.computeVertexNormals();};
+      group.add(flag);
     }
     if(id==='turtle'){
       const stone=0xb5b1a4,band=0x92887a,roof=0x706052;
@@ -493,19 +510,7 @@ window.VietnamLandmarks=(()=>{
       tapered(0x938a80,0,18.76,0,1.68,1.02,1.32,1,8);
       tapered(0xaaa59a,0,36.9,0,.42,.18,36,1,16);
       for(let i=0;i<13;i++)stamp(round,0x77766d,0,20+i*2.66,0,.44-i*.018,.1,.44-i*.018);
-      const canvas=document.createElement('canvas');canvas.width=192;canvas.height=128;
-      const pen=canvas.getContext('2d');pen.fillStyle='#b92628';pen.fillRect(0,0,192,128);pen.fillStyle='#ffcf3b';pen.beginPath();
-      for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?14:36;pen.lineTo(96+r*Math.cos(a),64+r*Math.sin(a));}
-      pen.closePath();pen.fill();
-      const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
-      const cloth=new T.PlaneGeometry(11,7.33,24,6);cloth.translate(5.5,-3.665,0);
-      const flag=new T.Mesh(cloth,new T.MeshStandardMaterial({map:texture,side:T.DoubleSide,roughness:.94}));flag.position.set(.18,54.6,0);
-      const pos=cloth.attributes.position,rest=pos.array.slice();let frame=-1;
-      flag.onBeforeRender=()=>{const time=Math.floor(performance.now()/60);if(time===frame)return;frame=time;
-        for(let i=0;i<pos.count;i++){const x=rest[i*3],y=rest[i*3+1],f=x/11,phase=x*.69+y*.22-time*.16;
-          pos.setXYZ(i,x*(1-.07*f),y-f*(.7+.18*Math.sin(phase)),f*(1.25*Math.sin(phase)+.33*Math.sin(phase*2.1)));}
-        pos.needsUpdate=true;cloth.computeVertexNormals();};
-      group.add(flag);
+      wavingFlag(11,7.33,.18,54.6,0);
     }
     if(id==='ponagar'){
       const brick=0xa15d43,terracotta=0xb47851,lintel=0x715142,sandstone=0xc09d72,top=7.55;
@@ -939,6 +944,10 @@ window.VietnamLandmarks=(()=>{
       }
       canopy.dispose();
     }
+    const addition=additions.get(id);
+    if(addition)addition.build(T,{group,stamp,box,round,tapered,profile,outline,arch,sign,random,wavingFlag});
+    cube.dispose();round.dispose();group.name=id;
+    if(!positions.length)return group;
     const geometry=new T.BufferGeometry();
     for(const [name,values] of [['position',positions],['normal',normals],['color',colours]])geometry.setAttribute(name,new T.Float32BufferAttribute(values,3));
     geometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geometry.computeBoundingSphere();
@@ -982,7 +991,7 @@ window.VietnamLandmarks=(()=>{
       };
     }
     const mesh=new T.Mesh(geometry,finish);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
-    cube.dispose();round.dispose();group.name=id;return group;
+    return group;
   }
   function create(T,scene){
     const cached=new Map();let active=[];
@@ -1028,7 +1037,9 @@ window.VietnamLandmarks=(()=>{
           const wx=nx*a.c+nz*a.s,wz=-nx*a.s+nz*a.c;
           return {nx:wx,nz:wz,pointX:x+wx*(depth-r),pointZ:z+wz*(depth-r),depth,kind:'building',id:a.data.id};
         }
-        const main=solid(0,0,a.data.width/2,a.data.depth/2);if(main)return main;
+        if(a.data.solids){
+          for(const footprint of a.data.solids){const hit=solid(...footprint);if(hit)return hit;}
+        }else{const main=solid(0,0,a.data.width/2,a.data.depth/2);if(main)return main;}
         if(a.data.id==='cathedral')for(const rail of churchRails){const hit=solid(...rail);if(hit)return hit;}
       }
       return null;

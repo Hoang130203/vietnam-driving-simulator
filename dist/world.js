@@ -33,7 +33,13 @@ function refreshView(){
  const [lon,lat]=roads.geo(car.x,car.z);
  tourPins=catalog.filter(s=>Math.abs(s.lon-lon)<.018&&Math.abs(s.lat-lat)<.018).map(data=>({...roads.point(data.lon,data.lat),data}));
  nearby=roads.nearby(car.x,car.z,560);
- gfx.setRoads(nearby,car.x,car.z,water?.nearby(car.x,car.z)||[],roads);viewX=car.x;viewZ=car.z;
+ const waterways=water?.nearby(car.x,car.z)||[];
+ for(const coast of window.VietnamSightCoasts||[]){
+   if(Math.abs(lon-coast.lon)>.02||Math.abs(lat-coast.lat)>.02)continue;
+   const project=ring=>ring.map(([x,y])=>roads.point(x,y));
+   waterways.push({kind:'lake',points:project(coast.ring),holes:coast.holes.map(project)});
+ }
+ gfx.setRoads(nearby,car.x,car.z,waterways,roads);viewX=car.x;viewZ=car.z;
 }
 async function streamWater(graph,redraw=true){
  try{
@@ -360,7 +366,7 @@ function pause(){
 $('launch').onclick=begin;$('pause').onclick=pause;
 $('tourView').onclick=()=>{
  const monument=gfx.nearLandmark(car.x,car.z);if(mode!=='drive'||!monument)return;
- mode='tour';keySet.clear();car.sightView={...monument,angle:monument.data.yaw+.23,elevation:.27,zoom:1};
+ mode='tour';keySet.clear();car.sightView={...monument,angle:monument.data.viewAngle??(monument.data.yaw+.23),elevation:.27,zoom:1};
  $('tourZoom').value='1';$('tourReference').href=monument.data.photo;
  $('tourTitle').textContent=monument.data.name;$('tourCamera').hidden=false;
  for(const id of ['hud','touch','camera','pause'])$(id).hidden=true;
@@ -417,19 +423,23 @@ window.addEventListener('blur',pause);document.addEventListener('visibilitychang
 let pendingPlace=featured[0],atlasPromise,originatedInPause=false;
 const normalize=s=>s.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
 const models=VietnamLandmarks.entries.map(site=>({...site,custom:true,kind:'Mô hình 3D'}));
-const catalog=(window.VietnamTourism?.entries||[]).filter(site=>!models.some(model=>
- Math.abs(model.lon-site.lon)<.003&&Math.abs(model.lat-site.lat)<.003&&normalize(model.name)===normalize(site.name)));
+const tourismSites=window.VietnamTourism?.entries||[];
+const replaced=new Set();
+for(const model of models){
+ let closest=null,best=Infinity;
+ for(const site of tourismSites){
+   const d=(site.lon-model.lon)**2+(site.lat-model.lat)**2;
+   if(d<best){best=d;closest=site;}
+   if(d<.003**2&&(normalize(model.name)===normalize(site.name)||model.map&&model.map===site.map))replaced.add(site);
+ }
+ if(closest){model.region??=closest.region;model.province??=closest.province;}
+}
+const catalog=tourismSites.filter(site=>!replaced.has(site));
 const mountainPlaces=mountainStages.map(stage=>({
  id:stage.id,name:stage.name,kind:'Đường đèo',city:'Đường đèo',start:stage.start,
  lon:stage.start[0],lat:stage.start[1],bearing:stage.bearing,km:stage.angles.length*stage.step/1000
 }));
 const destinations=[...models,...mountainPlaces,...catalog];
-for(const model of models){
- let best=Infinity;
- for(const s of catalog){const d=(s.lon-model.lon)**2+(s.lat-model.lat)**2;
-   if(d<best){best=d;model.region=s.region;model.province=s.province;}
- }
-}
 const tourPlace=site=>[site.km?site.name:site.name+' · '+site.city,...site.start,site];
 for(const [label,values] of [['Vùng',['Bắc Bộ','Trung Bộ','Nam Bộ']],['Tỉnh, thành phố',[...new Set(catalog.map(s=>s.province))].sort((a,b)=>a.localeCompare(b,'vi'))]]){
  const group=document.createElement('optgroup');group.label=label;
@@ -462,13 +472,18 @@ function placeList(keepScroll=false){
  matches.slice(0,pageSize).forEach((p,i)=>{
    const b=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('span');
    title.textContent=p[3]?.name||p[0];detail.textContent=p[3]?.km?'Đường đèo · '+p[3].km.toLocaleString('vi-VN')+' km':p[3]?[p[3].kind,p[3].province||p[3].city].filter(Boolean).join(' · '):'Điểm xuất phát';
+   if(filter==='model'&&p[3]?.custom){
+     const photo=document.createElement('img');photo.src='landmark-previews/'+encodeURIComponent(p[3].id)+'.webp';
+     photo.alt='';photo.width=84;photo.height=58;photo.loading='lazy';b.className='sightChoice';b.append(photo);
+     detail.textContent=[p[3].city,p[3].region].filter(Boolean).join(' · ');
+   }
    b.append(title,detail);b.type='button';b.dataset.index=i;b.setAttribute('aria-pressed',String(samePlace(p,pendingPlace)));
    b.onclick=()=>choosePlace(p);list.append(b);
  });
  $('resultCount').textContent=matches.length?matches.length.toLocaleString('vi-VN')+' điểm đến':'Không tìm thấy điểm đến';
  $('morePlaces').hidden=matches.length<=pageSize;list.scrollTop=scroll;drawAtlas();
 }
-function resetPlaces(){pageSize=24;placeList();}
+function resetPlaces(){pageSize=$('tourFilter').value==='model'?models.length:24;placeList();}
 $('morePlaces').onclick=()=>{pageSize+=24;placeList(true);};
 $('tourFilter').onchange=resetPlaces;
 function drawAtlas(){
@@ -507,13 +522,14 @@ $('atlasList').onclick=()=>setAtlasView(false);
 async function openAtlas(filter='all'){
  setAtlasView(filter==='all');
  originatedInPause=$('rest').open;if(originatedInPause)$('rest').close();
- $('atlas').showModal();$('findPlace').value='';$('tourFilter').value=filter;choosePlace(filter==='mountain'&&!source[3]?.km?tourPlace(mountainPlaces.find(p=>p.id==='deo-hai-van')||mountainPlaces[0]):source);resetPlaces();
+ $('atlas').showModal();$('findPlace').value='';$('tourFilter').value=filter;choosePlace(filter==='model'&&!source[3]?.custom?tourPlace(models.find(p=>p.id==='ganh-da-dia')||models[0]):filter==='mountain'&&!source[3]?.km?tourPlace(mountainPlaces.find(p=>p.id==='deo-hai-van')||mountainPlaces[0]):source);resetPlaces();
  if(!atlasData){
    try{atlasPromise||=fetchJSON('vn-roads/overview.json');atlasData=await atlasPromise;placeList();drawAtlas();}
    catch{atlasPromise=null;$('picked').textContent='Chưa tải được bản đồ. Bạn vẫn có thể chọn địa danh trong danh sách.';}
  }
 }
 $('openMap').onclick=$('relocate').onclick=()=>openAtlas();
+$('openSights').onclick=e=>{e.preventDefault();openAtlas('model');};
 $('openPasses').onclick=$('pausedPasses').onclick=e=>{e.preventDefault();openAtlas('mountain');};
 $('atlas').onclose=()=>{if(originatedInPause&&mode==='paused')$('rest').showModal();originatedInPause=false;};
 $('closeAtlas').onclick=()=>$('atlas').close();$('findPlace').oninput=resetPlaces;

@@ -113,3 +113,8 @@
 #tourZoom{display:block;width:88px;accent-color:var(--lime);cursor:pointer}
 #tourReference{color:var(--lime);text-underline-offset:2px}
 @media(max-width:550px){#tourCamera{width:94vw;gap:8px;padding:8px;flex-wrap:wrap}#tourCamera>div{flex:1 1 40%}#tourZoom{width:70px}}
+.placeShortcuts{display:flex;align-items:center;gap:13px}
+#atlas #places .sightChoice{display:grid;grid-template-columns:72px minmax(0,1fr);grid-template-rows:auto auto;align-content:center;column-gap:11px;padding:5px 8px}
+.sightChoice img{grid-column:1;grid-row:1/3;align-self:center;width:72px;height:50px;border-radius:3px}
+.sightChoice strong,.sightChoice span{grid-column:2;align-self:end}
+.sightChoice span{align-self:start}

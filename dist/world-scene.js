@@ -243,7 +243,13 @@
             painter.fillStyle='rgb('+(poolIds.get(feature.name)||0)+',0,0)';
             painter.beginPath();painter.moveTo(ring[0].x,ring[0].y);
             for(let i=1;i<ring.length;i++)painter.lineTo(ring[i].x,ring[i].y);
-            painter.closePath();painter.fill();
+            painter.closePath();
+            for(const island of feature.holes||[]){
+              painter.moveTo(island[0].x-cx,island[0].z-cz);
+              for(const p of island.slice(1))painter.lineTo(p.x-cx,p.z-cz);
+              painter.closePath();
+            }
+            painter.fill('evenodd');
           }else{
             const radius=Math.min(90,Math.max(2,Number(feature.width)||(/suối/i.test(feature.name||'')?8:23)))/2;
             painter.globalCompositeOperation='destination-over';painter.strokeStyle='#000';painter.lineWidth=radius*2;
