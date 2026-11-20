@@ -89,15 +89,19 @@
     const upland=surfaces.scanned('grass',0x8ea68d,.67);
     const landWidth=2048;
     const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth,32,32),meadow);
+    const landIndex=land.geometry.index;
+    land.geometry.setAttribute('shoreSediment',new T.Float32BufferAttribute(new Float32Array(land.geometry.attributes.position.count),1));
+    let shorePatch=null;
+    const shoreEarth=texture('verge-earth.webp',true);
     const landOrigin=new T.Vector2();
     // Low-frequency variation is fixed in geographic space. Close-up grain stays sharp.
     for(const mat of [meadow,upland]){
       mat.onBeforeCompile=shader=>{
-        shader.uniforms.landOrigin={value:landOrigin};
-        shader.vertexShader='uniform vec2 landOrigin; varying vec2 groundMetres;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-          '#include <begin_vertex>\n groundMetres=vec2(position.x,-position.y)+landOrigin;');
-        shader.fragmentShader='varying vec2 groundMetres;\n'+shader.fragmentShader.replace('#include <map_fragment>',
-          '#include <map_fragment>\n float patchiness=sin(dot(groundMetres,vec2(.035,.019)))+.55*cos(dot(groundMetres,vec2(-.015,.047))); diffuseColor.rgb*=vec3(.96,.98,.95)+patchiness*vec3(.08,.035,.05);');
+        shader.uniforms.landOrigin={value:landOrigin};shader.uniforms.shoreEarth={value:shoreEarth};
+        shader.vertexShader='uniform vec2 landOrigin; varying vec2 groundMetres; attribute float shoreSediment; varying float bankWet;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\n groundMetres=vec2(position.x,-position.y)+landOrigin; bankWet=shoreSediment;');
+        shader.fragmentShader='varying vec2 groundMetres; varying float bankWet; uniform sampler2D shoreEarth;\n'+shader.fragmentShader.replace('#include <map_fragment>',
+          '#include <map_fragment>\n float patchiness=sin(dot(groundMetres,vec2(.035,.019)))+.55*cos(dot(groundMetres,vec2(-.015,.047))); diffuseColor.rgb*=vec3(.96,.98,.95)+patchiness*vec3(.08,.035,.05); vec3 silt=texture2D(shoreEarth,groundMetres*.58).rgb; float bank=clamp(bankWet+(silt.g-.17)*.7,0.,1.)*smoothstep(0.,.2,bankWet); diffuseColor.rgb=mix(diffuseColor.rgb,silt*mix(vec3(.84,.78,.66),vec3(.34,.31,.25),bankWet),bank);');
       };
     }
     land.rotation.x=-Math.PI/2;land.position.y=-.17;land.receiveShadow=true;scene.add(land);
@@ -109,17 +113,17 @@
     const wireMaterial=new T.LineBasicMaterial({color:0x50554d,transparent:true,opacity:.64});
     const temp=new T.Object3D(),tone=new T.Color();
     const roadsideImpact=createRoadsideImpact(T,scene,relief.ground);
-    let roadway=relief.ground,wooded=false;
-    const driveGround=(x,z)=>roadway(x,z);
+    let roadway=relief.ground,shoreBed=()=>null,wooded=false;
+    const driveGround=(x,z)=>shoreBed(x,z)??roadway(x,z);
     function driveGrade(x,z,yaw){
       const dx=2.2*Math.sin(yaw),dz=-2.2*Math.cos(yaw);
-      return (roadway(x+dx,z+dz)-roadway(x-dx,z-dz))/4.4;
+      return (driveGround(x+dx,z+dz)-driveGround(x-dx,z-dz))/4.4;
     }
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
     const landmarks=window.VietnamLandmarks?.create(T,scene);
     const district=createTourDistrict(T,scene,material.wall);
     let nearbyWaterLevel=()=>null;
-    let obstacleCells=new Map(),waterContact=()=>null;
+    let obstacleCells=new Map(),waterAt=()=>null;
     const obstacleKey=(x,z)=>Math.floor(x/15)+','+Math.floor(z/15);
     function registerObstacle(o){
       roadsideImpact.register(o);
@@ -152,7 +156,7 @@
         }
         if(depth>0&&(!hit||depth>hit.depth))hit={nx,nz,depth,kind:o.kind,id:o.id,height:o.height,pointX:x+nx*(depth-r),pointZ:z+nz*(depth-r)};
       }
-      return hit||landmarks?.contact(x,z,r)||district.contact(x,z,r)||waterContact(px,pz,r);
+      return hit||landmarks?.contact(x,z,r)||district.contact(x,z,r);
     }
     function discardRoads(){
       if(!roadGroup)return;scene.remove(roadGroup);
@@ -175,6 +179,7 @@
           return f>-.12&&f<1.1&&Math.hypot(dx-v.dx*f,dz-v.dz*f)<9;
         });
       }
+      if(shorePatch){shorePatch.dispose();shorePatch=null;}
       discardRoads();roadGroup=new T.Group();scene.add(roadGroup);originX=cx;originZ=cz;
       const gx=Math.round(cx/64)*64,gz=Math.round(cz/64)*64,positions=land.geometry.attributes.position;
       landOrigin.set(gx,gz);land.position.set(gx-cx,-.17,gz-cz);
@@ -192,10 +197,11 @@
       roadsideImpact.rebase(cx,cz);
       const cellSize=32,cutoff=650;
       // A small occupancy mask lets each generated building test its footprint in constant time.
-      const maskSize=336,maskScale=.25,waterData=[];
+      const maskSize=336,maskScale=.25;
       // Raster cells are aligned in world metres across render-origin shifts.
       const maskX=Math.floor((cx-cutoff)/4)*4-cx,maskZ=Math.floor((cz-cutoff)/4)*4-cz;
       let wetMask=null;
+      const sampleShore=(x,z)=>shorePatch?.sample(x,z)||null;
       if(water.length){
         const mask=document.createElement('canvas');mask.width=mask.height=maskSize;
         const painter=mask.getContext('2d',{willReadFrequently:true});
@@ -204,6 +210,19 @@
         const currentCanvas=mask.cloneNode();
         const current=currentCanvas.getContext('2d',{willReadFrequently:true});
         current.setTransform(painter.getTransform());current.lineCap='round';
+        // A named lake may be split into rings to preserve islands. Estimate a
+        // shared stage from its shore samples, keeping the water below the banks.
+        const samples=new Map(),poolIds=new Map(),pools=[null];
+        for(const feature of water){
+          if(feature.kind!=='lake'||! /^(hồ|đầm|ao|bàu)\s/i.test(feature.name||''))continue;
+          if(!samples.has(feature.name))samples.set(feature.name,[]);
+          const values=samples.get(feature.name),stride=Math.max(1,Math.ceil(feature.points.length/18));
+          for(let i=0;i<feature.points.length;i+=stride){const p=feature.points[i];values.push(relief.ground(p.x,p.z));}
+        }
+        for(const [name,values] of samples){
+          if(pools.length>=255)break;
+          values.sort((a,b)=>a-b);poolIds.set(name,pools.length);pools.push(values[Math.floor(values.length*.16)]-.58);
+        }
         for(const feature of water){
           if(!feature.points||feature.points.length<2)continue;
           if(feature.kind==='lake'){
@@ -221,14 +240,13 @@
               ring=clean;
             }
             if(ring.length<3)continue;
-            const triangles=T.ShapeUtils.triangulateShape(ring,[]);
-            for(const [a,b,c] of triangles)waterData.push(ring[a].x,ring[a].y,ring[c].x,ring[c].y,ring[b].x,ring[b].y);
+            painter.fillStyle='rgb('+(poolIds.get(feature.name)||0)+',0,0)';
             painter.beginPath();painter.moveTo(ring[0].x,ring[0].y);
             for(let i=1;i<ring.length;i++)painter.lineTo(ring[i].x,ring[i].y);
             painter.closePath();painter.fill();
           }else{
             const radius=Math.min(90,Math.max(2,Number(feature.width)||(/suối/i.test(feature.name||'')?8:23)))/2;
-            painter.lineWidth=radius*2;
+            painter.globalCompositeOperation='destination-over';painter.strokeStyle='#000';painter.lineWidth=radius*2;
             for(let i=1;i<feature.points.length;i++){
               let ax=feature.points[i-1].x-cx,az=feature.points[i-1].z-cz,bx=feature.points[i].x-cx,bz=feature.points[i].z-cz;
               const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz);if(len<.01)continue;
@@ -240,15 +258,16 @@
               const speed=radius<=5?.98:.58;
               current.strokeStyle='rgb('+Math.round(128+126*speed*dx/len)+','+Math.round(128+126*speed*dz/len)+',0)';
               current.lineWidth=radius*2;current.beginPath();current.moveTo(ax,az);current.lineTo(bx,bz);current.stroke();
-              quad(waterData,ax-nx*radius,az-nz*radius,ax+nx*radius,az+nz*radius,bx-nx*radius,bz-nz*radius,bx+nx*radius,bz+nz*radius);
-              cap(waterData,bx,bz,radius);
               painter.beginPath();painter.moveTo(ax,az);painter.lineTo(bx,bz);painter.stroke();
             }
+            painter.globalCompositeOperation='source-over';
           }
         }
         wetMask=painter.getImageData(0,0,maskSize,maskSize).data;
-        if(waterData.length)waterSurface.setField(waterBankField(wetMask,current.getImageData(0,0,maskSize,maskSize).data,maskSize,1/maskScale),
-          maskSize,maskX,maskZ,maskScale,cx,cz);
+        const field=waterBankField(wetMask,current.getImageData(0,0,maskSize,maskSize).data,maskSize,1/maskScale);
+        waterSurface.setField(field,maskSize,maskX,maskZ,maskScale,cx,cz);
+        shorePatch=buildMappedShore(T,{mask:wetMask,field,size:maskSize,scale:maskScale,maskX,maskZ,cx,cz,gx,gz,landWidth,land,landIndex,
+          ground:localGround,pools,group:roadGroup,waterMaterial:waterSurface.material});
       }
       // Index occupied blocks once so narrow streams also enable local reflections.
       const wetBlocks=new Map(),blockSize=16,blocks=Math.ceil(maskSize/blockSize);
@@ -268,7 +287,7 @@
           const d=(x-p.x)**2+(z-p.z)**2;
           if(d<distance){nearest=p;distance=d;}
         }
-        return nearest?localGround(nearest.x,nearest.z)-.085:null;
+        return nearest?sampleShore(nearest.x,nearest.z)?.level??null:null;
       };
       function wet(x,z){
         const col=Math.floor((x-maskX)*maskScale),row=Math.floor((z-maskZ)*maskScale);
@@ -289,18 +308,23 @@
           if(dx*dx+dz*dz<(s.w+r)*(s.w+r))return true;
         }return false;
       }
-      // Bridges cover the water below. Estimate the outward bank normal only on contact.
-      waterContact=(x,z,r)=>{
-        if(!wetMask||!wet(x,z))return null;
+      // The road graph lacks explicit bridge tags. Keep mapped carriageways
+      // above water traversable and sample the exposed bed beyond the deck.
+      function onDeck(x,z){
         for(const s of cells.get(nearbyCell(x,z))||[]){
           const d=Math.max(0,Math.min(s.len,(x-s.ax)*s.fx+(z-s.az)*s.fz));
-          if(Math.hypot(s.ax+d*s.fx-x,s.az+d*s.fz-z)<s.w+.5)return null;
+          if(Math.hypot(s.ax+d*s.fx-x,s.az+d*s.fz-z)<s.w+.35)return true;
         }
-        for(let d=1;d<=16;d+=1)for(let i=0;i<16;i++){
-          const nx=Math.cos(i*Math.PI/8),nz=Math.sin(i*Math.PI/8);
-          if(!wet(x+d*nx,z+d*nz))return {nx,nz,depth:d+r,kind:'water'};
-        }
-        return null;
+        return false;
+      }
+      waterAt=(worldX,worldZ)=>{
+        const x=worldX-cx,z=worldZ-cz,shore=sampleShore(x,z);
+        return shore&&!onDeck(x,z)?shore:null;
+      };
+      shoreBed=(worldX,worldZ)=>{
+        if(!shorePatch)return null;
+        const x=worldX-cx,z=worldZ-cz;
+        return onDeck(x,z)?null:shorePatch.sample(x,z,true)?.bed;
       };
       let buildingBase=null;
       function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null,owner=null){
@@ -642,9 +666,9 @@
       function surface(data,mat,y,freq){
         if(!data.length)return;
         const verts=[],uv=[],step=relief.step;
-        const roadLayer=mat!==waterSurface.material;
+
         function vertex(x,z){
-          const h=roadLayer&&wooded?roadway(cx+x,cz+z):localGround(x,z);
+          const h=wooded?roadway(cx+x,cz+z):localGround(x,z);
           verts.push(x,h+y,z);
           uv.push(x*freq+(cx*freq)%1,z*freq+(cz*freq)%1);
         }
@@ -684,7 +708,7 @@
       }
       material.white.side=material.yellow.side=T.DoubleSide;
       surface(bankData,material.earth,-.065,.60);
-      surface(waterData,waterSurface.material,-.085,.074);surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
+      surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       if(wires.length){
         for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
         const lines=new T.BufferGeometry();lines.setAttribute('position',new T.Float32BufferAttribute(wires,3));
@@ -816,8 +840,8 @@
     }
     function pose(item,car,dt,near){
       const pitch=Math.atan(driveGrade(car.x,car.z,car.yaw)),bank=Math.atan(driveGrade(car.x,car.z,car.yaw+Math.PI/2));
-      item.root.position.set(car.x-originX,driveGround(car.x,car.z)+.011,car.z-originZ);
-      item.root.rotation.set(-pitch,Math.PI-car.yaw,-bank,'YXZ');
+      item.root.position.set(car.x-originX,(car.flood?.y??car.wading?.bed??driveGround(car.x,car.z))+.011,car.z-originZ);
+      item.root.rotation.set(car.flood?car.flood.pitch:-pitch,Math.PI-car.yaw,car.flood?0:-bank,'YXZ');
       if(near)item.request();
       const detailed=near&&!!item.detail;item.low.visible=!detailed;
       if(item.detail)item.detail.visible=detailed;
@@ -831,18 +855,21 @@
     const driveFx=createDrivingFX(T,scene);
     function render(car,traffic,dt,inside=false){
       if(!car||!Number.isFinite(car.x)||!Number.isFinite(car.z))return;
-      if(car.sightView)inside=false;
+      if(car.sightView||car.flood)inside=false;
       resize();dt=Math.max(0,Math.min(.12,dt||0));version++;totalDriven+=Math.abs(car.speed||0)*dt;
-      waterSurface.update(performance.now()*.001);
+      waterSurface.update(performance.now()*.001,weather.rainfall);
       const x=car.x-originX,z=car.z-originZ;
+      const wake=car.flood?Math.exp(-car.flood.age*.36):car.wading?Math.min(1,Math.abs(car.speed)*.11):0;
+      waterSurface.setWake(x,z,car.yaw+(car.speed<0?Math.PI:0),wake,car.flood?.age||0);
       const kind=['supercar','gt','rally'].includes(car.model)?car.model:'supercar';
       if(!player||player.kind!==kind){
         if(player)player.root.visible=false;
         if(!players.has(kind))players.set(kind,makeVehicle(kind,0,true));player=players.get(kind);player.request();player.root.visible=true;
       }
       pose(player,car,dt,true);player.outside.visible=!inside;
+      player.shadow.visible=!car.flood;for(const shadow of player.axleShadows)shadow.visible=!car.flood;
       player.outside.rotation.set(-(car.pitch||0),0,-(car.roll||0));
-      car.y=driveGround(car.x,car.z);playerRig.position.set(x,car.y+.011,z);
+      car.y=player.root.position.y-.011;playerRig.position.copy(player.root.position);
       playerRig.rotation.set(-player.root.rotation.x,-car.yaw,-player.root.rotation.z,'YXZ');
       mirrorRotation.copy(playerRig.quaternion);
       cabinCourse.finish=Math.ceil(totalDriven);cabinCourse.name=car.roadName||'Việt Nam';
@@ -854,11 +881,11 @@
         if(item&&item.kind!==kind){trafficItems.delete(a.id);item.root.visible=false;(pools.get(item.kind)||pools.set(item.kind,[]).get(item.kind)).push(item);item=null;}
         if(!item){item=pools.get(kind)?.pop()||makeVehicle(kind,Math.abs(Number(a.id)||index));trafficItems.set(a.id,item);}
         item.tick=version;item.root.visible=true;
-        const recoil=a.recoil;
+        const recoil=a.flood?null:a.recoil;
         item.outside.position.y=(recoil?.y||0)+(recoil?.fallen ? .25*Math.abs(Math.sin(recoil.roll)) : 0);
         item.outside.rotation.set(-(recoil?.pitch||0),0,-(recoil?.roll||0));
-        for(const shadow of item.axleShadows)shadow.visible=!recoil?.fallen;
-        item.shadow.visible=(recoil?.y||0)<3.2;
+        for(const shadow of item.axleShadows)shadow.visible=!a.flood&&!recoil?.fallen;
+        item.shadow.visible=!a.flood&&(recoil?.y||0)<3.2;
         pose(item,a,dt,(index<(small?3:5)||kind==='scooter'||!!recoil)&&d<140*140);
       }
       for(const [id,item] of trafficItems)if(item.tick!==version){
@@ -888,6 +915,7 @@
           look.set(x+dx*15,car.y+2.7,z+dz*15);
         }
       }
+      if(car.flood){eye.y=Math.max(eye.y,car.flood.level+2.2);look.set(x,car.flood.level-.25,z);}
       camera.position.copy(eye);camera.lookAt(look);
       if(car.sightView){
         const v=car.sightView,radius=Math.max(24,v.data.depth*.9,v.data.width*.83)*(camera.aspect<.85?1.48:1);
@@ -912,6 +940,6 @@
       }
       lastPaint=now;
     }
-    return {weather,terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    return {weather,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();

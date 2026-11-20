@@ -193,11 +193,11 @@ function courseRelief(raw){
     cache.set(key,value);return value;
   }
   const depth=(x,z)=>Math.max(0,raw.seaLevel-raw.ground(x,z));
-  return {id:raw.id,depth,ground(x,z){
+  return {id:raw.id,seaLevel:raw.seaLevel,depth,ground(x,z){
     const u=x/spacing,v=z/spacing,i=Math.floor(u),j=Math.floor(v),fx=u-i,fz=v-j;
     const a=offset(i,j),b=offset(i+1,j),c=offset(i,j+1),d=offset(i+1,j+1);
     const land=raw.ground(x,z),correction=(a+(b-a)*fx)*(1-fz)+(c+(d-c)*fx)*fz;
-    return Math.max(raw.seaLevel,land)+correction*smooth(0,15,land-raw.seaLevel);
+    return Math.max(raw.seaLevel-9,land)+correction*smooth(0,15,land-raw.seaLevel);
   }};
 }
 const mountainField=courseRelief(window.stageRelief);
@@ -279,8 +279,9 @@ const courseWater=createDrivingWater(T,false);
 let nearTerrain=null;
 function renderedGround(x,z){
   if(!nearTerrain)return ground(x,z);
-  const {grid,x0,z0,nx,nz,data}=nearTerrain,u=(x-x0)/grid,v=(z-z0)/grid,i=Math.floor(u),j=Math.floor(v);
-  if(i<0||j<0||i>=nx-1||j>=nz-1)return ground(x,z);
+  const {grid,x0,z0,nx,nz,data}=nearTerrain,u=(x-x0)/grid,v=(z-z0)/grid;
+  if(u<-.0001||v<-.0001||u>nx-1+.0001||v>nz-1+.0001)return ground(x,z);
+  const i=clamp(Math.floor(u),0,nx-2),j=clamp(Math.floor(v),0,nz-2);
   const f=u-i,g=v-j,a=i+j*nx,b=a+1,c=a+nx,d=c+1;
   return f+g<=1?data[a]+f*(data[b]-data[a])+g*(data[c]-data[a]):
     data[d]+(1-f)*(data[c]-data[d])+(1-g)*(data[b]-data[d]);
@@ -293,13 +294,13 @@ function terrain(){
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
     const x=box.min.x-margin+i*grid,z=box.min.z-margin+j*grid,n=nearest(x,z),y=surface(x,z,n);
     data[j*nx+i]=y;
-    const level=besideWater(n.d)&&(!mountainField||n.dist<145)?waterLevel:-1e4;
-    if(!route.stage){
-      const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
-      const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
-      const angle=heading+(crossChannel?Math.PI/2:0),current=river?.6:.93;
-      waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(level-y)*2.6);
-    }
+    const marine=route.stage&&mountainField;
+    const level=marine?mountainField.seaLevel:besideWater(n.d)&&(!mountainField||n.dist<145)?waterLevel:-1e4;
+    const actualDepth=marine&&!mountainField.depth(x,z)?Math.min(-.02,level-y):level-y;
+    const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
+    const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
+    const angle=heading+(crossChannel?Math.PI/2:0),current=marine?.16:river?.6:.93;
+    waterVerts.push(x,marine?level:waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,actualDepth*2.6);
     const cut=mountainField?Math.min(1,Math.max(0,(y-n.y+.3)/Math.max(4,n.dist)) * 4)
       *smooth(9,17,n.dist)*(1-smooth(35,75,n.dist)):0;
     cutWeights.push(cut);seaWeights.push(mountainField?mountainField.depth(x,z):0);
@@ -314,16 +315,31 @@ function terrain(){
     base.multiplyScalar(.96+.03*Math.sin(x*.67+z*.22));verts.push(x,y,z);colors.push(base.r,base.g,base.b);
     if(j&&i){const k=j*nx+i;indices.push(k-nx-1,k-1,k-nx,k-1,k,k-nx);}
   }
-  if(!route.stage)for(let i=0;i<indices.length;i+=3){
+  // Clip at the intersection with each rendered land triangle. This gives the
+  // renderer an actual shoreline instead of overlapping full squares of water.
+  for(let i=0;i<indices.length;i+=3){
     const a=indices[i],b=indices[i+1],c=indices[i+2];
-    if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0)waterIndices.push(a,b,c);
+    if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])<=0)continue;
+    if(Math.min(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0){waterIndices.push(a,b,c);continue;}
+    const ring=[];let p=c;
+    for(const q of [a,b,c]){
+      const dp=profiles[3*p+2],dq=profiles[3*q+2];
+      if((dp>0)!==(dq>0)){
+        const t=dp/(dp-dq);ring.push(waterVerts.length/3);
+        for(let k=0;k<3;k++)waterVerts.push(waterVerts[3*p+k]+t*(waterVerts[3*q+k]-waterVerts[3*p+k]));
+        for(let k=0;k<2;k++)profiles.push(profiles[3*p+k]+t*(profiles[3*q+k]-profiles[3*p+k]));
+        profiles.push(0);
+      }
+      if(dq>0)ring.push(q);p=q;
+    }
+    for(let k=2;k<ring.length;k++)waterIndices.push(ring[0],ring[k-1],ring[k]);
   }
   if(waterIndices.length){
     const waterGeometry=new T.BufferGeometry();
     waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
     waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
     waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
-    const water=new T.Mesh(waterGeometry,courseWater.material);water.receiveShadow=true;scene.add(water);
+    const water=new T.Mesh(waterGeometry,courseWater.material);water.name='Course waterline';water.receiveShadow=true;scene.add(water);
   }
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();
   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('soil',new T.Float32BufferAttribute(soil,1));g.setAttribute('cut',new T.Float32BufferAttribute(cutWeights,1));g.setAttribute('marine',new T.Float32BufferAttribute(seaWeights,1));
@@ -336,7 +352,7 @@ function terrain(){
     const vars='varying float soilWeight; varying float exposed; varying float seaDepth; varying vec3 hillside; varying vec3 hillsideNormal;\n';
     shader.vertexShader='attribute float soil; attribute float cut; attribute float marine;\n'+vars+shader.vertexShader.replace('#include <begin_vertex>',
       '#include <begin_vertex>\n soilWeight=soil; exposed=cut; seaDepth=marine; hillside=position; hillsideNormal=normal;');
-    let colour='diffuseColor *= mix(texture2D(map,vMapUv),texture2D(earthMap,vMapUv*1.6),smoothstep(.12,.9,soilWeight));';
+    let colour='vec4 sediment=texture2D(earthMap,vMapUv*1.6); float wetness=smoothstep(.25,.93,soilWeight+(sediment.g-.18)*.32); diffuseColor *= mix(texture2D(map,vMapUv),sediment,wetness);';
     if(mountainField){
       shader.uniforms.cutStone={value:rock};shader.uniforms.cutNormal={value:rockNormal};
       colour+=`
@@ -354,7 +370,7 @@ function terrain(){
         vec3 rockyNormal=mix(texture2D(cutNormal,v).xyz,texture2D(cutNormal,u).xyz,west)*2.-1.;
         float weather=.89+.06*sin(dot(hillside,vec3(.088,.33,-.069)))+.05*sin(hillside.y*.09);
         diffuseColor.rgb=mix(diffuseColor.rgb,rockColour*weather*(1.+rockyNormal.x*.12-rockyNormal.y*.16),amount);
-        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.047,.134,.139),smoothstep(.3,2.,seaDepth));`;
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.12,.115,.083),smoothstep(.1,1.7,seaDepth));`;
     }
     shader.fragmentShader=vars+'uniform sampler2D earthMap; uniform sampler2D cutStone; uniform sampler2D cutNormal;\n'
       +shader.fragmentShader.replace('#include <map_fragment>',colour);
@@ -724,7 +740,7 @@ function render(now){
    courseWeather.locate(weatherOrigin[0]+east/(111320*Math.cos(weatherOrigin[1]*Math.PI/180)),weatherOrigin[1]+north/111320);
  }
  courseWeather.render(camera,now);
- courseWater.update(now*.001);
+ courseWater.update(now*.001,courseWeather.rainfall);
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
  if(!route.stage)courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
  renderer.render(scene,camera);

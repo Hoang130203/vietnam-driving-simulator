@@ -127,9 +127,15 @@ window.createDrivingFX = function (T, scene) {
         nx*(.5+hit)+nz*lateral,.72+Math.random()*1.3,nz*(.5+hit)-nx*lateral,
         .28+Math.random()*.32, .7+Math.random()*.75,dustTint,.36+hit*.35);
     }
+    if(water)for(let i=0;i<12+hit*34;i++){
+      const a=Math.random()*Math.PI*2,r=.4+Math.random()*.9,v=(1.2+Math.random()*3.8)*(.55+hit);
+      const dy=.8+Math.random()*(2.2+3.5*hit),life=dy*.21+.1;
+      Object.assign(sparks[sparkIndex++%sparkCount],{water:true,x:x+Math.cos(a)*r,y:y+.12,z:z+Math.sin(a)*r,
+        ground,dx:Math.cos(a)*v,dy,dz:Math.sin(a)*v,life,total:life});
+    }
     if(metal)for(let i=0;i<3+hit*32;i++){
       const v=(1+Math.random()*8)*(.45+hit),side=(Math.random()-.5)*(3+hit*13),life=.13+Math.random()*.38;
-      Object.assign(sparks[sparkIndex++%sparkCount],{x,y:y+.43,z,ground,dx:nx*v+nz*side,dy:1+Math.random()*5,dz:nz*v-nx*side,life,total:life});
+      Object.assign(sparks[sparkIndex++%sparkCount],{water:false,x,y:y+.43,z,ground,dx:nx*v+nz*side,dy:1+Math.random()*5,dz:nz*v-nx*side,life,total:life});
     }
     if(!water)for(let i=0;i<Math.floor(hit*(metal?16:9));i++){
       const iChip=chipIndex++%chipCount,side=(Math.random()-.5)*(3+hit*8);
@@ -146,7 +152,7 @@ window.createDrivingFX = function (T, scene) {
     mark(x-dx*1.4,y,z-dz*1.4,x,y,z,.48);
     for(let i=0;i<Math.min(9,2+speed*.29);i++){
       const side=(Math.random()-.5)*3,trail=1+Math.random()*Math.min(7,speed*.55),life=.1+Math.random()*.22;
-      Object.assign(sparks[sparkIndex++%sparkCount],{x,y:y+.13,z,ground:y,dx:-dx*trail+dz*side,
+      Object.assign(sparks[sparkIndex++%sparkCount],{water:false,x,y:y+.13,z,ground:y,dx:-dx*trail+dz*side,
         dy:.3+Math.random()*2.5,dz:-dz*trail-dx*side,life,total:life});
     }
     puff(x,y+.12,z,-dx*.55,.38,-dz*.55,.2,.55,[.54,.52,.49],.25);
@@ -158,7 +164,7 @@ window.createDrivingFX = function (T, scene) {
   }
   function update(car,dt,originX=0,originZ=0,inside=false,camera){
     dt=clamp(dt||0,0,.1);clock+=dt;
-    const driving=car.driving!==false&&!car.showroom;
+    const driving=car.driving!==false&&!car.showroom&&!car.wading;
     if(originX!==ox||originZ!==oz){
       ox=originX;oz=originZ;
       for(let i=0;i<markCount;i++)if(marks[i]&&clock-marksBorn[i*6]<24)writeMark(i);
@@ -211,10 +217,11 @@ window.createDrivingFX = function (T, scene) {
     for(const p of sparks){
       if(p.life<=0)continue;p.life-=dt;
       p.x+=p.dx*dt;p.y+=p.dy*dt;p.z+=p.dz*dt;p.dy-=12*dt;
+      if(p.water&&p.y<p.ground){p.life=0;continue;}
       if(p.y<p.ground+.03){p.y=p.ground+.03;p.dy=Math.abs(p.dy)*.33;}
       const trail=Math.min(.038,.015+p.life*.07),a=clamp(p.life/p.total,0,1);
       sparkPos.set([p.x-ox,p.y,p.z-oz,p.x-p.dx*trail-ox,p.y-p.dy*trail,p.z-p.dz*trail-oz],sparkDraw*6);
-      sparkColor.set([1,.92*a,.47*a,a*.92,.28*a,.03],sparkDraw*6);sparkDraw++;
+      sparkColor.set(p.water?[.50*a,.81*a,a,.19*a,.44*a,.62*a]:[1,.92*a,.47*a,a*.92,.28*a,.03],sparkDraw*6);sparkDraw++;
     }
     sparkMesh.visible=sparkDraw>0;sparkGeo.setDrawRange(0,sparkDraw*2);
     if(sparkDraw){sparkGeo.attributes.position.needsUpdate=true;sparkGeo.attributes.color.needsUpdate=true;}

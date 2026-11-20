@@ -14,7 +14,7 @@ window.createPitQuiz=function(dialog,onWrong,onReady){
   dialog.oncancel=e=>e.preventDefault();
   return function show(kind){
     const q=draw(),img=$('#pitImage');
-    $('#remark').textContent=kind==='car'?'Cản sau đâu phải nút bấm còi!':kind==='curve'?'Cua trái, cản trước đi thẳng.':kind==='downhill'?'Đổ đèo, đừng đổ phụ tùng!':'Lề đường vừa xin chữ ký.';
+    $('#remark').textContent=kind==='water'?'Chú Tư kéo xe lên bờ rồi!':kind==='car'?'Cản sau đâu phải nút bấm còi!':kind==='curve'?'Cua trái, cản trước đi thẳng.':kind==='downhill'?'Đổ đèo, đừng đổ phụ tùng!':'Lề đường vừa xin chữ ký.';
     $('#prompt').textContent=q.prompt;img.hidden=!q.image;
     if(q.image){img.src=q.image;img.alt='Hình minh họa câu '+q.id;}else img.removeAttribute('src');
     $('#reply').textContent='Chú Tư đang mở nắp ca-pô. Trả lời câu này để chú ráp xe.';

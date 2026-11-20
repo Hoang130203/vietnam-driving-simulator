@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 // Current model conditions for the car's position. Coordinates come from the game map.
 function createDrivingWeather(THREE,scene,sun,pavement,reference=''){
   const interval=15*60000,maxAge=2*3600000,labels=document.querySelectorAll('[data-weather]');
@@ -81,5 +81,5 @@ function createDrivingWeather(THREE,scene,sun,pavement,reference=''){
     }
     positions.needsUpdate=true;
   }
-  return {locate,render};
+  return {locate,render,get rainfall(){return opacity;}};
 }

@@ -146,7 +146,7 @@
     if (!enabled || sound?.ctx.state !== 'running') return;
     strength=Math.min(1,Math.max(0,strength||0));
     if(!strength)return;
-    tone(94,28,.14+strength*.15,.07+strength*.37);
+    if(type!=='water')tone(94,28,.14+strength*.15,.07+strength*.37);
     if(type==='person')return;
     if((type==='vehicle'||type==='car')&&strength>.4){
       tone(117,63,.17,.025+strength*.065,.06,'triangle');
@@ -154,11 +154,12 @@
       tone(1260,940,.046,.008+strength*.018,.18);
     }
     const {ctx,output}=sound, source=ctx.createBufferSource(), filter=ctx.createBiquadFilter(), gain=ctx.createGain();
-    const duration=.12+strength*.28;
+    const duration=type==='water'?.28+strength*.40:.12+strength*.28;
     const buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*duration),ctx.sampleRate);
     const samples=buffer.getChannelData(0);
     for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-5*i/samples.length);
     source.buffer=buffer;filter.type='bandpass';filter.frequency.value=type==='curb'?480:1500;filter.Q.value=.65;
+    if(type==='water'){filter.type='lowpass';filter.frequency.setValueAtTime(3400,ctx.currentTime);filter.frequency.exponentialRampToValueAtTime(450,ctx.currentTime+duration);}
     gain.gain.value=.4+strength*.45;source.connect(filter).connect(gain).connect(output);source.start();
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }

@@ -14,12 +14,12 @@ $('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
 function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge)*.47);}
 function save(){
- if(!player||!roads)return;
+ if(!player||!roads||car.flood)return;
  const [lon,lat]=roads.geo(car.x,car.z);
  try{localStorage.setItem('taylai.world.trip',JSON.stringify({lon,lat,label:source[0],destination:source[3]?.id,distance,passes,dir:player.dir,edge:player.edge.id,yaw:car.yaw,origin:[roads.lon,roads.lat]}));}catch{}
 }
 function parkOnRoad(){
- const p=roads.sample(player,stance());DriveBody.reset(car);Object.assign(car,p);cooldown=1;
+ const p=roads.sample(player,stance());car.flood=null;car.wading=null;DriveBody.reset(car);Object.assign(car,p);cooldown=1;
 }
 function trackRoad(){
  const around=roads.nearby(car.x,car.z,22);
@@ -133,6 +133,7 @@ function fillTraffic(){
 }
 function trafficStep(dt){
  for(const n of npcs){
+   if(n.flood){advanceFlood(n,dt);if(n.flood.age>5)n.stopped=7;continue;}
    const dx=car.x-n.x,dz=car.z-n.z,fx=Math.sin(n.yaw),fz=-Math.cos(n.yaw);
    const fallen=n.recoil?.fallen;
    let target=fallen||n.recoil?.braking?0:n.pace;
@@ -148,6 +149,12 @@ function trafficStep(dt){
    const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge)*.75));
    const landing=DriveBody.advanceRecoil(n,dt);Object.assign(n,pos);
    if(n.recoil){n.x+=n.recoil.x;n.z+=n.recoil.z;n.yaw+=n.recoil.angle;}
+   if(n.recoil){
+     const wet=gfx.waterAt(n.x,n.z);
+     if(wet&&wet.level-wet.bed>.55&&n.recoil.y<.6){
+       startFlood(n,wet,n.recoil.vx,n.recoil.vz);continue;
+     }
+   }
    if(fallen)wreckContact(n);
    landingFx(n,landing);
    const along=(car.x-n.x)*fx+(car.z-n.z)*fz,across=(car.x-n.x)*fz-(car.z-n.z)*fx;
@@ -174,7 +181,8 @@ function hitVehicle(n){
  }
 }
 const pit=createPitQuiz($('pit'),()=>'Chú Tư lắc đầu. Chọn lại đáp án nhé.',()=>{
- hp=100;DriveBody.reset(car);cooldown=2;mode='drive';keySet.clear();inform('Máy lại giòn. Lên đường!');
+ if(car.flood)recover();
+ hp=100;DriveBody.reset(car);cooldown=2;mode='drive';keySet.clear();updateHud();save();inform('Máy lại giòn. Lên đường!');
 });
 function wreckContact(n){
  const r=n.recoil;
@@ -206,9 +214,43 @@ function hurt(kind,event,hit){
  if(hp===0){mode='crash';crashTime=1.2;crashKind=kind;car.boost=false;keySet.clear();}
  else inform('Va chạm · '+(event.energy/1000).toLocaleString('vi-VN',{maximumFractionDigits:1})+' kJ · thân xe '+hp+'%',1.6);
 }
+function startFlood(actor,wet,vx,vz){
+ const impact=Math.hypot(vx,vz);
+ actor.flood={level:wet.level,bed:wet.bed,y:actor.wading?.bed??wet.level,age:0,vy:0,vx,vz,pitch:0};
+ actor.wading=null;actor.boost=false;actor.slip=0;
+ gfx.splash(actor.x,actor.z,-vx,-vz,Math.min(1,.24+impact/30),wet.level);
+ if(actor!==car)return;
+ driveAudio.impact(Math.min(1,.25+impact/35),'water');
+ mode='sinking';keySet.clear();hp=0;updateHud();
+ inform('Nước tràn vào máy · chờ cứu hộ',5);
+}
+function advanceFlood(actor,dt){
+ const f=actor.flood;f.age+=dt;
+ const drag=Math.exp(-2.6*dt);
+ f.vx*=drag;f.vz*=drag;
+ const x=actor.x+f.vx*dt,z=actor.z+f.vz*dt;
+ const wet=gfx.waterAt(x,z);
+ if(wet){
+   actor.x=x;actor.z=z;f.level=wet.level;f.bed=wet.bed;
+ }else{f.vx=0;f.vz=0;}
+ actor.speed=f.vx*Math.sin(actor.yaw)-f.vz*Math.cos(actor.yaw);
+ f.vy=Math.min(2.2,f.vy+dt*(.65+Math.min(1,f.age)*1.4));
+ f.y=Math.max(f.bed,Math.min(f.level,f.y-f.vy*dt));
+ f.pitch+=(Math.min(.21,(f.level-f.y)*.16)-f.pitch)*(1-Math.exp(-dt*2.6));
+}
+function waterStep(dt){
+ const wet=gfx.waterAt(car.x,car.z);
+ if(!wet){car.wading=null;return;}
+ const depth=wet.level-wet.bed;
+ if(depth>.6){startFlood(car,wet,car.vx,car.vz);return;}
+ if(!car.wading&&Math.abs(car.speed)>1)gfx.splash(car.x,car.z,-car.vx,-car.vz,Math.min(.65,.14+Math.abs(car.speed)/35),wet.level);
+ car.wading=wet;
+ const drag=Math.exp(-depth*2.4*dt);
+ car.vx*=drag;car.vz*=drag;car.speed*=drag;car.boost=false;
+}
 function tick(dt){
  cooldown=Math.max(0,cooldown-dt);streamRetry=Math.max(0,streamRetry-dt);
- const gas=held('w','arrowup'),reverse=held('s','arrowdown'),brake=held(' '),boost=held('shift')&&nitro>1&&!reverse&&!brake;
+ const gas=held('w','arrowup'),reverse=held('s','arrowdown'),brake=held(' '),boost=!car.wading&&held('shift')&&nitro>1&&!reverse&&!brake;
  nitro=clamp(nitro+(boost?-27:held('shift')?0:6)*dt,0,100);
  const tune={gt:[6.4,43],rally:[7.7,40],supercar:[8.4,48]}[car.model];
  const x=car.x,z=car.z;
@@ -219,6 +261,7 @@ function tick(dt){
    hit.axle=axle;const impact=DriveBody.resolve(car,hit);
    if(impact.closing>.7)hurt(hit.kind||'shoulder',impact,hit);
  }
+ if(mode==='drive')waterStep(dt);
  trackRoad();const moved=Math.hypot(car.x-x,car.z-z);distance+=moved;
  if(mode!=='drive')return;
  if(duel){
@@ -250,7 +293,7 @@ function updateHud(){
  const fork=branchAhead(),plan=duel&&fork?duel.nextAt(fork.node):null;
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';
- $('turnInfo').textContent=duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
+ $('turnInfo').textContent=car.flood?'Xe ngập nước · chờ cứu hộ':car.wading?'Đang lội nước':duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
  drawMini(landmark);
 }
 function drawMini(landmark){
@@ -278,6 +321,9 @@ function frame(now){
    if(mode==='drive'){
      const steps=Math.max(1,Math.ceil(dt*90));
      for(let i=0;i<steps&&mode==='drive';i++)tick(dt/steps);
+   }else if(mode==='sinking'){
+     advanceFlood(car,dt);
+     if(car.flood.age>=4.1){mode='pit';pit('water');}
    }else if(mode==='crash'){
      DriveBody.settle(car,dt);
      for(const actor of duel?[duel.actor,...npcs]:npcs){
@@ -291,8 +337,8 @@ function frame(now){
    }
    if(mode!=='loading'&&roads&&!document.hidden&&now>=nextWeatherCheck){nextWeatherCheck=now+2000;gfx.weather.locate(...roads.geo(car.x,car.z));}
    car.driving=mode==='drive';car.showroom=mode==='grid';
-   if(mode!=='loading'&&mode!=='error'&&!document.hidden)gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'?dt:0,inside);
-   if(mode==='drive'){uiTick+=dt;if(uiTick>.13){uiTick=0;updateHud();}}
+   if(mode!=='loading'&&mode!=='error'&&!document.hidden)gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'||mode==='sinking'?dt:0,inside);
+   if(mode==='drive'||mode==='sinking'){uiTick+=dt;if(uiTick>.13){uiTick=0;updateHud();}}
    driveAudio.update({speed:Math.abs(car.speed)*3.6,boost:car.driving&&car.boost,slip:car.slip,offroad:car.offroad,throttle:held('w','arrowup'),braking:car.brake,signal:false,mode:mode==='drive'?'driving':mode==='grid'?'idling':'ready'});
  }
  if(toastTime>0&&(toastTime-=dt)<=0)$('callout').textContent='';
