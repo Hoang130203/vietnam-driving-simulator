@@ -82,15 +82,14 @@
     material.rail=new T.MeshStandardMaterial({color:0xaab2af,metalness:.55,roughness:.49,side:T.DoubleSide});
     material.asphalt.side=material.earth.side=T.DoubleSide;
     material.pavers=new T.MeshStandardMaterial({color:0xb5ada4,roughness:.91,side:T.DoubleSide});
-    const gardenLawn=new T.MeshLambertMaterial({color:0x73915b,side:T.DoubleSide});
-    const woodlandFloor=new T.MeshLambertMaterial({color:0x455d3c,side:T.DoubleSide});
+    let temple;
+    const curbStone=new T.MeshStandardMaterial({color:0x979388,roughness:.94,side:T.DoubleSide});
     material.pavers.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec2 paving;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-        '#include <begin_vertex>\n#ifdef USE_INSTANCING\n paving=(instanceMatrix*vec4(position,1.)).xz;\n#else\n paving=position.xz;\n#endif');
-      shader.uniforms.paverOrigin={value:landOrigin};
-      shader.fragmentShader='uniform vec2 paverOrigin; varying vec2 paving;\n'+shader.fragmentShader.replace('#include <color_fragment>',
+        '#include <begin_vertex>\n paving=uv;');
+      shader.fragmentShader='varying vec2 paving;\n'+shader.fragmentShader.replace('#include <color_fragment>',
         `#include <color_fragment>
-         vec2 p=(paving+paverOrigin)/vec2(.49,.25);p.x+=.5*mod(floor(p.y),2.);
+         vec2 p=paving/vec2(.49,.25);p.x+=.5*mod(floor(p.y),2.);
          vec2 edge=min(fract(p),1.-fract(p)),aa=max(fwidth(p),vec2(.01));
          vec2 face=smoothstep(vec2(.01)-aa*.5,vec2(.044)+aa*.5,edge);
          float detail=1.-smoothstep(.35,1.6,max(aa.x,aa.y));
@@ -133,7 +132,11 @@
     const temp=new T.Object3D(),tone=new T.Color();
     const roadsideImpact=createRoadsideImpact(T,scene,relief.ground);
     let roadway=relief.ground,shoreBed=()=>null,wooded=false;
-    const driveGround=(x,z)=>shoreBed(x,z)??roadway(x,z);
+    let pavementLift=()=>0;
+    const driveGround=(x,z)=>{
+      const lift=pavementLift(x-originX,z-originZ);
+      return lift?roadway(x,z)+lift:(shoreBed(x,z)??roadway(x,z));
+    };
     function driveGrade(x,z,yaw){
       const dx=2.2*Math.sin(yaw),dz=-2.2*Math.cos(yaw);
       return (driveGround(x+dx,z+dz)-driveGround(x-dx,z-dz))/4.4;
@@ -443,19 +446,21 @@
       }
       roadway=!wooded?relief.ground:(x,z)=>{
         const lx=x-cx,lz=z-cz,naturalY=natural(lx,lz);
-        let best=Infinity,height=naturalY;
+        let weightSum=0,formationSum=0,influence=0;
         for(const s of cells.get(nearbyCell(lx,lz))||[]){
           if(!s.graded)continue;
           const d=Math.max(0,Math.min(s.len,(lx-s.ax)*s.fx+(lz-s.az)*s.fz));
           const cross=Math.hypot(lx-s.ax-s.fx*d,lz-s.az-s.fz*d);
-          if(cross>=s.w+4||cross>=best)continue;
+          if(cross>=s.w+4)continue;
           const j=Math.min(s.crown.length-2,Math.floor(d/s.interval)),f=d/s.interval-j;
           const crown=s.crown[j]*(1-f)+s.crown[j+1]*f;
           const t=Math.max(0,Math.min(1,(s.w+4-cross)/3.35));
-          height=naturalY+(crown-Math.min(s.w,cross)*.018-naturalY)*t;
-          best=cross;
+          // Intersecting formations meet continuously where their nearest edges switch.
+          const blend=t*t*(3-2*t),weight=blend/(1+cross*cross);
+          formationSum+=(crown-Math.min(s.w,cross)*.018)*weight;
+          weightSum+=weight;influence=Math.max(influence,blend);
         }
-        return height;
+        return weightSum?naturalY+(formationSum/weightSum-naturalY)*influence:naturalY;
       };
       function cutClearance(x,z,own){
         let gap=8;
@@ -529,19 +534,16 @@
         for(let i=Math.floor((c.hx-c.footprint)/plotSize);i<=Math.floor((c.hx+c.footprint)/plotSize);i++)
           for(let j=Math.floor((c.hz-c.footprint)/plotSize);j<=Math.floor((c.hz+c.footprint)/plotSize);j++)cb(i+','+j);
       }
+      const walks=createGroundedWalkways(T,{cx,cz,step:relief.step,
+        height:(x,z)=>roadway(cx+x,cz+z),ground:(x,z)=>Math.min(localGround(x,z),shoreBed(cx+x,cz+z)??Infinity),
+        wet:(x,z)=>wetMask&&wet(x,z)});
       for(const s of segments){
         const start=openNearEnd(s,s.ax,s.az),end=s.len-openNearEnd(s,s.bx,s.bz);
         if(end<=start)continue;
         const mid=(start+end)/2,mx=s.ax+s.fx*mid,mz=s.az+s.fz*mid;
         const street=s.kind==='residential'||s.kind==='living_street'||district.builtUp(mx+cx,mz+cz);
-        if(street&&s.w<=6.8&&end-start>2&&(!wetMask||!wet(mx,mz))){
-          const sw=s.w<4?1.2:1.85,angle=Math.atan2(s.fx,s.fz);
-          for(const side of [-1,1]){
-            const off=side*(s.w+sw/2);
-            instance('pavers',unitBox,mx+s.nx*off,.02,mz+s.nz*off,sw,.14,end-start,angle);
-            const lip=side*(s.w+.08);
-            instance('concrete',unitBox,mx+s.nx*lip,.035,mz+s.nz*lip,.16,.14,end-start,angle);
-          }
+        if(street&&s.w<=6.8&&end-start>2){
+          for(const side of [-1,1])walks.sidewalk(s,start,end,side,s.w<4?1.2:1.85);
         }
         if(s.w>=4.2||s.graded){
           for(const side of [-1,1])strip(white,s,start,end,side*s.w*.94-.055,side*s.w*.94+.055);
@@ -625,7 +627,7 @@
               instance('roof',unitBox,hx,h+.07,hz,width+.46,.19,depth+.52,rot,[0x989d98,0xaf846d,0x99aeb0][type%3]);
               const pitched=h<5&&c.priority<.7;
               if(pitched)instance('gable',gable,hx,h+.14,hz,width+.5,width*.24,depth+.59,rot,[0xa26148,0x825947,0x7b8688][type%3]);
-              instance('pavement',unitBox,hx+sx*depth/2,.1,hz+sz*depth/2,width+.35,.2,2.7,rot);
+              walks.porch(s,hx+sx*depth/2,hz+sz*depth/2,width+.35);
               const porch=depth/2+.72;
               instance('awning',unitBox,hx+sx*porch,2.65,hz+sz*porch,width+.4,.13,1.8,rot,[0xa2a692,0xbc8062,0x809b93][type%3]);
               instance('concrete',unitPole,hx+sx*porch+s.fx*width*.45,1.32,hz+sz*porch+s.fz*width*.45,.09,2.62,.09);
@@ -725,21 +727,38 @@
         g.setIndex(railIndices);g.computeVertexNormals();const rails=new T.Mesh(g,material.rail);
         rails.name='Mountain safety rails';rails.castShadow=true;rails.receiveShadow=true;roadGroup.add(rails);
       }
-      function surface(data,mat,y,freq){
+      function surface(data,mat,y,freq,groundHeight=null){
         if(!data.length)return;
         const verts=[],uv=[],step=relief.step;
 
         function vertex(x,z){
-          const h=wooded?roadway(cx+x,cz+z):localGround(x,z);
+          const h=groundHeight?groundHeight(x,z):roadway(cx+x,cz+z);
           verts.push(x,h+y,z);
-          uv.push(x*freq+(cx*freq)%1,z*freq+(cz*freq)%1);
+          if(mat.userData.templeSurface||mat===material.pavers)uv.push(cx+x,cz+z);
+          else uv.push(x*freq+(cx*freq)%1,z*freq+(cz*freq)%1);
+        }
+        const fitRoad=wooded&&(mat===material.pavers||mat===curbStone);
+        function triangle(a,b,c,depth=0){
+          if(fitRoad&&depth<5){
+            const sample=p=>roadway(cx+p[0],cz+p[1]);
+            const mid=(p,q)=>[(p[0]+q[0])/2,(p[1]+q[1])/2];
+            const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a),ha=sample(a),hb=sample(b),hc=sample(c);
+            const middle=[(a[0]+b[0]+c[0])/3,(a[1]+b[1]+c[1])/3];
+            const error=Math.max(Math.abs(sample(ab)-(ha+hb)/2),Math.abs(sample(bc)-(hb+hc)/2),
+              Math.abs(sample(ca)-(hc+ha)/2),Math.abs(sample(middle)-(ha+hb+hc)/3));
+            if(error>.014){
+              triangle(a,ab,ca,depth+1);triangle(ab,b,bc,depth+1);
+              triangle(ca,bc,c,depth+1);triangle(ab,bc,ca,depth+1);return;
+            }
+          }
+          vertex(...a);vertex(...b);vertex(...c);
         }
         // Split at terrain edges so a long road, its paint and the ground coincide
         // even when all three meshes have different source triangulations.
         const offset=[cx,cz,cx+cz];
         function split(poly,axis){
           if(axis===3){
-            for(let j=1;j<poly.length-1;j++)for(const p of [poly[0],poly[j],poly[j+1]])vertex(p[0],p[1]);
+            for(let j=1;j<poly.length-1;j++)triangle(poly[0],poly[j],poly[j+1]);
             return;
           }
           const coord=p=>axis===2?p[0]+p[1]:p[axis];
@@ -762,15 +781,18 @@
         for(let i=0;i<data.length;i+=6){
           const ax=data[i],az=data[i+1],bx=data[i+2],bz=data[i+3],dx=data[i+4],dz=data[i+5];
           if(same(ax,bx,dx,cx)&&same(az,bz,dz,cz)&&same(ax+az,bx+bz,dx+dz,cx+cz)){
-            vertex(ax,az);vertex(bx,bz);vertex(dx,dz);
+            if(fitRoad)triangle([ax,az],[bx,bz],[dx,dz]);else{vertex(ax,az);vertex(bx,bz);vertex(dx,dz);}
           }else split([[ax,az],[bx,bz],[dx,dz]],0);
         }
         const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.computeVertexNormals();
-        const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;roadGroup.add(mesh);
+        const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;
+        if(mat.transparent&&mat.userData.templeSurface)mesh.renderOrder=1;
+        roadGroup.add(mesh);
       }
       material.white.side=material.yellow.side=T.DoubleSide;
       surface(bankData,material.earth,-.065,.60);
       if(cover.length){
+        temple??=createTempleSurfaces(T);temple.setOrigin(graph);
         const layer={stone:[],lawn:[],wood:[]};
         for(const {kind,points} of cover){
           for(const face of T.ShapeUtils.triangulateShape(points,[])){
@@ -778,9 +800,9 @@
           }
         }
         // Ground cover extends beneath the mapped carriageway at the lakeside gate.
-        surface(layer.stone,material.pavers,-.105,1);
-        surface(layer.lawn,gardenLawn,-.095,1);
-        surface(layer.wood,woodlandFloor,-.085,1);
+        surface(layer.stone,temple.paving,-.158,1,localGround);
+        surface(layer.lawn,temple.lawn,-.153,1,localGround);
+        surface(layer.wood,temple.wood,-.148,1,localGround);
       }
       if(graph&&window.tamChucPaths){
         const center=graph.point(105.7956,20.5528);
@@ -799,10 +821,11 @@
               a=b;
             }
           }
-          surface(paving,material.pavers,-.052,1);
+          if(paving.length){temple??=createTempleSurfaces(T);surface(paving,temple.paving,-.14,1,localGround);}
         }
       }
       surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
+      walks.build(roadGroup,surface,material.pavers,curbStone);pavementLift=walks.liftAt;
       if(wires.length){
         for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
         const lines=new T.BufferGeometry();lines.setAttribute('position',new T.Float32BufferAttribute(wires,3));

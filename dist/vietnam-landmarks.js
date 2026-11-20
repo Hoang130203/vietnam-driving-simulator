@@ -945,7 +945,7 @@ window.VietnamLandmarks=(()=>{
       canopy.dispose();
     }
     const addition=additions.get(id);
-    if(addition)addition.build(T,{group,stamp,box,round,tapered,profile,outline,arch,sign,random,wavingFlag});
+    if(addition)addition.build(T,{group,stamp,box,round,tapered,profile,outline,arch,sign,random,wavingFlag,vertexCount:()=>positions.length/3});
     cube.dispose();round.dispose();group.name=id;
     if(!positions.length)return group;
     const geometry=new T.BufferGeometry();
@@ -1004,7 +1004,9 @@ window.VietnamLandmarks=(()=>{
         if(!cached.has(data.id)){const mesh=model(T,data.id);mesh.userData.height=new T.Box3().setFromObject(mesh).max.y*(data.scale?.[1]||1);scene.add(mesh);cached.set(data.id,mesh);}
         const mesh=cached.get(data.id);mesh.position.set(x-cx,ground(x,z),z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
         if(data.scale)mesh.scale.fromArray(data.scale);
-        active.push({data,x,z,mesh,c:Math.cos(data.yaw),s:Math.sin(data.yaw)});
+        const c=Math.cos(data.yaw),s=Math.sin(data.yaw);
+        mesh.userData.fitGround?.((u,v)=>ground(x+u*c+v*s,z-u*s+v*c)-mesh.position.y);
+        active.push({data,x,z,mesh,c,s});
       }
     }
     function nearest(x,z,maxMeters=650){

@@ -32,21 +32,31 @@
     for(const side of [-1,1])outline([[0,0],[1.5,.15],[2.4,1.05],[2.15,1.33],[1.36,.78],[.65,.96],[-.45,.5]],ridge,side*(halfRidge-.7),y+rise,0,.35,side===1?0:Math.PI);
   }
 
-  function stairTerrace({box},w,d,level){
+  function stairTerrace({box},w,d,level,foundations,deckHeight){
     const slabW=w+6,slabD=d+7;
-    box(0x8c887d,0,level/2-.2,0,slabW,level+.4,slabD);
-    box(stone,0,level-.10,0,slabW+.5,.24,slabD+.5);
+    const deck=foundations.fixture(deckHeight,()=>{
+      box(0x8c887d,0,level/2-.2,0,slabW,level+.4,slabD);
+      box(stone,0,level-.10,0,slabW+.5,.24,slabD+.5);
+      for(const side of [-1,1])for(let n=0;n<=4;n++){
+        const x=side*(w*.265+n*(slabW/2-w*.265)/4),z=slabD/2;
+        box(0xa9a599,x,level+.72,z,.52,1.45,.5);box(lightStone,x,level+1.49,z,.64,.23,.62);
+        if(n<4)box(lightStone,x+side*(slabW/2-w*.265)/8,level+1.22,z,(slabW/2-w*.265)/4,.24,.27);
+      }
+    });
+    foundations.skirt(0,0,slabW-.03,slabD-.03,-.3,deck);
     const count=Math.ceil(level/.27),step=level/count;
     for(let j=0;j<count;j++){
       const h=(j+1)*step,z=slabD/2+(count-j-.5)*.51;
-      box(j%2?stone:lightStone,0,h/2,z,w*.46,h,.53);
-      for(const side of [-1,1])box(0xa19c8c,side*w*.237,h/2+.22,z,.7,h+.44,.54);
+      const stepAnchor=foundations.fixture(ground=>{
+        const entry=ground(0,slabD/2+count*.51),t=(j+.5)/count;
+        return entry*(1-t)+deck.height*t;
+      },()=>{
+        box(j%2?stone:lightStone,0,h/2,z,w*.46,h,.53);
+        for(const side of [-1,1])box(0xa19c8c,side*w*.237,h/2+.22,z,.7,h+.44,.54);
+      });
+      foundations.skirt(0,z,w*.46-.03,.51,.03,stepAnchor);
     }
-    for(const side of [-1,1])for(let n=0;n<=4;n++){
-      const x=side*(w*.265+n*(slabW/2-w*.265)/4),z=slabD/2;
-      box(0xa9a599,x,level+.72,z,.52,1.45,.5);box(lightStone,x,level+1.49,z,.64,.23,.62);
-      if(n<4)box(lightStone,x+side*(slabW/2-w*.265)/8,level+1.22,z,(slabW/2-w*.265)/4,.24,.27);
-    }
+    return deck;
   }
   function veranda(T,kit,width,depth,base,height,bays){
     const {box,stamp}=kit,post=new T.CylinderGeometry(1,1.07,1,8),widthInside=width-5,depthInside=depth-5;
@@ -74,13 +84,23 @@
   }
 
   function hall(T,kit,plan){
-    const {w,d,base,tiers,bays}=plan;stairTerrace(kit,w,d,base);
-    let floor=base;
-    for(const [ww,dd,eave,top] of tiers){
-      veranda(T,kit,ww-5,dd-5,floor,eave-floor+.25,bays);
-      hipRoof(T,kit,ww,dd,eave,top-eave);
-      floor=eave+(top-eave)*.50;
+    const {w,d,base,tiers,bays}=plan,foundations=createTempleFoundations(T,kit);
+    function deckHeight(ground){
+      // A level floor clears the uphill corners; the stair foot meets the forecourt.
+      let height=ground(0,0);
+      for(const x of [-w/2-3,0,w/2+3])for(const z of [-d/2-3.5,0,d/2+3.5])height=Math.max(height,ground(x,z)-base+.12);
+      return height;
     }
+    const deck=stairTerrace(kit,w,d,base,foundations,deckHeight);
+    foundations.fixture(()=>deck.height,()=>{
+      let floor=base;
+      for(const [ww,dd,eave,top] of tiers){
+        veranda(T,kit,ww-5,dd-5,floor,eave-floor+.25,bays);
+        hipRoof(T,kit,ww,dd,eave,top-eave);
+        floor=eave+(top-eave)*.50;
+      }
+    });
+    if(plan.cauldronZ)foundations.fixture(g=>g(0,plan.cauldronZ),()=>cauldron(T,kit,plan.cauldronZ));
   }
   function cauldron(T,{stamp,box},z){
     const profile=[[.8,.45],[.98,.62],[1.7,1.05],[2.10,1.85],[2.03,2.30],[1.88,2.54],[2.15,2.63],[2.14,2.79],[1.8,2.77],[1.65,2.51]].map(([x,y])=>new T.Vector2(x,y));
@@ -112,6 +132,6 @@
     ...common,id:'dien-tam-the',tourOrder:5,name:'Điện Tam Thế',lon:105.794355,lat:20.551562,
     map:'https://www.openstreetmap.org/way/1386126641',start:[105.793850,20.551377],width:84,depth:77,
     solids:[[0,0,34.4,22.1],[0,37,2.1,2.1]],description:'Điện Tam Thế có ba tầng mái và thờ ba pho Phật tượng trưng cho quá khứ, hiện tại và tương lai. Trước bậc thềm là chiếc vạc đồng lớn.',
-    build(T,kit){hall(T,kit,{w:75,d:51,base:3.5,bays:11,tiers:[[75,51,11.2,20.0],[65,41,18.45,27.2],[55.7,32.1,25.35,38.6]]});cauldron(T,kit,37);}
+    build(T,kit){hall(T,kit,{w:75,d:51,base:3.5,bays:11,cauldronZ:37,tiers:[[75,51,11.2,20.0],[65,41,18.45,27.2],[55.7,32.1,25.35,38.6]]});}
   });
 })();

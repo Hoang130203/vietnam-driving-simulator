@@ -10,7 +10,8 @@
   for(const [x,w,d] of [...towers,...galleries]){
     for(const face of [-1,1])for(let i=0;i<4;i++)gatePosts.push([x-w*.39+i*w*.26,face*d*.38,.55,.55]);
   }
-  function gate(T,{stamp,box,outline}){
+  function gate(T,kit){
+    const {stamp,box,outline}=kit,foundations=createTempleFoundations(T,kit);
     const timber=0x51382b,lacquer=0x79523b,stone=0x9b998c,tile=0x65594d;
     const post=new T.CylinderGeometry(1,1,1,10);
     const postAt=(x,y,z,h,r)=>{
@@ -66,13 +67,23 @@
     }
     for(const [x,w,d] of towers){
       const center=x===towers[1][0];
-      box(stone,x,.09,0,w+.9,.22,d+.6);
-      eaves(x,.2,w,d,5.6,false);roof(x,5.65,w+3,d+1.8,3.3);
-      eaves(x,8.1,w*.77,d*.77,3.85,true);roof(x,11.8,w*.90,d*.89,3.5);
-      if(center){eaves(x,14.35,w*.56,d*.55,3.35,true);roof(x,17.6,w*.70,d*.68,3.6);}
+      const anchor=foundations.fixture(g=>g(x,0),()=>{
+        eaves(x,.2,w,d,5.6,false);roof(x,5.65,w+3,d+1.8,3.3);
+        eaves(x,8.1,w*.77,d*.77,3.85,true);roof(x,11.8,w*.90,d*.89,3.5);
+        if(center){eaves(x,14.35,w*.56,d*.55,3.35,true);roof(x,17.6,w*.70,d*.68,3.6);}
+      });
+      foundations.walk(w+.9,d+.6,x);
+      for(const side of [-1,1])for(let i=0;i<4;i++){
+        foundations.skirt(x-w*.39+i*w*.26,side*d*.38,1.19,1.19,.23,anchor);
+      }
     }
     for(const [x,w,d] of galleries){
-      eaves(x,.15,w,d,4.75,false);roof(x,4.76,w+1.3,11.9,2.42);
+      const anchor=foundations.fixture(g=>g(x,0),()=>{
+        eaves(x,.15,w,d,4.75,false);roof(x,4.76,w+1.3,11.9,2.42);
+      });
+      for(const side of [-1,1])for(let i=0;i<4;i++){
+        foundations.skirt(x-w*.39+i*w*.26,side*d*.38,1.19,1.19,.18,anchor);
+      }
     }
     post.dispose();
   }
@@ -80,10 +91,10 @@
   for(const side of [-1,1])for(let row=0;row<4;row++)for(let col=0;col<4;col++){
     pillars.push([side*(11+col*11.8),(row-1.5)*12.1]);
   }
-  function court(T,{box,stamp,tapered,group}){
+  function court(T,kit){
+    const {box,stamp,tapered,group}=kit,foundations=createTempleFoundations(T,kit);
     const grey=0xa4a79d,rock=0x93988f,shade=0x737d73;
-    box(0x8e8e80,0,-.06,0,118,.24,68);
-    box(0xbebcb0,0,.075,0,9.3,.09,68);
+    foundations.walk(9.3,68);
     const petal=new T.SphereGeometry(1,7,4);
     const bud=new T.LatheGeometry([[0,0],[.54,.07],[.68,.49],[.57,.88],[.24,1.3],[0,1.74]].map(([r,y])=>new T.Vector2(r,y)),10);
     // A single shared inscription texture preserves readable vertical lettering up close.
@@ -97,28 +108,42 @@
       new T.MeshLambertMaterial({map:texture}),pillars.length*6);
     const pose=new T.Object3D();let index=0;
     for(const [x,z] of pillars){
-      box(0x979887,x,.23,z,6.1,.32,6.1);
-      tapered(rock,x,.62,z,2.53,2.53,.55,1,12);
-      tapered(grey,x,1.14,z,2.32,1.94,.67,1,12);
-      for(let i=0;i<10;i++){
-        const a=Math.PI*i/5;
-        stamp(petal,i%2?rock:grey,x+1.85*Math.sin(a),1.19,z+1.85*Math.cos(a),.58,.73,.42,a,.24);
-      }
-      tapered(shade,x,1.80,z,1.75,1.54,.66,1,8);
-      tapered(grey,x,6.17,z,1.29,1.24,8.44,1,6);
-      for(let face=0;face<6;face++){
-        const a=Math.PI*(face+.5)/3;
-        pose.position.set(x+1.123*Math.sin(a),6.25,z+1.123*Math.cos(a));pose.rotation.y=a;pose.updateMatrix();
-        panels.setMatrixAt(index++,pose.matrix);
-      }
-      tapered(rock,x,10.65,z,1.34,1.45,.58,1,8);
-      tapered(grey,x,11.22,z,1.34,.96,.62,1,10);
-      tapered(shade,x,11.62,z,.86,.76,.22,1,10);
-      stamp(bud,grey,x,11.75,z);
+      const firstPanel=index;
+      const anchor=foundations.fixture(g=>g(x,z),()=>{
+        box(0x979887,x,.23,z,6.1,.32,6.1);
+        tapered(rock,x,.62,z,2.53,2.53,.55,1,12);
+        tapered(grey,x,1.14,z,2.32,1.94,.67,1,12);
+        for(let i=0;i<10;i++){
+          const a=Math.PI*i/5;
+          stamp(petal,i%2?rock:grey,x+1.85*Math.sin(a),1.19,z+1.85*Math.cos(a),.58,.73,.42,a,.24);
+        }
+        tapered(shade,x,1.80,z,1.75,1.54,.66,1,8);
+        tapered(grey,x,6.17,z,1.29,1.24,8.44,1,6);
+        for(let face=0;face<6;face++){
+          const a=Math.PI*(face+.5)/3;
+          pose.position.set(x+1.123*Math.sin(a),6.25,z+1.123*Math.cos(a));pose.rotation.y=a;pose.updateMatrix();
+          panels.setMatrixAt(index++,pose.matrix);
+        }
+        tapered(rock,x,10.65,z,1.34,1.45,.58,1,8);
+        tapered(grey,x,11.22,z,1.34,.96,.62,1,10);
+        tapered(shade,x,11.62,z,.86,.76,.22,1,10);
+        stamp(bud,grey,x,11.75,z);
+      },height=>{
+        const m=new T.Matrix4();
+        for(let face=0;face<6;face++){
+          panels.getMatrixAt(firstPanel+face,m);m.elements[13]=6.25+height;panels.setMatrixAt(firstPanel+face,m);
+        }
+        panels.instanceMatrix.needsUpdate=true;panels.boundingSphere=null;
+      });
+      foundations.skirt(x,z,6.06,6.06,.15,anchor);
     }
-    for(const x of [-30,30])for(const z of [-27.5,27.5]){
-      box(0xb4b3a5,x,.19,z,43,.23,2.9);
-      box(0x516549,x,.61,z,42,.79,2.5);
+    for(const x of [-30,30])for(const z of [-27.5,27.5])for(let i=0;i<8;i++){
+      const w=43/8,px=x+(i-3.5)*w;
+      const anchor=foundations.fixture(g=>g(px,z),()=>{
+        box(0xb4b3a5,px,.19,z,w,.23,2.9);
+        box(0x516549,px,.61,z,w-.08,.79,2.5);
+      });
+      foundations.skirt(px,z,w-.03,2.87,.13,anchor);
     }
     panels.instanceMatrix.needsUpdate=true;group.add(panels);petal.dispose();bud.dispose();
   }
