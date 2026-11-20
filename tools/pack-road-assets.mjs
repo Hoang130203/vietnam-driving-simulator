@@ -66,14 +66,20 @@ export function encodeRoadTile(rows){
 async function processTiles(directory,write){
   // A sparse release checkout only has the exported dist/client tree.
   await import(pathToFileURL(path.join(path.dirname(directory),'road-tile-codec.js')).href);
-  const files=(await readdir(directory)).filter(f=>tileName.test(f)).sort();
+  const entries=new Set(await readdir(directory));
+  const files=[...new Set([...entries].map(name=>name.replace(/\.vrd\.gz$/,'.gz')).filter(name=>tileName.test(name)))].sort();
   if(!files.length)throw Error('Road tile directory is empty: '+directory);
   let sourceBytes=0,packedBytes=0,edges=0,alreadyPacked=0;
   for(const file of files){
-    const target=path.join(directory,file),original=await readFile(target),source=gunzipSync(original);
+    // Sites serves physical assets before invoking the Worker. Only its
+    // private representation can occupy a file in the public asset tree.
+    const target=path.join(directory,file.replace(/\.gz$/,'.vrd.gz'));
+    const input=entries.has(file)?path.join(directory,file):target;
+    const original=await readFile(input),source=gunzipSync(original);
     if(RoadTileCodec.packed(source)){
       const rows=RoadTileCodec.decode(source);
       if(!encodeRoadTile(rows).equals(source))throw Error('Invalid previously packed road tile: '+file);
+      if(write&&input!==target)await rename(input,target);
       alreadyPacked++;edges+=rows.length;packedBytes+=original.length;continue;
     }
     const rows=JSON.parse(source),packed=gzipSync(encodeRoadTile(rows),{level:9});
@@ -81,7 +87,11 @@ async function processTiles(directory,write){
     if(!json.equals(source))throw Error('Road tile round-trip differs: '+file);
     if(write){
       const tmp=target+'.packing-'+process.pid;
-      try{await writeFile(tmp,packed);await rename(tmp,target);}
+      try{
+        await writeFile(tmp,packed);
+        await rename(tmp,target);
+        if(input!==target)await unlink(input);
+      }
       finally{await unlink(tmp).catch(e=>{if(e.code!=='ENOENT')throw e;});}
     }
     sourceBytes+=original.length;packedBytes+=packed.length;edges+=rows.length;

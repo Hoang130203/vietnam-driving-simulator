@@ -197,8 +197,10 @@ async function serveGameAsset(request, env, url) {
   if (/^\/sight-landscapes\/N\d{2}E\d{3}-\d+\.png$/.test(pathname)) {
     url.pathname = pathname.replace(/\.png$/,".surface.webp");
   }
-  const legacyTile = (request.method === "GET" || request.method === "HEAD")
-    && /^\/vn-roads\/\d+_\d+(?:_\d+_\d+)?\.gz$/.test(pathname) && url.searchParams.get("format") !== "packed";
+  const roadTile = (request.method === "GET" || request.method === "HEAD")
+    && /^\/vn-roads\/\d+_\d+(?:_\d+_\d+)?\.gz$/.test(pathname);
+  if (roadTile) url.pathname = pathname.replace(/\.gz$/,".vrd.gz");
+  const legacyTile = roadTile && url.searchParams.get("format") !== "packed";
   let response = legacyTile ? await legacyRoadTile(request, env, url) : await env.ASSETS.fetch(new Request(url,request));
   if (isPage && response.ok) {
     const headers = new Headers(response.headers);
