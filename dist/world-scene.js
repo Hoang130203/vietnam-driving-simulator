@@ -130,6 +130,7 @@
     }
     const meadow=surfaces.scanned('meadow',0xafbd9d,.56);
     const upland=surfaces.scanned('grass',0x8ea68d,.67);
+    const rebuildSigns=createWorldSigns(T,scene,small);
     const landWidth=2048;
     const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth,32,32),meadow);
     const landIndex=land.geometry.index;
@@ -567,6 +568,17 @@
         if(end<=start)continue;
         const mid=(start+end)/2,mx=s.ax+s.fx*mid,mz=s.az+s.fz*mid;
         const street=s.kind==='residential'||s.kind==='living_street'||district.builtUp(mx+cx,mz+cz);
+        if(!street && !s.kind.startsWith('motorway') && s.rank<420 && s.len>12){
+          // Red-topped marker posts follow exposed verges, including the outside of bends.
+          for(let d=8+s.seed%17;d<end-5;d+=48)for(const side of [-1,1]){
+            if(d<start+4)continue;
+            const x=s.ax+s.fx*d+side*s.nx*(s.w+1.05),z=s.az+s.fz*d+side*s.nz*(s.w+1.05);
+            if(blocked(x,z,.24)||contact(cx+x,cz+z,.28))continue;
+            const y=roadway(cx+x,cz+z)-localGround(x,z);
+            instance('white',unitBox,x,y+.32,z,.17,.64,.17);
+            instance('white',unitBox,x,y+.72,z,.18,.16,.18,0,0xc13f31);
+          }
+        }
         if(street&&s.w<=6.8&&end-start>2){
           for(const side of [-1,1])walks.sidewalk(s,start,end,side,s.w<4?1.2:1.85);
         }
@@ -860,6 +872,7 @@
         b.poses.forEach((pose,i)=>{m.setMatrixAt(i,pose);if(tinted)m.setColorAt(i,tone.set(b.colors[i]??0xffffff));});
         m.castShadow=true;m.receiveShadow=true;roadGroup.add(m);
       }
+      rebuildSigns(graph,edges,cx,cz,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r),driveGround,registerObstacle);
       shadowStamp=-1000;
     }
     const assetPaths={supercar:'streetscape/race-car.glb',gt:'streetscape/gt-coupe.glb',rally:'streetscape/rally-car.glb',sedan:'traffic/hatchback.glb',van:'traffic/kei-van.glb',scooter:'traffic/motor-scooter.glb',taxi:'streetscape/city-taxi.glb',rival:'streetscape/gt-coupe.glb'};

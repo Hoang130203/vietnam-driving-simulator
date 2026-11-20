@@ -345,6 +345,20 @@ function drawDepartureMap(){
  g.strokeStyle='#dcf89a';g.lineWidth=2;g.fillStyle='#d6f58932';g.fill();g.stroke();
  g.beginPath();g.arc(c.width/2,c.height/2,5,0,Math.PI*2);g.fillStyle='#f2ffca';g.fill();
 }
+let mapPlaces=[];
+const drivingMap=createDrivingMap(()=>({graph:roads,car,edge:player.edge,water,duel,places:mapPlaces,amenities:gfx.streetLife?.places||[]}));
+function openDrivingMap(){
+ if(mode!=='drive')return;
+ mode='map';keySet.clear();save();
+ mapPlaces=localDrivingPlaces(roads,car.x,car.z,2700);
+ drivingMap.open(nameOf(player.edge));
+}
+$('openDrivingMap').onclick=openDrivingMap;
+$('drivingMap').addEventListener('close',()=>{
+ if(mode!=='map')return;
+ mode='drive';keySet.clear();updateHud();
+ if(document.hidden||!document.hasFocus())pause();
+});
 function drawMini(landmark){
  const c=$('map'),g=c.getContext('2d'),scale=.43;
  g.clearRect(0,0,c.width,c.height);g.save();g.translate(c.width/2,c.height*.56);
@@ -393,7 +407,7 @@ function frame(now){
    }
    if(mode!=='loading'&&roads&&!document.hidden&&now>=nextWeatherCheck){nextWeatherCheck=now+2000;gfx.weather.locate(...roads.geo(car.x,car.z));}
    car.driving=mode==='drive';car.showroom=mode==='grid';
-   if(mode!=='loading'&&mode!=='error'&&!document.hidden){
+   if(mode!=='loading'&&mode!=='error'&&mode!=='map'&&!document.hidden){
      const ready=gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'||mode==='sinking'?dt:0,inside);
      if(mode==='tour'&&car.sightView?.data.id==='tam-chuc'){
        const point=gfx.projectSummit();
@@ -521,6 +535,11 @@ soundLabel();$('sound').onclick=()=>{driveAudio.toggle();soundLabel();};
 $('rest').oncancel=e=>{e.preventDefault();$('resume').click();};
 window.addEventListener('keydown',e=>{
  const k=e.key.toLowerCase();
+ if(k==='m'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&(mode==='drive'||mode==='map')){
+   e.preventDefault();
+   if(!e.repeat){if(mode==='map')$('drivingMap').close();else openDrivingMap();}
+   return;
+ }
  if(mode==='tour'){
    if(k==='escape')closeTour();
    if(!['SELECT','INPUT'].includes(e.target.tagName)&&(k==='arrowleft'||k==='arrowright')){car.sightView.angle+=(k==='arrowleft'?-1:1)*.09;e.preventDefault();}

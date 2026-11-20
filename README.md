@@ -26,7 +26,7 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 - [Cúp Bánh Mì](http://127.0.0.1:8000/cup.html)
 - [Sân tập và thi thử](http://127.0.0.1:8000/hall.html)
 
-Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
+Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Ở ngã rẽ, bảng chỉ hướng ghi tên đường hoặc địa danh có lối ô tô tới. Nhấn **M** hoặc chạm bản đồ nhỏ để xem đường quanh xe, kéo để xem xung quanh và dùng **+ / −** để đổi tỷ lệ. Nhấn **M** hoặc **Esc** để lái tiếp. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
 
 Trong Xuyên Việt, mở **Danh lam 3D** ở mục điểm xuất phát để chọn địa danh qua hình xem trước. Khi tới gần, nhấn **Ngắm địa danh 3D** để xoay, chỉnh khoảng cách hoặc mở ảnh đối chiếu. Trong **Quần thể Tam Chúc**, chọn góc toàn cảnh hoặc một trong tám công trình để ngắm từ gần. Nút **Trở lại xe** đưa góc nhìn về nơi đã dừng. [Ảnh và tư liệu đối chiếu](dist/landmark-references.txt).
 
