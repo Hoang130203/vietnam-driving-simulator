@@ -305,65 +305,6 @@
     viewAngle:2.38,viewElevation:.19,gardenRadius:105,solids:[[0,8,41,9.5],[-25,-13,11.5,14.5],[25,-13,11.5,14.5],[0,-20,19.5,7]],
     photo:'https://dinhdoclap.gov.vn/kien-truc-dinh-doc-lap/',description:'Các dải ban công chạy ngang mặt đứng. Lớp rèm hoa đá gợi hình đốt trúc, che nắng cho hành lang phía sau.'},palace);
 
-  function ngoMon(T,{box,profile,outline,stamp,round,tapered}){
-    const base=0x8b8580,trim=0xc9b899,red=0x944537,ochre=0xcb9842,green=0x74866a;
-    function passage(x,z,w,d,a){
-      const s=new T.Shape(),r=w*.23,spring=3.15;
-      s.moveTo(-w/2,0);s.lineTo(-r,0);s.lineTo(-r,spring);
-      s.absarc(0,spring,r,Math.PI,0,true);s.lineTo(r,0);s.lineTo(w/2,0);
-      s.lineTo(w/2,5.35);s.lineTo(-w/2,5.35);s.closePath();profile(s,base,x,0,z,d,a);
-    }
-    for(let i=-2;i<=2;i++){
-      if(Math.abs(i)<2)passage(i*7.6,-8,7.6,14,0);
-      else box(base,i*7.6,2.675,-1,7.6,5.35,14);
-    }
-    for(const side of [-1,1]){
-      passage(side*23-4.4,10,12,8.8,Math.PI/2);box(base,side*23,2.675,-2.1,8.8,5.35,12.3);
-      box(trim,side*23,5.55,4.2,9.1,.42,25);box(trim,side*27,6.02,4.2,.45,.65,24.8);
-    }
-    box(trim,0,5.5,-1,46,.48,14.6);
-    box(0xbb9e82,0,.015,17,55,.11,20);
-    for(const side of [-1,1])for(let i=0;i<17;i++){
-      const x=side*(4+i*1.32);box(trim,x,6.20,5.72,.19,.99,.22);
-      if(i<16)box(0xc6ac80,x+side*.66,6.62,5.72,1.45,.14,.2);
-    }
-    function pavilion(x,z,w,d,y,h,tile){
-      for(const side of [-1,1])for(let i=0;i<4;i++){
-        const px=x+(i/3-.5)*(w-1.8);
-        stamp(round,red,px,y+h/2,z+side*(d/2-.95),.21,h,.21);
-      }
-      box(red,x,y+h-.25,z,w-.9,.5,d-.95);
-      const v=[],ridge=w*.28,rise=w*.21;
-      const corners=[[-w*.54,-d*.56],[w*.54,-d*.56],[w*.54,d*.56],[-w*.54,d*.56]];
-      for(let side=0;side<4;side++){
-        const start=corners[side],end=corners[(side+1)%4];
-        function point(u,t){
-          const xx=start[0]+(end[0]-start[0])*u,zz=start[1]+(end[1]-start[1])*u;
-          const tip=.84*Math.pow(Math.abs(u*2-1),5)*(1-t);
-          return [xx*(1-t)+xx*ridge/(w*.54)*t,rise*(t*.48+t*t*.52)+tip,zz*(1-t)];
-        }
-        for(let k=0;k<14;k++)for(let j=0;j<5;j++){
-          const a=point(k/14,j/5),b=point((k+1)/14,j/5),c=point(k/14,(j+1)/5),d=point((k+1)/14,(j+1)/5);
-          v.push(...a,...c,...b,...b,...c,...d);
-        }
-      }
-      const roof=new T.BufferGeometry();roof.setAttribute('position',new T.Float32BufferAttribute(v,3));roof.computeVertexNormals();stamp(roof,tile,x,y+h,z);roof.dispose();
-      box(ochre,x,y+h+rise+.03,z,ridge*2,.21,.34);
-      for(const side of [-1,1])for(const end of [-1,1]){
-        const tip=[[0,0],[side*.95,.08],[side*1.66,.92],[side*1.37,.13],[side*.80,-.22],[0,-.16]];
-        outline(tip,trim,x+side*(w*.50-.25),y+h,z+end*d/2,.13);
-      }
-    }
-    pavilion(0,-1,22,11,5.8,3.5,ochre);pavilion(0,-1,17.5,9,10.9,2.1,ochre);
-    for(const side of [-1,1]){
-      pavilion(side*14.5,-1,10,8,5.8,3.1,green);
-      for(const z of [-4.8,3.6,12])pavilion(side*23,z,9.7,8.2,5.8,3.15,green);
-    }
-  }
-  stop('ngo-mon','osm-way-172657562',{width:56,depth:38,yaw:.66,viewAngle:.72,viewElevation:.23,solids:[[-23,3,4.5,12],[23,3,4.5,12],[-15,0,4,7],[15,0,4,7]],
-    photo:'https://aluoi3.hue.gov.vn/Du-khach/Thong-tin-du-khach/Kham-pha-Hue/tb/Ngo-Mon-546198',
-    description:'Trên nền đài chữ U là lầu Ngũ Phụng. Mái chính giữa lợp ngói hoàng lưu ly, hai bên là những bộ mái xanh thấp hơn.'},ngoMon);
-
   function lighthouse(T,{group,stamp,round,tapered,box}){
     const granite=0xc2ac86,band=0xa79779;
     tapered(band,0,.55,0,4.6,4.35,1.1,1,8);
