@@ -1,8 +1,23 @@
 'use strict';
 function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights){
+  const parts=createVietnamOsmBuildings('sight-building-parts/',Infinity);
   const group=new T.Group();group.name='OSM building footprints';scene.add(group);
   const wall=plaster.clone();wall.vertexColors=true;wall.side=T.DoubleSide;
   const roof=new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.9});
+  roof.onBeforeCompile=shader=>{
+    const vary='varying vec2 visitorRoofUv; varying float visitorRoofFinish;\n';
+    shader.vertexShader=vary+'attribute float roofFinish;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n visitorRoofUv=uv;visitorRoofFinish=roofFinish;');
+    shader.fragmentShader=vary+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      if(visitorRoofFinish>.5){
+        vec2 tile=visitorRoofUv*vec2(5.8,3.6);
+        vec2 aa=max(vec2(.001),fwidth(tile));float fade=1.-smoothstep(.14,.8,max(aa.x,aa.y));
+        float crest=.5+.5*cos(tile.x*6.283);
+        float lip=smoothstep(.71,.95,fract(tile.y));
+        if(visitorRoofFinish>1.5)lip=0.;
+        diffuseColor.rgb*=1.+fade*(.24*(crest-.5)-.16*lip);
+      }`);
+  };
   // Window bays follow the measured edge length and the floor count. Shade them
   // in the wall pass, so a dense city block costs the same two draws on a phone.
   wall.onBeforeCompile=shader=>{
@@ -75,6 +90,7 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
   function contact(x,z,r){
     let hit;
     for(const b of cells.get(Math.floor(x/cell)+','+Math.floor(z/cell))||[]){
+      if(b.bottom>2.2)continue;
       if(x<b.minX-r||z<b.minZ-r||x>b.maxX+r||z>b.maxZ+r)continue;
       let inside=false,min=Infinity,px,pz;
       for(const ring of b.rings){
@@ -153,10 +169,13 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
     }
     return false;
   }
-  function build(graph,cx,cz,landmarks,ground=()=>0,edges=[]){
+  function build(graph,cx,cz,landmarks,ground=()=>0,edges=[],visitorGround=()=>false){
     for(const mesh of [...group.children]){group.remove(mesh);mesh.geometry.dispose();}
     cells.clear();blocks.clear();if(!graph)return;
-    const surveyed=[...(graph===loadedGraph?loaded:[]),...osmBuildings.rows(graph,cx,cz)];
+    const pieces=parts.rows(graph,cx,cz);
+    const replaced=new Set(pieces.flatMap(row=>[row[6]?.parent,row[6]?.sourceId]).filter(Boolean));
+    const shells=[...(graph===loadedGraph?loaded:[]),...osmBuildings.rows(graph,cx,cz)];
+    const surveyed=[...pieces,...shells.filter(row=>!replaced.has(row[0]))];
     const extra=structures.rows(graph,cx,cz);
     // Satellite outlines can be displaced onto a carriageway. Only index the
     // road segments close enough to test a footprint in this view.
@@ -192,7 +211,10 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
     }
     const batches=[wall,roof].map(mat=>({mat,pos:[],uv:[],cols:[],bays:[],styles:[]}));
     let baseY=0,opening=0,facadeSeed=0;
-    function vertex(b,x,y,z,u,v,tint){b.pos.push(x-cx,baseY+y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);if(b.mat===wall)b.styles.push(opening+facadeSeed);}
+    function vertex(b,x,y,z,u,v,tint,finish=0){
+      b.pos.push(x-cx,baseY+y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);
+      b.styles.push(b.mat===wall?opening+facadeSeed:finish);
+    }
     function quad(b,a,c,lo,hi,tint,count,floors){
       const span=a.distanceTo(c);
       for(const [p,y,u] of [[a,lo,0],[c,lo,span],[a,hi,0],[c,lo,span],[c,hi,span],[a,hi,0]]){
@@ -240,7 +262,11 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
       }
     }
     const ids=new Set(),surveyedIds=new Set(surveyed.map(row=>row[0]));
-    for(const [id,kind,tagH,levels,raw,shape] of [...surveyed,...extra]){
+    const [lon,lat]=graph.geo(cx,cz);
+    const pins=VietnamTourism.nearby(lon,lat,720/graph.mx,720/graph.my)
+      .filter(p=>p.id.startsWith('osm-node-')&&p.kind==='Công trình tín ngưỡng')
+      .map(site=>({...graph.point(site.lon,site.lat),site}));
+    for(const [id,kind,tagH,levels,raw,shape,part] of [...surveyed,...extra]){
       if(ids.has(id)||landmarks?.modeledBuildings.has(id))continue;
       const first=graph.point(raw[0][0]/scale,raw[0][1]/scale);
       if(Math.abs(first.x-cx)>850||Math.abs(first.z-cz)>850)continue;
@@ -252,7 +278,7 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
       if(Math.hypot(x-cx,z-cz)>620+Math.hypot(maxX-minX,maxZ-minZ)/2)continue;
       const original=surveyedIds.has(id),box={minX,minZ,maxX,maxZ};
       if(overlapsSight(landmarks,rings,box,!original))continue;
-      if(!original&&(overlapsMapped(rings,box)||obstructsRoad(rings,box,x,z)))continue;
+      if(!original&&(visitorGround(x,z)||overlapsMapped(rings,box)||obstructsRoad(rings,box,x,z)))continue;
       ids.add(id);
       // Keep floors level, and seat the plinth against the terrain around the
       // entire footprint, including courtyard edges and long downhill walls.
@@ -268,24 +294,39 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
       let seed=0;for(let i=0;i<id.length;i++)seed=(Math.imul(seed,31)+id.charCodeAt(i))>>>0;
       const warehouse=/warehouse|industrial|shed|garage|roof|barn/.test(kind);
       facadeSeed=(seed%997)/2493;
-      const detail=original&&window.VietnamSightDetails?.['osm-'+(id[0]==='w'?'way':'relation')+'-'+id.slice(1)];
+      const ref='osm-'+(id[0]==='w'?'way':'relation')+'-'+id.slice(1).split(':')[0];
+      const pin=original&&pins.find(p=>p.x>=minX&&p.x<=maxX&&p.z>=minZ&&p.z<=maxZ&&insideBuilding(p.x,p.z,rings));
+      const site=original&&(VietnamTourism.byId.get(ref)||pin?.site);
+      const tagged=original&&(window.VietnamSightDetails?.[ref]||window.VietnamSightDetails?.[pin?.site.id]);
+      const detail=part?{...tagged,...part}:tagged;
       const use=detail?.building||kind,faith=detail?.religion;
-      opening=use==='temple'||['buddhist','vietnamese_folk','chinese_folk','Phật_Giáo'].includes(faith)?1:
-        /church|cathedral/.test(use)||faith==='christian'?2:use==='mosque'||faith==='muslim'?3:0;
-      const h=Math.min(460,Math.max(2,tagH||parseFloat(detail?.height)||levels*3.3||structures.heightAt(graph,x,z)||(warehouse?5.4:3.7+seed%3*3)));
-      const b={id,h,rings,...box,surveyed:original};
+      const label=site?.name||'';
+      opening=use==='temple'||['buddhist','vietnamese_folk','chinese_folk','Phật_Giáo'].includes(faith)||/^(chùa|đền|đình|miếu)\s/iu.test(label)?1:
+        /church|cathedral|chapel/.test(use)||faith==='christian'||/^nhà thờ\s/iu.test(label)?2:use==='mosque'||faith==='muslim'?3:0;
+      const bottom=part?.min_height||part?.['building:min_level']*3.3||0;
+      const rise=parseFloat(detail?.['roof:height'])||detail?.['roof:levels']*3.3;
+      const h=Math.min(850,Math.max(bottom+.3,2,tagH||parseFloat(detail?.height)||(levels&&levels*3.3+(part&&rise||0))||structures.heightAt(graph,x,z)||(warehouse?5.4:3.7+seed%3*3)));
+      const b={id,h,bottom,parent:part?.parent,rings,...box,surveyed:original};
       const block=Math.floor(x/70)+','+Math.floor(z/70);blocks.set(block,(blocks.get(block)||0)+1);
       for(let i=Math.floor((minX-12)/cell);i<=Math.floor((maxX+12)/cell);i++)for(let j=Math.floor((minZ-12)/cell);j<=Math.floor((maxZ+12)/cell);j++){
         const key=i+','+j;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(b);
       }
       const flat=rings.flat(),roofColor=detail?.['roof:colour']?new T.Color(detail['roof:colour']):roofs[opening===1?0:seed%roofs.length];
       const base=detail?.['building:colour']?new T.Color(detail['building:colour']):detail?.['building:material']==='wood'?new T.Color(0x99765a):palette[seed%palette.length];
-      if(!opening&&Math.hypot(x-cx,z-cz)<185&&h>=3&&h<17&&maxX-minX<32&&maxZ-minZ<32&&
+      if(!part&&!opening&&Math.hypot(x-cx,z-cz)<185&&h>=3&&h<17&&maxX-minX<32&&maxZ-minZ<32&&
         /^(yes|residential|house|terrace|apartments|retail|commercial|building)$/.test(kind))streetFront(outer,h,roofColor,seed);
       let eave=h;
-      const lowRiseRoof=h<7.2&&(warehouse||seed%5<2)?'gabled':null;
+      const lowRiseRoof=!part&&h<7.2&&(warehouse||seed%5<2)?'gabled':null;
       const roofShape=shape||detail?.['roof:shape']||(opening===1?'hipped':opening===2?'gabled':lowRiseRoof);
-      if(rings.length===1&&outer.length===4&&['hipped','gabled','pyramidal','hipped-and-gabled'].includes(roofShape)){
+      const pitched=['hipped','gabled','pyramidal','hipped-and-gabled','side_hipped','round','skillion','onion','dome','saltbox','mansard'].includes(roofShape);
+      const visitorRoof=original&&(site||opening||part||shape)&&pitched&&buildVisitorRoof(T,rings,roofShape,h,
+        rise,roofColor,base,([px,py,pz],[u,v],tint,tiles)=>{
+          const finish=tiles&&(/metal/.test(detail?.['roof:material'])?2:opening===1||detail?.['roof:material']==='roof_tiles'?1:0);
+          vertex(batches[1],px,py,pz,u,v,tint,Number(finish));
+        },opening===1,detail,bottom);
+      if(visitorRoof){
+        eave=visitorRoof;
+      }else if(rings.length===1&&outer.length===4&&pitched){
         const start=outer[0].distanceTo(outer[1])>=outer[1].distanceTo(outer[2])?0:1;
         const [a,c,d,f]=Array.from({length:4},(_,i)=>outer[(start+i)%4]);
         eave=h-Math.min(h*.25,3,a.distanceTo(f)*.25);
@@ -300,12 +341,16 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
           const p=flat[index];vertex(batches[1],p.x,h,p.y,0,0,roofColor);
         }
       }
+      if(bottom>0)for(const tri of T.ShapeUtils.triangulateShape(outer,rings.slice(1)))for(const k of tri){
+        const p=flat[k];vertex(batches[1],p.x,bottom,p.y,0,0,concrete);
+      }
       for(let ri=0;ri<rings.length;ri++)for(let j=0;j<rings[ri].length;j++){
         const ring=rings[ri],profile=profiles[ri];
         const a=ring[j],c=ring[(j+1)%ring.length],length=a.distanceTo(c);
         if(length<.2)continue;
         const count=warehouse?0:Math.floor(length/(opening?3.8:2.85)),floors=opening?Math.max(1,levels||1):Math.max(1,Math.round(h/3.3));
         const samples=profile[j],next=profile[(j+1)%ring.length][0],wallBatch=batches[0];
+        if(bottom>0){quad(wallBatch,a,c,bottom,Math.max(bottom,eave),base,count,floors);continue;}
         // On nearly level blocks the wall itself can reach beneath the grass.
         if(samples.every(p=>baseY-p.h<.16)&&baseY-next.h<.16){
           quad(wallBatch,a,c,-.39,eave,base,count,floors);continue;
@@ -325,16 +370,22 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights)
     for(const b of batches){
       if(!b.pos.length)continue;
       const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(b.pos,3));
-      if(b.styles.length)g.setAttribute('openingStyle',new T.Float32BufferAttribute(b.styles,1));
+      g.setAttribute(b.mat===wall?'openingStyle':'roofFinish',new T.Float32BufferAttribute(b.styles,1));
       g.setAttribute('uv',new T.Float32BufferAttribute(b.uv,2));g.setAttribute('color',new T.Float32BufferAttribute(b.cols,3));if(b.bays.length)g.setAttribute('bays',new T.Float32BufferAttribute(b.bays,2));g.computeVertexNormals();
       const mesh=new T.Mesh(g,b.mat);mesh.receiveShadow=true;mesh.castShadow=true;group.add(mesh);
     }
   }
   function footprint(site,x,z){
     const id=site.map?.match(/\/(way|relation)\/(\d+)$/);
-    if(!id)return null;
-    return cells.get(Math.floor(x/cell)+','+Math.floor(z/cell))?.find(b=>b.id===id[1][0]+id[2]);
+    const near=cells.get(Math.floor(x/cell)+','+Math.floor(z/cell))||[];
+    if(id){
+      const key=id[1][0]+id[2],match=near.find(b=>b.id.split(':')[0]===key||b.parent?.split(':')[0]===key);
+      if(match)return match;
+    }
+    if(!['Công trình tín ngưỡng','Bảo tàng','Kiến trúc','Phòng trưng bày'].includes(site.kind))return null;
+    return near.find(b=>b.surveyed&&insideBuilding(x,z,b.rings));
   }
-  return {load,build,contact,footprint,overlapsSight,builtUp:(x,z)=>cells.has(Math.floor(x/cell)+','+Math.floor(z/cell)),
+  return {load:async(g,x,z)=>(await Promise.all([load(g,x,z),parts.load(g,x,z)])).some(Boolean),
+    build,contact,footprint,overlapsSight,builtUp:(x,z)=>cells.has(Math.floor(x/cell)+','+Math.floor(z/cell)),
     mappedBlock:(x,z)=>(blocks.get(Math.floor(x/70)+','+Math.floor(z/70))||0)>=3};
 }

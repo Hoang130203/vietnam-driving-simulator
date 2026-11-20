@@ -1015,6 +1015,7 @@ window.VietnamLandmarks=(()=>{
       buildingAreas.length=gardens.length=0;modeledBuildings.clear();
       if(!graph)return;
       for(const site of active){
+        if(site.data.surveyed)continue;
         const {data}=site,extra=data.id==='cathedral'?8:data.id==='turtle'?12:2;
         const rectangle=(x,z,w,d)=>reserveBuildingArea(site,[[x-w,z-d],[x+w,z-d],[x+w,z+d],[x-w,z+d]]);
         if(data.boundary)reserveBuildingArea(site,data.boundary);
@@ -1031,7 +1032,8 @@ window.VietnamLandmarks=(()=>{
       if(Math.hypot(precinct.x-cx,precinct.z-cz)<1500)gardens.push({...precinct,r:445});
       // A catalogue pin without a surveyed outline only reserves its immediate
       // surroundings against inferred buildings. Its mapped building remains visible.
-      for(const site of window.VietnamTourism?.entries||[]){
+      const [lon,lat]=graph.geo(cx,cz);
+      for(const site of window.VietnamTourism?.nearby(lon,lat,900/graph.mx,900/graph.my)||[]){
         const p=graph.point(site.lon,site.lat);
         if(Math.abs(p.x-cx)<900&&Math.abs(p.z-cz)<900)gardens.push({...p,r:12});
       }

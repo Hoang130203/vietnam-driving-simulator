@@ -71,12 +71,21 @@ def read_cells(url, path, cells, level, workers, optional=False, divisions=GRID,
         for j in range(int(top) // th, math.ceil((top+h)/th)):
             for i in range(int(left) // tw, math.ceil((left+w)/tw)):
                 blocks.add(j*math.ceil(width/tw)+i)
-    def load(i):
-        pos = offsets[i]
-        return pos, byte_range(url, pos, pos+lengths[i]-1)
+    # Nearby compressed strips frequently belong to the same HTTP range.
+    # Coalesce them to reduce round trips when baking the national catalogue.
+    ranges = []
+    for i in sorted(blocks,key=offsets.__getitem__):
+        first,last = offsets[i],offsets[i]+lengths[i]-1
+        if ranges and first-ranges[-1][1]<16384 and last-ranges[-1][0]<2**20:
+            ranges[-1][1]=last
+        else:
+            ranges.append([first,last])
+    def load(span):
+        first,last=span
+        return first,byte_range(url,first,last)
     with path.open('wb') as f:
         f.write(header)
-        for pos, data in workers.map(load, sorted(blocks)):
+        for pos, data in workers.map(load, ranges):
             f.seek(pos)
             f.write(data)
     options = {'overview_level': level-1} if level else {}
@@ -99,7 +108,7 @@ def build(degree, cells, workers):
     for start in range(0, len(cells), 32):
         page = cells[start:start+32]
         size = (min(len(page), 8)*SIZE, math.ceil(len(page)/8)*SIZE)
-        colour, surface = Image.new('RGB', size), Image.new('RGB', size)
+        colour, surface = Image.new('RGBA', size), Image.new('RGB', size)
         for i, key in enumerate(page):
             data = rgb.get(key)
             if data is None:
@@ -110,7 +119,7 @@ def build(degree, cells, workers):
             linear = np.stack((red, green, blue), axis=-1) / 3700
             srgb = np.clip(1.055*np.maximum(0, linear)**(1/2.4)-.055, 0, 1)
             place = (i%8*SIZE, i//8*SIZE)
-            colour.paste(Image.fromarray(np.uint8(srgb*255)), place)
+            colour.paste(Image.fromarray(np.dstack((np.uint8(srgb*255),valid.astype('uint8')*255))), place)
             elevation = dem_data.get(key)
             heights = np.zeros((SIZE, SIZE)) if elevation is None else elevation[0]
             packed = np.clip(np.round(heights)+128, 0, 65535).astype('uint16')
@@ -157,14 +166,18 @@ def build_water(index):
         list(batches.map(pack,groups.items()))
 
 
-def main():
+def stops():
     extract = r"""const fs=require('fs');global.window=global;
     const scripts=Array.from(fs.readFileSync('dist/index.html','utf8').matchAll(/src="([^"]+\.js)"/g),m=>m[1]);
     for(const file of scripts.slice(scripts.indexOf('tourism-catalog.js'),scripts.indexOf('vietnam-landmarks.js')+1))
       require('./dist/'+file);
     console.log(JSON.stringify([...VietnamTourism.entries,...VietnamLandmarks.entries]
       .flatMap(p=>[[p.lon,p.lat],p.start])));"""
-    coords = json.loads(subprocess.check_output(['node','-e',extract],cwd=ROOT))
+    return json.loads(subprocess.check_output(['node','-e',extract],cwd=ROOT))
+
+
+def main():
+    coords = stops()
     degrees = defaultdict(set)
     for lon, lat in coords:
         for x in range(math.floor((lon-.007)*GRID), math.floor((lon+.007)*GRID)+1):

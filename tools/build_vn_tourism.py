@@ -15,7 +15,7 @@ import unicodedata
 
 import osmium
 from shapely import STRtree, from_wkb
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, box
 from shapely.ops import polygonize
 
 
@@ -28,7 +28,7 @@ TAGS = {
                  "ruins": "Di tích", "building": "Kiến trúc", "tomb": "Lăng mộ", "tower": "Di tích"},
     "natural": {"beach": "Bãi biển", "cave_entrance": "Hang động", "peak": "Đỉnh núi", "bay": "Vịnh"},
     "water": {"lake": "Hồ"},
-    "leisure": {"nature_reserve": "Khu bảo tồn"},
+    "leisure": {"nature_reserve": "Khu bảo tồn", "park": "Công viên", "garden": "Vườn cảnh"},
     "waterway": {"waterfall": "Thác nước"},
     "boundary": {"national_park": "Vườn quốc gia"},
     "amenity": {"place_of_worship": "Công trình tín ngưỡng"},
@@ -113,16 +113,27 @@ def extract(source):
         highlight = folded in HIGHLIGHTS
         if SPAM.search(folded) or len(folded)<3:
             continue
-        if kind in {"Hồ","Vịnh","Đỉnh núi","Khu bảo tồn"} and not (linked or highlight):
+        # The extract includes shops and directions accidentally tagged as
+        # cave entrances or museums. Keep native-language cave/place names.
+        if not linked and kind=="Hang động" and (not re.search(
+                r"\b(hang|dong|tham|cave|caves|grotto|grotte|nguom|entrance|exit|underground|lung khuy)\b",folded)
+                or re.search(r"\b(cap dien|thanh ly|thoi trang|dong ho hoa|xe dien|solar|1 cave ngay)\b",folded)):
+            continue
+        if not linked and (folded in {"xuat phat","diem den","dia diem","xe 2","nha 38","nice waterfall","small river"}
+                           or folded.startswith(("you have a road ","truong mam non ")) and kind in {"Công viên","Thác nước"}):
+            continue
+        name = re.sub(r"\s*[.,;]?\s*(?:ĐT|SĐT|Tel)\s*[:.]\s*[\d. +()-]{8,}$","",name,flags=re.I).strip()
+        if not linked and (re.search(r"^(photocopy|nga re|ap |phuong |xa |duong doa[nm] |cx so |chau battery)", folded)
+                           or re.match(r"^(ho (xu ly|nuoc thai)|be lang|tram bom)\b", folded)):
             continue
         if kind in {"Tham quan","Điểm ngắm cảnh"} and not (linked or highlight or FEATURE.search(folded)):
-            continue
-        if kind == "Công trình tín ngưỡng" and not (linked or folded.startswith(("chua ", "den ", "thap ", "nha tho ", "thanh that ", "dinh "))):
             continue
         if re.fullmatch(r"(view\s?point|museum|pagoda|beach|attraction|memorial|tuong dai|di tich|nghia trang liet si|chua|den|nha tho|bai bien|war memorial|tourist attraction|waterfall|hang dong)( \d+)?", folded):
             continue
         if tags.get("access") in {"no", "private", "military"}:
             continue
+        if not linked and folded.startswith("chua ") and kind in {"Tham quan", "Bảo tàng", "Di tích"}:
+            kind = "Công trình tín ngưỡng"
         if obj.is_node():
             x, y = obj.location.lon, obj.location.lat
             ref = f"node/{obj.id}"
@@ -145,13 +156,55 @@ def extract(source):
     return provinces, points
 
 
-def road_tile(x, y, splits):
-    bx, by = math.floor(x*4), math.floor(y*4)
-    key = f"{bx}_{by}"
-    n = splits.get(key)
-    if n:
-        key += f"_{math.floor((x*4-bx)*n)}_{math.floor((y*4-by)*n)}"
-    return key
+def road_bounds(key, splits):
+    i,j,*sub = map(int,key.split("_"))
+    n = splits[f"{i}_{j}"] if sub else 1
+    a,b = sub or (0,0)
+    return box((i+a/n)/4, (j+b/n)/4, (i+(a+1)/n)/4, (j+(b+1)/n)/4)
+
+
+def road_approaches(pins, roads, index):
+    # Query occupied tiles by distance, including sites far from a road and
+    # sites near a tile edge. Batch the second pass to read each gzip once.
+    keys = [k for k in index["tiles"] if k not in index["splits"]] + index["subtiles"]
+    bounds = STRtree([road_bounds(k,index["splits"]) for k in keys])
+    groups = defaultdict(list)
+    first = []
+    for i,(_,_,_,_,_,x,y,_) in enumerate(pins):
+        tile = int(bounds.nearest(Point(x,y)))
+        groups[tile].append(i)
+        first.append(tile)
+    nearest = {}
+
+    def visit(batches):
+        for tile, ids in batches.items():
+            with gzip.open(roads/(keys[tile]+".gz"), "rt", encoding="utf8") as src:
+                rows = json.load(src)
+            scale = math.cos(math.radians(bounds.geometries[tile].centroid.y))
+            lines = [LineString([(x*scale/1e5,y/1e5) for x,y in zip(r[6][::2],r[6][1::2])])
+                     for r in rows if r[4] not in {"motorway","trunk"} and not r[4].endswith("_link")]
+            if not lines:
+                continue
+            tree = STRtree(lines)
+            for i in ids:
+                x,y = pins[i][5:7]
+                local = Point(x*scale,y)
+                line = lines[tree.nearest(local)]
+                p = line.interpolate(line.project(local))
+                sx,sy = p.x/scale,p.y
+                d = 111100*math.hypot((sx-x)*math.cos(math.radians(y)),sy-y)
+                if i not in nearest or d < nearest[i][0]:
+                    nearest[i] = d,round(sx,6),round(sy,6)
+    visit(groups)
+    adjacent = defaultdict(list)
+    for i,(_,_,_,_,_,x,y,_) in enumerate(pins):
+        radius = nearest.get(i,(100000,))[0]/111100 + .00005
+        dx = radius/math.cos(math.radians(y))
+        for tile in bounds.query(box(x-dx,y-radius,x+dx,y+radius)):
+            if tile!=first[i]:
+                adjacent[tile].append(i)
+    visit(adjacent)
+    return nearest
 
 
 def build(source, roads):
@@ -160,55 +213,32 @@ def build(source, roads):
     index = json.loads((roads/"index.json").read_text(encoding="utf8"))
     towns = json.loads((roads/"overview.json").read_text(encoding="utf8"))["places"]
     boundaries = STRtree([polygon for _, polygon in provinces])
-    groups = defaultdict(list)
+    pins = []
     for rating, ref, name, kind, x, y, wd in points:
         candidates = boundaries.query(Point(x,y), predicate="intersects")
         if len(candidates):
             province = provinces[min(candidates, key=lambda i: provinces[i][1].area)][0]
-            groups[road_tile(x,y,index["splits"])].append((province,rating,ref,name,kind,x,y,wd))
+            pins.append((province,rating,ref,name,kind,x,y,wd))
     accessible = defaultdict(list)
-    for tile, pois in groups.items():
-        path = roads/(tile+".gz")
-        if not path.is_file():
-            continue
-        scale = math.cos(math.radians(pois[0][6]))
-        with gzip.open(path, "rt", encoding="utf8") as f:
-            rows = json.load(f)
-        # Never choose a motorway or limited-access ramp as a visitor arrival point.
-        lines = [LineString([(x*scale/1e5,y/1e5) for x,y in zip(row[6][::2],row[6][1::2])])
-                 for row in rows if row[4] not in {"motorway","trunk"} and not row[4].endswith("_link")]
-        if not lines:
-            continue
-        street_index = STRtree(lines)
-        for province,rating,ref,name,kind,x,y,wd in pois:
-            local = Point(x*scale,y)
-            street = lines[street_index.nearest(local)]
-            position = street.interpolate(street.project(local))
-            metres = local.distance(position)*111100
-            if metres > 1100:
-                continue
-            accessible[province].append((rating,ref,name,kind,x,y,wd,
-                                         round(position.x/scale,6),round(position.y,6),round(metres)))
-    rows = []
+    for i,(metres,sx,sy) in road_approaches(pins,roads,index).items():
+        province,rating,ref,name,kind,x,y,wd = pins[i]
+        accessible[province].append((rating,ref,name,kind,x,y,wd,sx,sy,round(metres)))
+    rows,aliases = [],{}
     for province, pois in sorted(accessible.items()):
-        names, seen_wd, grid, kinds = set(), set(), defaultdict(int), defaultdict(int)
-        count = 0
+        names, entities = defaultdict(list),defaultdict(list)
         for rating,ref,name,kind,x,y,wd,sx,sy,dist in sorted(pois,key=lambda p:(-p[0],p[9],p[1])):
-            cell = (math.floor(x*80),math.floor(y*80))
             norm = normalize(name)
-            if count>=48 or norm in names or (wd and wd in seen_wd) or grid[cell]>=4 or kinds[kind]>=13:
-                continue
-            if any(normalize(r[1])==norm and abs(r[5]-x)<.01 and abs(r[6]-y)<.01 for r in rows):
+            possible=names[norm]+(entities[wd] if wd else [])
+            same=next((key for px,py,key in possible if abs(px-x)<.002 and abs(py-y)<.002),None)
+            if same:
+                aliases["osm-"+ref.replace("/","-")]="osm-"+same.replace("/","-")
                 continue
             town = min(towns,key=lambda t:((t[1]-x)*math.cos(math.radians(y)))**2+(t[2]-y)**2)[0]
             rows.append([ref,name,province,town,kind,x,y,sx,sy,dist,REGIONS[province]])
-            count += 1
-            names.add(norm)
+            names[norm].append((x,y,ref))
             if wd:
-                seen_wd.add(wd)
-            grid[cell]+=1
-            kinds[kind]+=1
-    return rows,index
+                entities[wd].append((x,y,ref))
+    return rows,index,aliases
 
 
 if __name__ == "__main__":
@@ -217,7 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--roads",type=Path,default=Path("dist/vn-roads"))
     parser.add_argument("--output",type=Path,default=Path("dist/tourism-catalog.js"))
     args = parser.parse_args()
-    rows,index = build(args.pbf,args.roads)
+    rows,index,aliases = build(args.pbf,args.roads)
     print(f"Selected {len(rows)} destinations in {len(set(r[2] for r in rows))} provinces",flush=True)
     compact = lambda v: json.dumps(v,ensure_ascii=False,separators=(",",":"))
     with args.pbf.open("rb") as f:
@@ -231,7 +261,7 @@ window.VietnamTourism = {
     metadata = {"attribution":"© OpenStreetMap contributors","license":"ODbL 1.0",
                 "source":"https://download.geofabrik.de/asia/vietnam.html",
                 "sourceSha256":digest,"roadSnapshot":index.get("osmTimestamp")}
-    content += "  metadata: "+compact(metadata)+",\n  entries: [\n"
+    content += "  metadata: "+compact(metadata)+",\n  aliases: "+compact(aliases)+",\n  entries: [\n"
     content += ",\n".join("    "+compact(row) for row in rows)
     content += """
   ].map(([ref,name,province,locality,kind,lon,lat,startLon,startLat,approachMeters,region])=>({

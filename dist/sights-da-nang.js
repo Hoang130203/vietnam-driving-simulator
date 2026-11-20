@@ -41,99 +41,178 @@
     }
   }
 
-  // 1. Cầu Rồng – Đà Nẵng (Golden Steel Dragon Arch spanning Han River)
-  function cauRong(T, {stamp, box, round, tapered}) {
-    const gold = 0xe8b923, brightGold = 0xf4cd46, deepGold = 0xb88914;
-    const concrete = 0xbcbab2, darkConcrete = 0x87867f, steel = 0xd6d3c8;
-    const ember = 0xd94826, ivory = 0xf2ebd9;
-    const shift = -62; // Center the camera right on the Eastern Dragon Head + front arches!
-
-    // Median divider & flanking pedestrian parapets (keeping z = +-8.4m clear for driving!)
-    box(concrete, -28 + shift, 0.45, 0, 290, 0.9, 2.2);
-    for (const side of [-1, 1]) {
-      box(concrete, -28 + shift, 0.55, side * 14.8, 290, 1.1, 0.75);
-      box(steel, -28 + shift, 1.32, side * 14.8, 290, 0.14, 0.16);
-      for (let px = -148; px <= 92; px += 48) {
-        box(darkConcrete, px + shift, -3.9, side * 10.5, 4.2, 7.0, 4.6);
-        box(concrete, px + shift, -0.95, 0, 5.2, 0.85, 30.8);
+  // Alignment from the two OSM carriageways. Distances along +X run west
+  // to east. The three exposed steel spans emerge separately above the deck.
+  function cauRong(T, {group, stamp, box, deck, profile, round}) {
+    const yellow = 0xf4bf19, sunlit = 0xffcf35, ochre = 0xc2941e;
+    const pier = 0xc8c7ba, coping = 0xd9d4c5, iron = 0x64736e;
+    const west = -315, east = 321;
+    const tubes = [[0,1.47],[-1.48,.55],[1.48,.55],[-1.05,-.99],[1.05,-.99]];
+    function pipe(points,radius,tint,steps) {
+      const curve = new T.CatmullRomCurve3(points.map(([x,y,z])=>new T.Vector3(x,y,z)));
+      const geo = new T.TubeGeometry(curve,steps,radius,9,false);
+      stamp(geo,tint,0,0,0);
+      geo.dispose();
+    }
+    function bar(a,b,w,h,tint) {
+      const [dx,dy,dz]=b.map((v,i)=>v-a[i]);
+      box(tint,(a[0]+b[0])*.5,(a[1]+b[1])*.5,(a[2]+b[2])*.5,
+        w,h,Math.hypot(dx,dy,dz),Math.atan2(dx,dz),-Math.atan2(dy,Math.hypot(dx,dz)));
+    }
+    function plate(shape,tint,x,y,z,d) {
+      profile(shape,tint,x,y,z,d);
+    }
+    const sections=Math.ceil((east-west)/8);
+    const step=(east-west)/sections;
+    // Keep the national road renderer's asphalt, markings and terrain profile.
+    // The dressed sidewalks and the brick median have their own narrow strips.
+    for(let i=0;i<sections;i++) {
+      const x=west+(i+.5)*step;
+      box(0x93897f,x,-.78,0,step,1.0,37.5);
+      deck(0xb27157,x,.065,0,step-.016,.20,5.25);
+      for(const s of [-1,1]){
+        deck(0xc29983,x,.075,s*16.10,step-.018,.24,5.1);
+        box(coping,x,.245,s*13.58,step,.34,.27);
+        box(pier,x,.30,s*18.37,step,.60,.46);
+        box(iron,x,1.02,s*18.39,step,.085,.10);
+        box(iron,x,.78,s*18.39,step,.056,.072);
+        for(const off of [-step*.25,step*.25])box(iron,x+off,.81,s*18.39,.075,.60,.08);
       }
-      for (let lx = -152; lx <= 98; lx += 25) {
-        stamp(round, deepGold, lx + shift, 3.8, side * 14.8, 0.1, 5.6, 0.1);
-        box(brightGold, lx + shift, 6.45, side * 13.7, 0.26, 0.16, 2.1);
+    }
+    for(const x of [-230,-96,100,223]){
+      box(pier,x,-1.5,0,6.3,2.25,35);
+      for(const z of [-10.4,10.4])stamp(round,0xb3b3a9,x,-5.25,z,2.9,8.6,3.8);
+    }
+    for(let x=west+14;x<east-4;x+=29)for(const s of [-1,1]){
+      stamp(round,iron,x,3.9,s*17.96,.105,7.5,.105);
+      bar([x,7.6,s*17.96],[x+.48,8.02,s*15.87],.094,.095,iron);
+      box(0xc5c6b7,x+.48,7.99,s*15.67,.32,.13,.69);
+    }
+
+    const fin = new T.Shape();
+    fin.moveTo(-2.1,0);fin.quadraticCurveTo(-.83,.93,1.57,1.03);
+    fin.lineTo(2.14,.65);fin.quadraticCurveTo(.62,.52,.25,0);fin.closePath();
+    for (const [start,end,rise] of [[-211,-118,15.0],[-77,82,27.5],[120,210,15.0]]) {
+      const width=end-start;
+      const yAt=t=>.42+4*t*(1-t)*rise;
+      for(const [z,dy] of tubes){
+        const points=Array.from({length:19},(_,i)=>{
+          const t=i/18;
+          return [start+width*t,yAt(t)+dy,z];
+        });
+        pipe(points,.60,dy<0?0xe6aa12:yellow,Math.ceil(width/1.9));
+      }
+      for(const endX of [start,end])box(coping,endX,.49,0,6.6,.94,5.3);
+      const bays=Math.round(width/8);
+      for(let i=1;i<bays;i++) {
+        const t=i/bays,x=start+width*t,y=yAt(t),slope=4*rise*(1-2*t)/width;
+        const rot=Math.atan(slope);
+        // Bolt plates bridge the five individual tubes at the frame stations.
+        for(let j=0;j<5;j++){
+          const [z,dy]=tubes[j],[nz,ny]=tubes[[1,3,0,4,2][j]];
+          bar([x,y+dy,z],[x,y+ny,nz],.29,.34,ochre);
+        }
+        if(y>3.6) {
+          bar([x,1.0,0],[x,y-1.5,0],.15,.15,iron);
+          box(0x495956,x,1.14,0,.36,.53,.34);
+        }
+        const geom=new T.ExtrudeGeometry(fin,{depth:.2,bevelEnabled:false,curveSegments:7});
+        stamp(geom,sunlit,x,y+1.83,-.1,1,1,1,0,0,rot);
+        geom.dispose();
       }
     }
 
-    // Undulating 5-arch Golden Dragon Spine
-    const archY = (x) => {
-      const t = (x + 165) / 265;
-      const env = 0.65 + 0.45 * Math.sin(Math.min(1, Math.max(0, t)) * Math.PI);
-      const wave = Math.abs(Math.sin(t * Math.PI * 5));
-      return 3.6 + wave * 17.5 * env;
+    // Rolled tubes carry the head. Its mane and jaws are a set of parallel
+    // cut-steel plates, leaving an actual opening between the raised lips.
+    for(const [z,dy] of tubes) {
+      pipe([[241,.53,z],[244,4.4+.72*dy,z],[249.5,9.2+dy,z],[254.2,10.5+dy,z]],
+        .60,yellow,18);
+    }
+    box(coping,241.1,.46,0,6.3,.92,5.2);
+    const cheek=new T.Shape();
+    cheek.moveTo(-6.4,1.35);
+    cheek.bezierCurveTo(-7.1,2.2,-5.95,3.15,-5.16,2.76);
+    cheek.bezierCurveTo(-3.84,2.17,-2.55,2.42,-1.80,2.57);
+    cheek.quadraticCurveTo(-2.8,2.85,-3.91,3.46);
+    cheek.quadraticCurveTo(-2.09,4.18,-.48,3.48);
+    cheek.bezierCurveTo(1.19,4.53,2.77,4.03,3.21,3.17);
+    cheek.quadraticCurveTo(3.89,3.47,4.63,4.27);
+    cheek.quadraticCurveTo(4.35,3.43,4.32,3.13);
+    cheek.bezierCurveTo(5.32,2.65,5.88,3.74,6.62,3.78);
+    cheek.bezierCurveTo(7.58,4.31,8.14,3.18,7.93,2.43);
+    cheek.quadraticCurveTo(8.5,1.93,8.11,1.34);
+    cheek.quadraticCurveTo(7.57,.99,7.25,1.67);
+    cheek.bezierCurveTo(6.68,2.52,5.27,1.87,5.03,1.06);
+    cheek.bezierCurveTo(4.8,.28,6.24,-.07,6.87,.21);
+    cheek.quadraticCurveTo(7.63,.67,8.18,.42);
+    cheek.lineTo(8.62,.02);cheek.lineTo(8.08,-.02);cheek.lineTo(8.36,-.52);
+    for(const [x,y] of [[7.77,-.35],[7.38,-1.17],[7.07,-.73],[6.30,-1.70],[5.94,-1.15],
+      [5.09,-2.18],[4.77,-1.49],[3.92,-2.38],[3.62,-1.38],[2.6,-2.48],[2.29,-1.17]])cheek.lineTo(x,y);
+    cheek.quadraticCurveTo(.94,-1.99,-1.67,-2.92);
+    cheek.quadraticCurveTo(-.60,-2.03,-.22,-1.43);
+    cheek.quadraticCurveTo(-3.38,-2.67,-5.66,-2.33);
+    cheek.quadraticCurveTo(-3.89,-1.94,-2.64,-.53);
+    cheek.quadraticCurveTo(-5.55,-1.0,-7.11,-.32);
+    cheek.quadraticCurveTo(-4.98,.07,-3.42,.85);
+    cheek.quadraticCurveTo(-5.35,.60,-6.4,1.35);cheek.closePath();
+    const lowerJaw=new T.Shape();
+    lowerJaw.moveTo(-3,.32);lowerJaw.quadraticCurveTo(2.05,-1.29,7.89,.08);
+    lowerJaw.quadraticCurveTo(7.75,-.68,7,-1.37);lowerJaw.lineTo(6.97,-.79);
+    lowerJaw.quadraticCurveTo(5.95,-2.59,5.02,-3.01);lowerJaw.lineTo(5.07,-1.63);
+    lowerJaw.quadraticCurveTo(3.76,-3.36,2.55,-3.57);lowerJaw.lineTo(2.81,-1.99);
+    lowerJaw.quadraticCurveTo(1.18,-3.36,-.25,-3.38);lowerJaw.lineTo(.54,-1.82);
+    lowerJaw.quadraticCurveTo(-1.64,-2.75,-3.49,-2.25);lowerJaw.quadraticCurveTo(-1.88,-1.59,-.92,-.72);lowerJaw.closePath();
+    const headX=257.4,headY=10.8;
+    for(const z of [-1.90,-1.06,-.22,.62,1.46]) {
+      plate(lowerJaw,ochre,headX,headY-.32,z+.13,.34);
+      plate(cheek,z<-1.2||z>1.2?sunlit:yellow,headX,headY,z,.43);
+    }
+    // Rolled upper snout bridges the cheek plates; keep the mouth open below.
+    for(const [x,y,rx,ry] of [[6.62,3.16,.67,.58],[7.36,2.97,.65,.56],[7.76,2.48,.54,.45]]){
+      stamp(round,yellow,headX+x,headY+y,0,rx,3.75,ry,0,Math.PI/2);
+    }
+    const pupil=new T.SphereGeometry(1,18,12);
+    for(const side of [-1,1]) {
+      const z=side*1.93;
+      stamp(pupil,ochre,headX+3.03,headY+2.28,z,.88,.76,.21,0,0,.12);
+      stamp(pupil,0x5d8390,headX+3.12,headY+2.38,z+side*.12,.56,.47,.17);
+      for(const [x,y] of [[2.05,3.19],[1.48,2.77],[1.12,2.12],[.95,1.40],[1.03,.65],
+        [1.40,-.02],[2.26,-.58],[3.28,-.83],[4.32,-.69],[5.28,-.51],[6.18,-.32],[7.22,2.99]]) {
+        stamp(pupil,yellow,headX+x,headY+y,z+.06*side,.25,.23,.11);
+      }
+    }
+    pupil.dispose();
+    // The western lotus tail rises independently from a short cluster of tubes.
+    for (const [z,dy] of tubes) {
+      pipe([[-241,.47,z],[-245,4.06+dy*.5,z],[-251,7+dy,z],[-258,8.24+dy,z]],.6,yellow,19);
+    }
+    const petal=new T.Shape();petal.moveTo(0,-1.17);
+    petal.bezierCurveTo(-3.5,-1.2,-6.8,.88,-8.92,4.3);
+    petal.bezierCurveTo(-6.1,3.48,-3.17,3.47,-1.1,2.13);
+    petal.quadraticCurveTo(.6,1.24,1.0,.15);petal.closePath();
+    for(let i=-2;i<=2;i++) {
+      plate(petal,i%2?yellow:sunlit,-257.1+i*i*.63,8.65-Math.abs(i)*.4,i*.72-.18,.36);
+    }
+    box(coping,-241,.46,0,6.3,.92,5.2);
+
+    // The bridge occupies many terrain cells. On a district rebase refit the
+    // original geometry against the same relief datum as the two road ribbons.
+    let baseHeights, previousProfile;
+    group.userData.fitGround=ground=>{
+      const mesh=group.children.find(child=>child.geometry?.attributes.color);
+      if(!mesh)return;
+      const positions=mesh.geometry.attributes.position;
+      if(!baseHeights)baseHeights=Float32Array.from({length:positions.count},(_,i)=>positions.getY(i));
+      const stride=8,count=Math.ceil((east-west)/stride)+2;
+      const height=Array.from({length:count},(_,i)=>ground(west+i*stride,0));
+      if(previousProfile && height.every((h,i)=>Math.abs(h-previousProfile[i])<.006))return;
+      previousProfile=height;
+      for(let i=0;i<positions.count;i++){
+        const t=Math.max(0,Math.min(count-1.001,(positions.getX(i)-west)/stride)),j=Math.floor(t);
+        positions.setY(i,baseHeights[i]+height[j]+(height[j+1]-height[j])*(t-j));
+      }
+      positions.needsUpdate=true;mesh.geometry.computeBoundingSphere();
     };
-    const curvePts = [];
-    for (let i = 0; i <= 110; i++) {
-      const x = -165 + i * 265 / 110;
-      curvePts.push(new T.Vector3(x + shift, archY(x), 0));
-    }
-    for (const [dy, dz, r, tint] of [
-      [0.85, 0, 0.78, brightGold],
-      [-0.55, -1.05, 0.62, gold],
-      [-0.55, 1.05, 0.62, gold],
-      [-1.55, -0.62, 0.48, deepGold],
-      [-1.55, 0.62, 0.48, deepGold]
-    ]) {
-      const shifted = curvePts.map(pt => new T.Vector3(pt.x, pt.y + dy, pt.z + dz));
-      const tube = new T.TubeGeometry(new T.CatmullRomCurve3(shifted), 140, r, 8, false);
-      stamp(tube, tint, 0, 0, 0);
-      tube.dispose();
-    }
-    for (let x = -160; x <= 96; x += 4.2) {
-      const y = archY(x), dy = archY(x + 1) - archY(x - 1);
-      const slope = Math.atan2(dy, 2);
-      box(brightGold, x + shift, y + 1.85, 0, 1.85, 1.25, 0.24, 0, 0, slope);
-      box(deepGold, x + shift, y - 0.55, 0, 0.45, 2.35, 2.45, 0, 0, slope);
-      if (y > 5.5 && Math.abs(Math.round(x) % 8) < 4) {
-        stamp(round, steel, x + shift, (y - 1.2) / 2, 0, 0.085, y - 1.4, 0.085);
-      }
-    }
-
-    // Ornate Lý-dynasty Golden Dragon Head at East end (now right in the showcase focal zone!)
-    const hx = 102 + shift, hy = 13.8;
-    const neckPts = [
-      new T.Vector3(96 + shift, archY(96), 0),
-      new T.Vector3(100 + shift, 11.2, 0),
-      new T.Vector3(103.5 + shift, 15.5, 0),
-      new T.Vector3(107.5 + shift, 17.6, 0)
-    ];
-    const neckTube = new T.TubeGeometry(new T.CatmullRomCurve3(neckPts), 24, 1.85, 10, false);
-    stamp(neckTube, gold, 0, 0, 0);
-    neckTube.dispose();
-    box(brightGold, hx + 6.8, hy + 4.4, 0, 9.2, 3.5, 4.6);
-    box(gold, hx + 12.0, hy + 4.8, 0, 4.8, 2.45, 3.4, 0, 0, 0.14);
-    box(brightGold, hx + 14.2, hy + 6.3, 0, 2.3, 2.2, 2.3, 0, 0, -0.32);
-    box(deepGold, hx + 9.4, hy + 1.5, 0, 7.8, 1.5, 3.5, 0, 0, -0.24);
-    box(ember, hx + 9.8, hy + 2.75, 0, 5.4, 1.5, 2.5);
-    for (const s of [-1, 1]) {
-      for (let i = 0; i < 4; i++) {
-        tapered(ivory, hx + 8.6 + i * 1.4, hy + 3.15, s * 1.32, 0.22, 0.04, 0.85, 1, 4);
-        tapered(ivory, hx + 8.9 + i * 1.35, hy + 2.25, s * 1.24, 0.04, 0.2, 0.72, 1, 4);
-      }
-      const eye = new T.SphereGeometry(0.72, 10, 8);
-      stamp(eye, ember, hx + 8.4, hy + 5.1, s * 2.25, 1.1, 0.9, 0.7);
-      eye.dispose();
-      box(brightGold, hx + 7.6, hy + 6.2, s * 2.2, 3.9, 0.68, 0.78, 0, 0, -0.22);
-      box(brightGold, hx + 3.4, hy + 8.0, s * 1.7, 7.2, 0.82, 0.68, s * 0.18, 0, -0.45);
-      for (let m = 0; m < 4; m++) {
-        box(gold, hx + 2.8 - m * 1.2, hy + 6.2 - m * 1.3, s * 2.15, 4.4, 0.54, 0.44, s * 0.22, 0, -0.38);
-      }
-      box(brightGold, hx + 12.8, hy + 3.8, s * 2.35, 5.0, 0.3, 0.3, s * 0.42, 0, 0.28);
-    }
-
-    // Stylized Golden Lotus Tail at West end
-    for (let i = 0; i < 5; i++) {
-      const a = (i - 2) * 0.34;
-      box(i % 2 ? brightGold : gold, -168 + shift - Math.cos(a) * 4.2, 6.8 + i * 1.15, Math.sin(a) * 2.4, 7.6, 0.72, 1.45, a * 0.5, 0, -0.42 - i * 0.08);
-    }
   }
 
   // 2. Hải Vân Quan (Đỉnh Đèo Hải Vân – Thiên Hạ Đệ Nhất Hùng Quan)
@@ -337,12 +416,17 @@
 
   (window.VietnamSights ??= []).push({
     id: 'cau-rong', name: 'Cầu Rồng', city: 'Đà Nẵng', province: 'Đà Nẵng', region: 'Trung Bộ',
-    lon: 108.22923, lat: 16.06122, start: [108.227901, 16.061095], yaw: 0.034, viewAngle: 0.52, viewElevation: 0.20,
-    width: 135, depth: 32, viewDistance: 1400,
-    solids: [[-90, 0, 145, 1.4]],
-    description: 'Cây cầu biểu tượng của Đà Nẵng bắc qua sông Hàn với thân thép vàng uốn lượn năm nhịp mô phỏng rồng thời Lý, đầu hướng ra biển Đông.',
-    photo: 'https://danangfantasticity.com/en/attractions/dragon-bridge',
-    source: 'https://vi.wikipedia.org/wiki/C%E1%BA%A7u_R%E1%BB%93ng',
+    catalogId: 'osm-way-694831926', lon: 108.227128, lat: 16.061147, yaw: .033,
+    start: [108.22456,16.060987], width: 636, depth: 37.5, viewDistance: 1650, plasterStain: .018,
+    solids: [[3,0,318,2.6],[3,-18.38,318,.24],[3,18.38,318,.24]],
+    views: [
+      {name:'Toàn cảnh từ sông Hàn',height:30,viewAngle:.73,viewElevation:.22,viewRadius:470},
+      {name:'Đầu rồng',offset:[255,-8.4],height:15,viewAngle:.69,viewElevation:.14,viewRadius:29},
+      {name:'Đuôi rồng',offset:[-254,8.4],height:12,viewAngle:-.57,viewElevation:.16,viewRadius:33}
+    ],
+    description: 'Ba nhịp vòm thép vàng nổi lên giữa hai chiều xe chạy. Năm ống thép tạo dáng thân rồng, từ chiếc đuôi phía Hải Châu đến đầu rồng ghép bằng nhiều lớp thép hướng ra biển.',
+    photo: 'https://cttdt.danangportal.gov.vn/vi/web/dng/w/toan-canh-cau-rong-tu-tren-cao-i',
+    source: 'https://baochinhphu.vn/dang-ky-ky-luc-guinness-cho-cau-rong-da-nang-102134027.htm',
     map: 'https://www.openstreetmap.org/way/694831926',
     build: cauRong
   }, {

@@ -124,6 +124,7 @@
     const meadow=surfaces.scanned('meadow',0xafbd9d,.56);
     const upland=surfaces.scanned('grass',0x8ea68d,.67);
     const landscapes=createSightLandscapes(T);
+    const grounds=createSightGrounds(T,small);
     const environment=createVietnamEnvironment(),amenities=createVietnamAmenities(),structures=createVietnamStructures();
     const osmBuildings=createVietnamOsmBuildings();
     const coverMap=createWorldLandCover(T,environment);
@@ -145,7 +146,7 @@
           '#include <begin_vertex>\n groundMetres=vec2(position.x,-position.y)+landOrigin; bankWet=shoreSediment;');
         shader.fragmentShader='varying vec2 groundMetres; varying float bankWet; uniform sampler2D shoreEarth;\n'+shader.fragmentShader.replace('#include <map_fragment>',
           '#include <map_fragment>\n float patchiness=sin(dot(groundMetres,vec2(.035,.019)))+.55*cos(dot(groundMetres,vec2(-.015,.047))); diffuseColor.rgb*=vec3(.96,.98,.95)+patchiness*vec3(.08,.035,.05); vec3 silt=texture2D(shoreEarth,groundMetres*.58).rgb; float bank=clamp(bankWet+(silt.g-.17)*.7,0.,1.)*smoothstep(0.,.2,bankWet); diffuseColor.rgb=mix(diffuseColor.rgb,silt*mix(vec3(.84,.78,.66),vec3(.34,.31,.25),bankWet),bank);');
-        coverMap.shade(shader);landscapes.shade(shader);
+        coverMap.shade(shader);landscapes.shade(shader);grounds.shade(shader);
         relief.passSurface.shade(shader,'groundMetres','(.40+.46*smoothstep(35.,450.,length(vViewPosition)))*(1.-bankWet)');
         // The satellite texels span several metres. Restore ground-scale contrast
         // after the regional tint, including at the edge of a streamed tile.
@@ -235,7 +236,8 @@
       relief.setOrigin(graph,cx,cz);
       const localGround=(x,z)=>relief.ground(cx+x,cz+z);
       landmarks?.setOrigin(graph,cx,cz,relief.ground);
-      district.build(graph,cx,cz,landmarks,relief.ground,edges);
+      grounds.prepare(graph,cx,cz,landmarks);
+      district.build(graph,cx,cz,landmarks,relief.ground,edges,grounds.mapped);
       const vistas=[];
       if(graph)for(const site of VietnamLandmarks.entries){
         const end=graph.point(site.lon,site.lat);if(Math.hypot(end.x-cx,end.z-cz)>1000)continue;
@@ -405,15 +407,18 @@
         for(let ix=Math.floor((Math.min(seg.ax,seg.bx)-pad)/cellSize);ix<=Math.floor((Math.max(seg.ax,seg.bx)+pad)/cellSize);ix++)
           for(let iz=Math.floor((Math.min(seg.az,seg.bz)-pad)/cellSize);iz<=Math.floor((Math.max(seg.az,seg.bz)+pad)/cellSize);iz++)fn(ix+','+iz);
       }
-      function blocked(x,z,r){
+      function obstruction(x,z,r,allowWater=false){
         if(landmarks?.reserved(x+cx,z+cz,r)||district.contact(x+cx,z+cz,r))return true;
-        if(wetMask&&(wet(x,z)||wet(x+r,z)||wet(x-r,z)||wet(x,z+r)||wet(x,z-r)))return true;
+        if(!allowWater&&wetMask&&(wet(x,z)||wet(x+r,z)||wet(x-r,z)||wet(x,z+r)||wet(x,z-r)))return true;
         const list=cells.get(nearbyCell(x,z))||[];
         for(const s of list){
           const t=Math.max(0,Math.min(s.len,(x-s.ax)*s.fx+(z-s.az)*s.fz));
           const dx=x-s.ax-s.fx*t,dz=z-s.az-s.fz*t;
           if(dx*dx+dz*dz<(s.w+r)*(s.w+r))return true;
         }return false;
+      }
+      function blocked(x,z,r){
+        return grounds.mapped(x+cx,z+cz)||obstruction(x,z,r);
       }
       waterAt=(x,z)=>sampleShore(x-cx,z-cz);
       shoreBed=(x,z)=>shorePatch?.sample(x-cx,z-cz,true)?.bed;
@@ -743,11 +748,16 @@
       if(graph){
         forestPlots(graph,cx,cz,Math.min(600,detailRadius),(ix,iz,wx,wz,gx,gz,rand)=>{
             const precinct=Math.hypot(wx-complexCenter.x,wz-complexCenter.z)<1500;
-            if(!precinct&&rand()>.36)return;
             const observed=landscapes.cover(wx,wz),grove=precinct&&inGrove(wx-cx,wz-cz);
             const landClass=environment.sample(graph,wx,wz).cover;
-            const forest=landClass==null?relief.altitude(wx,wz)>=(precinct?63:280):landClass===10||landClass===95;
-            if(!grove&&(observed!==null?observed<204:!forest))return;
+            const woodland=landClass===10||landClass===95;
+            if(!grove){
+              if(landClass!=null&&!woodland)return;
+              if(observed!==null?observed<(woodland?158:204):!woodland&&relief.altitude(wx,wz)<(precinct?63:280))return;
+            }
+            // A high vegetation index also occurs in rice fields. Use the mapped
+            // tree and mangrove classes to fill a canopy without planting the fields.
+            if(!precinct&&rand()>(woodland?(small?.56:.76):.36))return;
             const openness=.46+.19*Math.sin(gx*.013+gz*.004)+.18*Math.sin(gz*.019-gx*.005);
             if(rand()>openness+.24||district.builtUp(wx,wz)||onApproach(wx,wz))return;
             const lx=wx-cx,lz=wz-cz,dist=Math.hypot(lx,lz);
@@ -756,8 +766,9 @@
             if(occupants.some(o=>!String(o.id).startsWith('stand:')&&
               Math.hypot(lx-o.x,lz-o.z)<(o.radius||Math.hypot(o.w,o.d))+2))return;
             const altitude=relief.altitude(wx,wz),cool=altitude>650;
-            const pine=cool&&rand()<.73;
-            const h=(pine?10:6.7)+rand()*(pine?10:7.1),w=h*(pine?.5:.82)*(.82+rand()*.32);
+            const pine=cool&&rand()<.4;
+            const h=landClass===95?4.7+rand()*5.5:(pine?10:6.7)+rand()*(pine?10:7.1);
+            const w=h*(pine?.5:landClass===95?1.12:.82)*(.82+rand()*.32);
             const angle=rand()*Math.PI,tint=tone.setHSL(.24+rand()*.10,.08+rand()*.14,.66+rand()*.18).getHex();
             const id='stand:'+ix+':'+iz;
             const tree=registerObstacle({id,kind:'tree',x:lx,z:lz,radius:Math.max(.16,h*.02),height:h,parts:[]});
@@ -885,6 +896,15 @@
         roadGroup.add(mesh);
       }
       material.white.side=material.yellow.side=T.DoubleSide;
+      grounds.build(roadGroup,localGround,obstruction,registerObstacle,sampleShore,(kind,x,z,h,w,angle)=>{
+        if(kind==='tea'){
+          instance('tree',unitPlane,x,h*.48,z,w,h,1,angle,0x96af73);
+          instance('tree',unitPlane,x,h*.48,z,w,h,1,angle+Math.PI/2,0x9ab977);return;
+        }
+        const tree=registerObstacle({id:'mapped-tree:'+Math.round(cx+x)+':'+Math.round(cz+z),
+          kind:'tree',x,z,radius:Math.max(.12,h*.022),height:h,parts:[]});
+        for(const turn of [angle,angle+Math.PI/2])instance(kind,unitPlane,x,h*.49,z,w,h,1,turn,null,tree);
+      });
       surface(bankData,material.earth,-.065,.60);
       if(cover.length){
         temple??=createTempleSurfaces(T);temple.setOrigin(graph);
@@ -1187,9 +1207,15 @@
         camera.fov=car.showroom||car.sightView?.data.views?fov:camera.fov+(fov-camera.fov)*(1-Math.exp(-dt*7));
         camera.updateProjectionMatrix();
       }
+      const viewport=car.sightView?.viewport;
+      if(viewport){
+        const {width,height,shift}=viewport,v=camera.view;
+        if(!v?.enabled||v.fullWidth!==width||v.fullHeight!==height||v.offsetY!==shift)
+          camera.setViewOffset(width,height,0,shift,width,height);
+      }else if(camera.view?.enabled)camera.clearViewOffset();
       sightings.update(dt,car,originX,originZ,camera.aspect);
       if(breakfast.update(car,dt))onBreakfastCall?.();
-      atmosphere.setHour(car.scenicHour);
+      atmosphere.setHour(car.sightView?.hour??car.scenicHour);
       weather.render(camera,now,car.dawn||0,atmosphere.update);
       headlight.intensity=car.flood?0:atmosphere.lamps.value*2600;
       headlight.visible=headlight.intensity>3;
@@ -1228,6 +1254,6 @@
       markerPoint.project(camera);
       return markerPoint.z>0 && markerPoint.z<1 && Math.abs(markerPoint.x)<.92 && Math.abs(markerPoint.y)<.9 ? markerPoint : null;
     }
-    return {projectSummit,weather,streetLife,loadStructures:structures.load,preloadVehicle:loadModel,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize:graphics.resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),osmBuildings.load(g,x,z),relief.loadLocal(g,x,z),landscapes.load(g,x,z),environment.load(g,x,z),amenities.load(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),sightFootprint:district.footprint,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();sightings.reset();}};
+    return {projectSummit,weather,streetLife,loadStructures:structures.load,preloadVehicle:loadModel,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize:graphics.resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),osmBuildings.load(g,x,z),relief.loadLocal(g,x,z),landscapes.load(g,x,z),grounds.load(g,x,z),environment.load(g,x,z),amenities.load(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),sightFootprint:district.footprint,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();sightings.reset();}};
   };
 })();

@@ -1,8 +1,7 @@
 'use strict';
 
-function createVietnamOsmBuildings(){
-  const base='vn-osm-buildings/',cache=new Map(),cell=128;
-  const limit=matchMedia('(pointer: coarse)').matches?750:1500;
+function createVietnamOsmBuildings(base='vn-osm-buildings/',limit=matchMedia('(pointer: coarse)').matches?750:1500){
+  const cache=new Map(),cell=128;
   let index,ready,signature,version=0,active=[];
 
   function loadIndex(){
