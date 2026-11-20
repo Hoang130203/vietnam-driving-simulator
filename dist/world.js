@@ -436,7 +436,9 @@ function pause(){
 }
 $('launch').onclick=begin;$('pause').onclick=pause;
 function showMonument(monument){
- car.sightView={...monument,angle:monument.data.viewAngle??(monument.data.yaw+.23),elevation:monument.data.viewElevation??.27,zoom:1};
+ const portraitOverview=monument.data.id==='tam-chuc'&&innerWidth<innerHeight;
+ const angle=portraitOverview?monument.data.yaw-.27:(monument.data.viewAngle??(monument.data.yaw+.23));
+ car.sightView={...monument,angle,elevation:monument.data.viewElevation??.27,zoom:1};
  $('tourZoom').value='1';$('tourReference').href=monument.data.photo;
  $('tourDescription').textContent=monument.data.description||'';$('tourDescription').hidden=!monument.data.description;
  $('tourTitle').textContent=monument.data.name;$('tourCamera').hidden=false;
