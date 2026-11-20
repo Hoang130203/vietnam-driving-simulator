@@ -56,15 +56,16 @@ function createDrivingWeather(THREE,scene,sun,pavement,reference=''){
   positions.setUsage(THREE.DynamicDrawUsage);geom.setAttribute('position',positions);
   const mat=new THREE.LineBasicMaterial({color:0xc4d5df,transparent:true,depthWrite:false});
   const drops=new THREE.LineSegments(geom,mat);drops.frustumCulled=false;drops.visible=false;scene.add(drops);
-  function render(camera,now){
+  const dawnHaze=new THREE.Color(0xe6c9a4);
+  function render(camera,now,dawn=0){
     const mix=1-Math.exp(-Math.min(.2,(now-lastFrame)/1000)*2);lastFrame=now;
     const c=current,code=c?.weather_code||0,night=c&&c.is_day===0;
-    const wet=c?Math.min(1,Math.max(c.precipitation*1.8,code>=51?.24:0)):0;
-    const cloud=(c?.cloud_cover||0)/100,fog=code===45||code===48;
-    sun.intensity+=(base.light*(night?.13:1-.65*cloud)-sun.intensity)*mix;
-    scene.backgroundIntensity+=((night?.09:1-.46*cloud)-scene.backgroundIntensity)*mix;
-    scene.fog.density+=(Math.max(base.fog,fog?.012:wet*.004+cloud*.0005)-scene.fog.density)*mix;
-    fogColor.copy(base.color).lerp(stormColor.setHex(night?0x374650:0xa0acb1),night?.95:Math.max(cloud,wet,fog?1:0));scene.fog.color.lerp(fogColor,mix);
+    const wet=c?(1-dawn)*Math.min(1,Math.max(c.precipitation*1.8,code>=51?.24:0)):0;
+    const cloud=(c?.cloud_cover||0)/100*(1-dawn),fog=(code===45||code===48)?1-dawn:0;
+    sun.intensity+=(base.light*(night?.13+.87*dawn:1-.65*cloud)-sun.intensity)*mix;
+    scene.backgroundIntensity+=((night?.09+.91*dawn:1-.46*cloud)-scene.backgroundIntensity)*mix;
+    scene.fog.density+=(Math.max(base.fog+dawn*.00036,.012*fog,wet*.004+cloud*.0005)-scene.fog.density)*mix;
+    fogColor.copy(base.color).lerp(stormColor.setHex(night?0x374650:0xa0acb1),night?.95:Math.max(cloud,wet,fog)).lerp(dawnHaze,dawn);scene.fog.color.lerp(fogColor,mix);
     pavement.roughness+=(base.rough*(1-.58*wet)-pavement.roughness)*mix;
     pavement.color.lerp(fogColor.copy(base.road).multiplyScalar(1-.36*wet),mix);
     opacity+=(wet-opacity)*mix;drops.visible=opacity>.015;if(!drops.visible)return;

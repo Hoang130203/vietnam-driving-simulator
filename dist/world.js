@@ -8,13 +8,15 @@ let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],next
 let viewX=Infinity,viewZ=Infinity,loadX=Infinity,loadZ=Infinity,busy=false,loadToken=0,streamRetry=0,tourPins=[];
 let hp=100,nitro=100,cooldown=0,distance=0,snapshot=0,toastTime=0,crashTime=0,crashKind='car',passes=0,duel=null;
 let car={model:'supercar',x:0,z:0,yaw:0,speed:0,steer:0,brake:false},last=performance.now(),uiTick=0,spawnTick=0;
+let activeTrip=false,loadRequest=null,openingCameraTime=0;
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
 try{saved=JSON.parse(localStorage.getItem('taylai.world.trip'));const model=localStorage.getItem('taylai.garage');if(['gt','rally'].includes(model))car.model=model;}catch{}
 $('garage').value=car.model;
 $('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('taylai.garage',car.model);}catch{}};
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
 function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge)*.47);}
 function save(){
- if(!player||!roads||car.flood)return;
+ if(!activeTrip||!player||!roads||car.flood)return;
  const [lon,lat]=roads.geo(car.x,car.z);
  try{localStorage.setItem('taylai.world.trip',JSON.stringify({lon,lat,label:source[0],destination:source[3]?.id,distance,passes,dir:player.dir,edge:player.edge.id,yaw:car.yaw,origin:[roads.lon,roads.lat]}));}catch{}
 }
@@ -52,6 +54,14 @@ async function streamWater(graph,redraw=true){
  }catch{/* Road navigation stays available when this scenery layer is offline. */}
 }
 async function startAt(place,restore=null){
+ loadRequest={place,restore};activeTrip=false;
+ const firstDrive=place===openingPlace&&!restore;
+ car.opening=firstDrive;car.openingPose=firstDrive?1:0;car.dawn=firstDrive?1:0;openingCameraTime=0;
+ document.body.removeAttribute('data-awaiting-motion');
+ document.body.toggleAttribute('data-lakeside',firstDrive);
+ if(!firstDrive)$('openingStill').hidden=true;
+ gfx.preloadVehicle(car.model);
+ $('journeyTitle').textContent=firstDrive?'Tam Chúc':place[3]?.name||place[0];
  const token=++loadToken;mode='loading';keySet.clear();$('grid').hidden=false;$('hud').hidden=true;$('touch').hidden=true;
  $('pause').hidden=true;$('camera').hidden=true;document.body.dataset.phase='grid';
  $('launch').disabled=true;$('challenge').disabled=true;$('launch').textContent='Đang tải đường…';$('loadStatus').textContent='';
@@ -66,8 +76,9 @@ async function startAt(place,restore=null){
    const sight=place[3]||destinations.find(v=>restore?.destination===v.id)||VietnamLandmarks.entries.find(v=>place[0]===v.name+' · '+v.city);
    if(sight)place=[place[0],place[1],place[2],sight];
    car.tourStop=Boolean(sight?.custom||sight&&VietnamLandmarks.entries.includes(sight));
-   if(Number.isFinite(sight?.bearing)&&!restore&&!nearest.edge.oneway){
-     nearest.dir=Math.cos(graph.sample(nearest).yaw-sight.bearing*Math.PI/180)>=0?1:-1;
+   const bearing=firstDrive?104:sight?.bearing;
+   if(Number.isFinite(bearing)&&!restore&&!nearest.edge.oneway){
+     nearest.dir=Math.cos(graph.sample(nearest).yaw-bearing*Math.PI/180)>=0?1:-1;
    }else if(sight&&!restore&&!nearest.edge.oneway){
      const target=graph.point(sight.lon,sight.lat),p=graph.sample(nearest);
      if((target.x-p.x)*Math.sin(p.yaw)-(target.z-p.z)*Math.cos(p.yaw)<0)nearest.dir=-1;
@@ -80,7 +91,7 @@ async function startAt(place,restore=null){
    loadX=car.x;loadZ=car.z;streamRetry=0;
    await Promise.all([gfx.terrainReady,streamWater(graph,false),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
    refreshView();seedTraffic();mode='grid';
-   $('challenge').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Tiếp tục lái tự do':'Lái tự do';$('loadStatus').textContent=nameOf(player.edge);
+   $('challenge').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Lái tiếp':'Cầm lái';
  }catch(e){if(token===loadToken){$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
 }
 async function stream(){
@@ -329,6 +340,13 @@ function frame(now){
    if(mode==='drive'){
      const steps=Math.max(1,Math.ceil(dt*90));
      for(let i=0;i<steps&&mode==='drive';i++)tick(dt/steps);
+     if(car.opening){
+       openingCameraTime=Math.min(1,openingCameraTime+dt/.85);
+       car.openingPose=reduceMotion.matches||inside?0:1-openingCameraTime**2*(3-2*openingCameraTime);
+       car.dawn=clamp((210-distance)/85,0,1);
+       if(distance>.25)document.body.removeAttribute('data-awaiting-motion');
+       if(car.dawn===0){car.opening=false;document.body.removeAttribute('data-lakeside');}
+     }
    }else if(mode==='sinking'){
      advanceFlood(car,dt);
      if(car.flood.age>=4.1){mode='pit';pit('water');}
@@ -345,7 +363,10 @@ function frame(now){
    }
    if(mode!=='loading'&&roads&&!document.hidden&&now>=nextWeatherCheck){nextWeatherCheck=now+2000;gfx.weather.locate(...roads.geo(car.x,car.z));}
    car.driving=mode==='drive';car.showroom=mode==='grid';
-   if(mode!=='loading'&&mode!=='error'&&!document.hidden)gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'||mode==='sinking'?dt:0,inside);
+   if(mode!=='loading'&&mode!=='error'&&!document.hidden){
+     const ready=gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'||mode==='sinking'?dt:0,inside);
+     if(ready&&!$('openingStill').hidden)$('openingStill').hidden=true;
+   }
    if(mode==='drive'||mode==='sinking'){uiTick+=dt;if(uiTick>.13){uiTick=0;updateHud();}}
    driveAudio.update({speed:Math.abs(car.speed)*3.6,boost:car.driving&&car.boost,slip:car.slip,offroad:car.offroad,throttle:held('w','arrowup'),braking:car.brake,signal:false,mode:mode==='drive'?'driving':mode==='grid'?'idling':'ready'});
  }
@@ -355,12 +376,22 @@ function frame(now){
 const worldBoard=createLeaderboard('xuyen-viet','Xuyên Việt');
 let tripStart=0;
 $('showBoard').onclick=()=>worldBoard.open();
+$('openSetup').onclick=()=>$('journeySetup').showModal();
+$('closeSetup').onclick=()=>$('journeySetup').close();
 $('scoreBoard').onclick=()=>worldBoard.open(distance-tripStart);
 function begin(){
- if(mode==='error'){if(indexData&&gfx)startAt(pendingPlace);else location.reload();return;}
+ if(mode==='error'){if(loadRequest&&indexData&&gfx)startAt(loadRequest.place,loadRequest.restore);else location.reload();return;}
  if(!player||mode!=='grid')return;
- tripStart=distance;worldBoard.start();
- mode='drive';document.body.dataset.phase='drive';$('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('camera').hidden=false;$('pause').hidden=false;updateHud();driveAudio.cue(true);
+ if($('journeySetup').open)$('journeySetup').close();
+ $('openingStill').hidden=true;
+ activeTrip=true;tripStart=distance;worldBoard.start();
+ mode='drive';document.body.dataset.phase='drive';$('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('camera').hidden=false;$('pause').hidden=false;updateHud();
+ if(car.opening){
+   document.body.setAttribute('data-awaiting-motion','');
+   if(!matchMedia('(pointer:coarse)').matches&&!duel)inform('Giữ W hoặc ↑ để lên ga',3);
+   driveAudio.ignition();
+ }
+ else driveAudio.cue(true);
 }
 function pause(){
  if(mode!=='drive')return;mode='paused';keySet.clear();save();$('raceMode').textContent=duel?'Lái tự do':'Đua xuyên Việt';$('positionLabel').textContent=nameOf(player.edge)+' · '+fmt(distance);$('rest').showModal();
@@ -599,7 +630,7 @@ $('country').onclick=e=>{
  for(const pin of mapPins){const d=Math.hypot(pin.x-x,pin.y-y);if(d<range){best=pin.site;range=d;}}
  const [lon,lat]=projection(x,y);choosePlace(best?tourPlace(best):['Điểm trên bản đồ',lon,lat]);
 };
-$('travel').onclick=()=>{originatedInPause=false;$('atlas').close();if(indexData&&gfx)startAt(pendingPlace);};
+$('travel').onclick=()=>{originatedInPause=false;$('atlas').close();if($('journeySetup').open)$('journeySetup').close();if(indexData&&gfx)startAt(pendingPlace);};
 window.addEventListener('resize',()=>{if($('atlas').open)drawAtlas();});
 async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('Chưa tải được dữ liệu đường.');return r.json();}
 (async()=>{
@@ -608,7 +639,7 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
    gfx=createWorldScene($('world'));indexData=await fetchJSON('vn-roads/index.json');
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
    $('openMap').disabled=false;$('travel').disabled=false;
-   const valid=saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
+   const valid=new URLSearchParams(location.search).get('intro')!=='tam-chuc'&&saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
    const params=new URLSearchParams(location.search),stage=mountainPlaces.find(p=>p.id===params.get('pass'));
    const collection=params.get('collection')==='ha-nam';
    const landmark=models.find(p=>p.id===params.get('landmark'))||tamChucParts.find(p=>p.id===params.get('landmark'))||(collection&&tamChuc);

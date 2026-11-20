@@ -142,6 +142,14 @@
       tone(330, 294, .18, .072);
     }
   }
+  async function ignition() {
+    unlock();
+    if (!enabled || !sound) return;
+    try { await sound.ctx.resume(); } catch { return; }
+    for (let i=0;i<4;i++) tone(48+i*3,32+i*5,.085,.12,i*.073,'triangle');
+    tone(44,96,.20,.16,.27,'sawtooth');
+    tone(92,36,.36,.13,.46,'triangle');
+  }
   function impact(strength,type) {
     if (!enabled || sound?.ctx.state !== 'running') return;
     strength=Math.min(1,Math.max(0,strength||0));
@@ -163,5 +171,5 @@
     gain.gain.value=.4+strength*.45;source.connect(filter).connect(gain).connect(output);source.start();
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
-  window.driveAudio = { toggle, update, cue, impact, get enabled(){return enabled;} };
+  window.driveAudio = { toggle, update, cue, ignition, impact, get enabled(){return enabled;} };
 })();

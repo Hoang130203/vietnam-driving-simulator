@@ -17,6 +17,23 @@
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
     scene.background=new T.Color(0xaec5d2);scene.fog=new T.FogExp2(0xc2d1d0,.00072);
     const camera=new T.PerspectiveCamera(61,1,.14,28000);
+    // A thin sunlit haze overlays the panorama and participates in the lake reflection.
+    const sunrise=new T.Mesh(new T.SphereGeometry(15000,32,16),new T.ShaderMaterial({
+      side:T.BackSide,transparent:true,depthWrite:false,
+      uniforms:{strength:{value:0}},
+      vertexShader:'varying vec3 ray; void main(){ray=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+      fragmentShader:`varying vec3 ray; uniform float strength;
+        void main(){
+          vec3 d=normalize(ray), sun=normalize(vec3(.96,.085,-.24));
+          float h=exp(-5.*max(d.y,0.)), dist=length(d-sun);
+          float halo=exp(-dist*8.), disc=1.-smoothstep(.010,.014,dist);
+          vec3 sky=mix(vec3(.37,.55,.66),vec3(1.,.68,.41),h)+vec3(.85,.48,.22)*halo+vec3(2.5,2.,1.4)*disc;
+          gl_FragColor=vec4(sky,strength*clamp(.22+.48*h+.65*halo,0.,1.));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`
+    }));
+    sunrise.renderOrder=-100;sunrise.visible=false;scene.add(sunrise);
     const skyLoader=new T.TextureLoader();
     function texture(file,tile=false){
       const t=skyLoader.load('streetscape/'+file);
@@ -622,6 +639,16 @@
               for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle,null,tree);}
             }
       }
+      if(innerPrecinct){
+        // Three shade trees on the inside verge frame the gate as the road turns.
+        const verge=[[105.79649,20.55585,7.6],[105.79665,20.55580,9.2],[105.79682,20.55578,7.9]];
+        for(const [lon,lat,h] of verge){
+          const p=graph.point(lon,lat),x=p.x-cx,z=p.z-cz;
+          if(Math.hypot(x,z)>540||blocked(x,z,1.5))continue;
+          const tree=registerObstacle({id:'tam-chuc-verge:'+lon,kind:'tree',x,z,radius:.25,height:h,parts:[]});
+          for(const angle of [.35,1.92])instance('tree',unitPlane,x,h*.49,z,h*.94,h,1,angle,0xe0d5b4,tree);
+        }
+      }
       if(wooded||innerPrecinct){
         // World-aligned, seeded stands keep their identity as streamed road tiles move.
         // Dense stands only grow in gaps between mapped roads, water and settlements.
@@ -750,9 +777,10 @@
             for(const i of face)layer[kind].push(points[i].x,points[i].y);
           }
         }
-        surface(layer.stone,material.pavers,.01,1);
-        surface(layer.lawn,gardenLawn,.02,1);
-        surface(layer.wood,woodlandFloor,.025,1);
+        // Ground cover extends beneath the mapped carriageway at the lakeside gate.
+        surface(layer.stone,material.pavers,-.105,1);
+        surface(layer.lawn,gardenLawn,-.095,1);
+        surface(layer.wood,woodlandFloor,-.085,1);
       }
       if(graph&&window.tamChucPaths){
         const center=graph.point(105.7956,20.5528);
@@ -771,7 +799,7 @@
               a=b;
             }
           }
-          surface(paving,material.pavers,.06,1);
+          surface(paving,material.pavers,-.052,1);
         }
       }
       surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
@@ -854,6 +882,7 @@
       item.request=()=>{
         if(item.loading)return;item.loading=true;
         loadModel(kind).then(base=>{
+          item.modelReady=true;
           if(!base)return;
           const model=base.clone(true),tints=new Map();
           model.traverse(n=>{
@@ -914,7 +943,7 @@
       if(detailed){
         item.wheels.forEach(({n,id})=>n.rotateX((id.endsWith('R')&&id.length===2?-1:1)*car.speed*dt/.33));
         for(const steer of item.front)steer.rotation.y=-(car.steer||0)*.34;
-        if(item.light)item.light.emissiveIntensity=car.brake||car.recoil?.braking?3.5:.55;
+        if(item.light)item.light.emissiveIntensity=car.brake||car.showroom&&car.opening||car.recoil?.braking?3.5:.55;
         updateBodywork(T,item.detail,car.dent,car.yaw);
       }
     }
@@ -963,7 +992,7 @@
       const now=performance.now();if(now-shadowStamp>(small?115:66)){renderer.shadowMap.needsUpdate=true;shadowStamp=now;}
       const viewpoint=car.sightView||car;
       land.material=wooded||car.region==='highlands'?upland:meadow;relief.update(viewpoint.x,viewpoint.z);
-      if(car.showroom&&!inside){
+      if(car.showroom&&!inside&&!car.opening){
         const portrait=camera.aspect<.85;
         eye.set(portrait?-5.6:-4.3,portrait?1.9:1.6,portrait?8.0:5.5);
         look.set(portrait?0:-1.38,.72,-.38);
@@ -973,8 +1002,13 @@
         const back=(camera.aspect<.85?7.55:6.35)+speed*.018;
         eye.set(-(car.steer||0)*.32,2.08+speed*.007,back);look.set(0,.9,-10);
       }
+      if(car.openingPose&&!inside&&!car.sightView){
+        const p=car.openingPose,portrait=camera.aspect<.85;
+        eye.x+=(3.2-eye.x)*p;eye.y+=(1.22-eye.y)*p;eye.z+=((portrait?9.5:6.2)-eye.z)*p;
+        look.x+=((portrait?-1.55:-2.7)-look.x)*p;look.y+=(1.12-look.y)*p;look.z+=(-3.1-look.z)*p;
+      }
       eye.applyQuaternion(mirrorRotation).add(playerRig.position);look.applyQuaternion(mirrorRotation).add(playerRig.position);
-      if(car.showroom&&car.tourStop){
+      if(car.showroom&&car.tourStop&&!car.opening){
         const stop=landmarks.nearest(car.x,car.z);
         if(stop&&stop.distance>3){
           const dx=(stop.x-car.x)/stop.distance,dz=(stop.z-car.z)/stop.distance;
@@ -995,11 +1029,20 @@
           look.z+Math.cos(v.angle)*radius*Math.cos(v.elevation));camera.lookAt(look);
         sun.target.position.copy(look);sun.position.copy(look).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       }
-      const fov=(inside?64:car.showroom?47:57+Math.min(15,speed*.28))+(car.boost?5:0);
-      if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
+      const fov=(inside?64:car.openingPose?57+Math.min(15,speed*.28)-9*car.openingPose:car.showroom?47:57+Math.min(15,speed*.28))+(car.boost?5:0);
+      if(Math.abs(fov-camera.fov)>.05){
+        camera.fov=car.showroom?fov:camera.fov+(fov-camera.fov)*(1-Math.exp(-dt*7));
+        camera.updateProjectionMatrix();
+      }
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
-      weather.render(camera,now);
+      const dawn=car.dawn||0;
+      sunrise.visible=dawn>0;
+      if(dawn){
+        sunrise.position.copy(camera.position);sunrise.material.uniforms.strength.value=dawn;
+        sun.position.x+=dawn*85;sun.position.z-=dawn*37;sun.position.y-=dawn*23;
+      }
+      weather.render(camera,now,dawn);
       const waterLevel=nearbyWaterLevel(viewpoint.x-originX,viewpoint.z-originZ);
       waterSurface.reflect(renderer,scene,camera,waterLevel,now,waterLevel!==null);
       renderer.render(scene,camera);
@@ -1009,7 +1052,8 @@
         renderer.setPixelRatio(Math.max(.78,renderer.getPixelRatio()*.88));slowFrames=0;
       }
       lastPaint=now;
+      return player.modelReady;
     }
-    return {weather,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    return {weather,preloadVehicle:loadModel,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();
