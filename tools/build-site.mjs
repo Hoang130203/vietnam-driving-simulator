@@ -20,9 +20,15 @@ const stageScript = await readFile(path.join(client,"mountain-stages.js"),"utf8"
 const stages = JSON.parse(stageScript.slice(stageScript.indexOf("window.mountainStages=")+"window.mountainStages=".length).trim().replace(/;$/,""));
 const courses = {river:2240,pass:2480};
 for(const stage of stages) courses[stage.id]=stage.angles.length*stage.step;
+const featured = JSON.parse(await readFile(path.join(client,"featured-drives.json"),"utf8"));
+const guided = Object.fromEntries(featured.map(route => [route.id,route.metres]));
+if(featured.length!==Object.keys(guided).length || featured.some(r=>!Number.isInteger(r.metres)||r.metres<=0||r.id==="xuyen-viet"||Object.hasOwn(courses,r.id)))
+  throw new Error("Invalid or duplicate featured drive.");
 const body = await readFile(path.join(root,"worker/leaderboard.mjs"),"utf8");
 // Sites accepts a single ES module as its Worker entry point.
-await writeFile(path.join(server,"index.js"),body.replace('import courseLengths from "./course-lengths.js";',"const courseLengths = "+JSON.stringify(courses)+";"));
+await writeFile(path.join(server,"index.js"),body
+  .replace('import courseLengths from "./course-lengths.js";',"const courseLengths = "+JSON.stringify(courses)+";")
+  .replace('import guidedLengths from "./guided-lengths.js";',"const guidedLengths = "+JSON.stringify(guided)+";"));
 const wrangler = {
   name:"tay-lai-viet",main:"index.js",compatibility_date:"2026-05-15",
   assets:{directory:"../client",binding:"ASSETS",html_handling:"none",run_worker_first:true},

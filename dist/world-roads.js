@@ -19,6 +19,18 @@ class VietnamRoads {
  }
  point(lon,lat){return {x:(lon-this.lon)*this.mx,z:(this.lat-lat)*this.my};}
  geo(x,z){return [this.lon+x/this.mx,this.lat-z/this.my];}
+ decodeEdge([id,start,end,name,kind,oneway,coords]){
+   const points=[],dist=[];let length=0;
+   for(let i=0;i<coords.length;i+=2){
+     const p=this.point(coords[i]/100000,coords[i+1]/100000),last=points.at(-1);
+     if(last){const d=Math.hypot(last.x-p.x,last.z-p.z);if(d<.1)continue;length+=d;}
+     points.push(p);dist.push(length);
+   }
+   if(length<.5)return null;
+   const edge={id,start,end,name,kind,oneway:Boolean(oneway),points,dist,length};
+   if(kind==='service')edge.authoredHalfWidth=window.VietnamRoadWidths?.get(Math.min(start,end)+':'+Math.max(start,end));
+   return edge;
+ }
  async tile(key){
    if(!this.cache.has(key)){
      const pending=(async()=>{
@@ -48,18 +60,10 @@ class VietnamRoads {
    if(stamp!==this.stamp)return;
    const fresh=new Map(),nodes=new Map(),buckets=new Map();
    for(const {rows,details} of tiles)for(const row of rows){
-     const [id,start,end,name,kind,oneway,coords]=row;if(fresh.has(id))continue;
+     const [id,start,end]=row;if(fresh.has(id))continue;
      let edge=this.edges.get(id);
      if(!edge){
-       const points=[],dist=[];let length=0;
-       for(let i=0;i<coords.length;i+=2){
-         const p=this.point(coords[i]/100000,coords[i+1]/100000),last=points.at(-1);
-         if(last){const d=Math.hypot(last.x-p.x,last.z-p.z);if(d<.1)continue;length+=d;}
-         points.push(p);dist.push(length);
-       }
-       if(length<.5)continue;
-       edge={id,start,end,name,kind,oneway:Boolean(oneway),points,dist,length};
-       if(kind==='service')edge.authoredHalfWidth=window.VietnamRoadWidths?.get(Math.min(start,end)+':'+Math.max(start,end));
+       edge=this.decodeEdge(row);if(!edge)continue;
      }
      if(!edge.traffic&&details?.[id]){
        edge.traffic=details[id];

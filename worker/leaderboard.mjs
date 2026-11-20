@@ -1,12 +1,12 @@
 import courseLengths from "./course-lengths.js";
+import guidedLengths from "./guided-lengths.js";
 
 const tour = "xuyen-viet";
-const guided = "ba-sao-tam-chuc";
-const guidedMetres = 5412;
+const isGuided = route => Object.hasOwn(guidedLengths,route);
 const hour = 3600_000;
 const maxAge = 7 * 24 * hour;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const knownRoute = route => route === tour || route === guided || Object.hasOwn(courseLengths, route);
+const knownRoute = route => typeof route === "string" && (route === tour || isGuided(route) || Object.hasOwn(courseLengths, route));
 const json = (data, status = 200, headers = {}) => Response.json(data, {
   status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers },
 });
@@ -83,12 +83,15 @@ async function arrive(request, db, body, now) {
   if (typeof body.runId !== "string" || !uuid.test(body.runId)) return fail("Mã lượt chơi không hợp lệ.",400);
   const {player} = await identity(request,false);
   if (!player) return fail("Hãy bắt đầu một lượt chơi mới.",401);
-  const [_, row] = await db.batch([
+  const attempt = await db.prepare("SELECT route FROM race_runs WHERE id=? AND player=?").bind(body.runId,player).first();
+  if (!attempt || !isGuided(attempt.route)) return fail("Lượt đi không còn hiệu lực.",410);
+  const route=attempt.route, minimumMs=guidedLengths[route]*10;
+  const [, row] = await db.batch([
     db.prepare(`UPDATE race_runs SET score=?-started,updated=?
       WHERE id=? AND player=? AND route=? AND score IS NULL AND started BETWEEN ? AND ?`)
-      .bind(now,now,body.runId,player,guided,now-maxAge,now-guidedMetres*10),
+      .bind(now,now,body.runId,player,route,now-maxAge,now-minimumMs),
     db.prepare("SELECT score,started FROM race_runs WHERE id=? AND player=? AND route=?")
-      .bind(body.runId,player,guided),
+      .bind(body.runId,player,route),
   ]);
   const run=row.results[0];
   if (!run || run.started<now-maxAge) return fail("Lượt đi không còn hiệu lực.",410);
@@ -108,7 +111,7 @@ async function finish(request, db, body, now) {
   const value = distance ? body.distanceM : body.timeMs;
   if (!Number.isSafeInteger(value) || value < 1) return fail("Thành tích không hợp lệ.",400);
   const score = distance ? -value : value;
-  const guidedArrival = run.route === guided;
+  const guidedArrival = isGuided(run.route);
   if (guidedArrival && run.score !== value) return fail("Cần xác nhận thời gian tại đích.",422);
   if (run.score !== null && (!guidedArrival || run.name!==null) && (!distance || score >= run.score)) {
     if (!distance && (run.score !== score || run.name !== name)) return fail("Lượt đua này đã ghi kết quả.",409);
@@ -117,15 +120,15 @@ async function finish(request, db, body, now) {
   const elapsed = now-run.started;
   // Generous upper speed bound covers nitro, game-frame jitter and launch-request latency.
   const maxMetres = (elapsed/1000 + 4)*100;
-  const metres = guidedArrival ? guidedMetres : courseLengths[run.route];
+  const metres = guidedArrival ? guidedLengths[run.route] : courseLengths[run.route];
   if (distance ? value>maxMetres : (metres>maxMetres || value<metres*10 || value>maxAge)) {
     return fail("Thành tích chưa phù hợp với chặng và thời gian chơi.",422);
   }
   if (distance && run.updated !== null && now-run.updated < 3000) return json({error:"Chờ vài giây trước khi cập nhật."},429,{"Retry-After":"3"});
   await db.batch([
     db.prepare(`UPDATE race_runs SET score=?,name=?,updated=? WHERE id=? AND player=?
-      AND (score IS NULL OR (route=? AND score=? AND name IS NULL) OR (route=? AND score>? AND updated<=?))`)
-      .bind(score,name,now,body.runId,player,guided,score,tour,score,now-3000),
+      AND (score IS NULL OR (?=1 AND score=? AND name IS NULL) OR (route=? AND score>? AND updated<=?))`)
+      .bind(score,name,now,body.runId,player,Number(guidedArrival),score,tour,score,now-3000),
     db.prepare(`INSERT INTO race_records(route,player,score,name,achieved)
       SELECT route,player,score,name,updated FROM race_runs WHERE id=? AND player=? AND score IS NOT NULL
       ON CONFLICT(route,player) DO UPDATE SET score=excluded.score,name=excluded.name,achieved=excluded.achieved

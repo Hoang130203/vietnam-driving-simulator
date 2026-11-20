@@ -50,7 +50,8 @@ function createDrivingMap(getView) {
     }
     path(edge.points); g.lineWidth = Math.max(3, Math.min(8, 7 * scale)); g.strokeStyle = '#487354'; g.stroke();
     if (guide) {
-      path(guide.points); g.strokeStyle='#1d7960'; g.lineWidth=4; g.stroke();
+      g.strokeStyle='#1d7960'; g.lineWidth=4;
+      for(const points of guide.visiblePaths(edges)){path(points);g.stroke();}
       if (guide.detour) {
         path(guide.detour.points); g.setLineDash([6,4]); g.strokeStyle='#94421e'; g.stroke(); g.setLineDash([]);
       }

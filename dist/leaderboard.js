@@ -7,7 +7,7 @@ function createLeaderboard(routeId,title,serverTimed=false){
   dialog.className='scoreBoard';dialog.setAttribute('aria-labelledby','boardTitle-'+routeId);
   dialog.innerHTML='<div class="boardHead"><h2>Bảng xếp hạng online</h2><button type="button" aria-label="Đóng bảng xếp hạng">✕</button></div><p class="boardMode"></p><p role="status"></p><ol></ol><form hidden><label>Biệt danh <input name="alias" required minlength="1" maxlength="24" autocomplete="off"></label><button class="hot">Gửi thành tích</button></form><button class="reloadBoard">Tải lại bảng</button>';
   dialog.querySelector('h2').id='boardTitle-'+routeId;document.body.append(dialog);
-  dialog.querySelector('.boardMode').textContent=title+' · '+(world?'Quãng đường trong một lượt':serverTimed?'Thời gian từ Ba Sao đến hồ Tam Chúc':'Thời gian gồm giây phạt');
+  dialog.querySelector('.boardMode').textContent=title+' · '+(world?'Quãng đường trong một lượt':serverTimed?'Thời gian hoàn thành tuyến':'Thời gian gồm giây phạt');
   const status=dialog.querySelector('[role=status]'),list=dialog.querySelector('ol'),form=dialog.querySelector('form');
   const name=form.elements.alias,submit=form.querySelector('button'),reload=dialog.querySelector('.reloadBoard');
   const format=world?m=>m.toLocaleString('vi-VN')+' m':formatRaceTime;
