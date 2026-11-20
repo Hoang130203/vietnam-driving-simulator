@@ -158,7 +158,7 @@ window.buildDriverCabin = function(T, rig) {
   panel(sideMirror,.194,.087,new T.MeshBasicMaterial({map:sideTarget.texture,toneMapped:false}),0,0,.032);
   const rearCamera=new T.PerspectiveCamera(27,256/80,.2,620);
   const wingCamera=new T.PerspectiveCamera(38,2,.2,620);
-  let lastMirror=-Infinity,previousSpeed=-1,renderWing=false;
+  let lastMirror=-Infinity,previousSpeed=-1,renderWing=false,preparedEnvironment;
   function instruments(speed){
     const value=Math.round(speed);if(value===previousSpeed)return;
     previousSpeed=value;const c=cluster.ctx;
@@ -179,14 +179,28 @@ window.buildDriverCabin = function(T, rig) {
     cluster.tex.needsUpdate=true;
   }
   return {
+    prepare(renderer,scene,camera){
+      if(!scene.environment||preparedEnvironment===scene.environment)return;
+      preparedEnvironment=scene.environment;
+      if(!renderer.extensions.has('KHR_parallel_shader_compile'))return;
+      // The display and the linear mirror texture use different shader programs.
+      // Submit both batches while the starting scene is visible, before a mirror
+      // draw has to wait for the driver to link each material in turn.
+      renderer.compile(scene,camera);
+      const previous=renderer.getRenderTarget();
+      try{
+        renderer.setRenderTarget(target);
+        renderer.compile(scene,rearCamera);
+      }finally{renderer.setRenderTarget(previous);}
+    },
     update(interior,speed,steering,distance,course){
       cabin.visible=interior;
 
       wheel.rotation.z=interior?steering*.92:0;
       if(interior){instruments(speed);navigation(distance,course);}
     },
-    reflect(renderer,scene,player,distance,lateral){
-      const now=performance.now();if(now-lastMirror<90)return;lastMirror=now;
+    reflect(renderer,scene,player,distance,lateral,interval=90){
+      const now=performance.now();if(now-lastMirror<interval)return;lastMirror=now;
       const cam=renderWing?wingCamera:rearCamera;
       if(renderWing){
         cam.position.set(lateral-1.02,1.13,2-distance);cam.lookAt(lateral-5.6,.97,25-distance);

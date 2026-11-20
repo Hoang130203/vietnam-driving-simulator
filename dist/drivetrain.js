@@ -85,11 +85,7 @@ window.DriveBody={
    c.x+=c.vx*dt;c.z+=c.vz*dt;c.yaw+=c.spin*dt;
    c.speed=c.vx*Math.sin(c.yaw)-c.vz*Math.cos(c.yaw);
  },
- step(c,input,dt){
-   if(!(dt>0))return;
-   const sx=Math.sin(c.yaw),cz=Math.cos(c.yaw),forward=c.vx*sx-c.vz*cz,side=c.vx*cz+c.vz*sx;
-   const grip=c.offroad?4.2:c.model==='rally'?9:7.2;
-   c.steer+=(input.steer-c.steer)*(1-Math.exp(-dt*8));
+ forwardSpeed(c,input,dt,forward){
    const limit=input.top+(input.boost?9:0);
    let drive=input.gas?input.power:0;
    if(input.boost&&forward>=-.3)drive+=13;
@@ -100,7 +96,14 @@ window.DriveBody={
    const drag=(c.offroad?1.65:.48)+(c.offroad?.013:.0031)*forward*forward+(c.brake?17:0);
    const grade=input.grade||0,gravity=9.81*grade/Math.hypot(1,grade);
    const rolling=forward+(drive-gravity)*dt;
-   const next=rolling-Math.sign(rolling)*Math.min(Math.abs(rolling),drag*dt);
+   return rolling-Math.sign(rolling)*Math.min(Math.abs(rolling),drag*dt);
+ },
+ step(c,input,dt){
+   if(!(dt>0))return;
+   const sx=Math.sin(c.yaw),cz=Math.cos(c.yaw),forward=c.vx*sx-c.vz*cz,side=c.vx*cz+c.vz*sx;
+   const grip=c.offroad?4.2:c.model==='rally'?9:7.2;
+   c.steer+=(input.steer-c.steer)*(1-Math.exp(-dt*8));
+   const next=this.forwardSpeed(c,input,dt,forward);
    const wheel=c.steer*.52/(1+Math.abs(next)*.056);
    const yawRate=Math.max(-1.8,Math.min(1.8,next*Math.tan(wheel)/2.68));
    const settle=1-Math.exp(-dt*5);

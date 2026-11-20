@@ -22,10 +22,22 @@ TILE = UNITS // 4
 MAIN = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary'}
 DENIED = {'no', 'private', 'agricultural', 'forestry'}
 PLACE_TYPES = {'city', 'town'}
+# Mapped lanes used for free driving at the HUST landmark. Several have
+# restricted real-world access. Only these service ways enter the game graph.
+HUST_LANES = {
+    36730545, 179997645, 183423974, 596802413, 596802451, 596802481, 596802483,
+    787639813, 824886232, 856290137, 856290139, 856290140, 856290141, 856290142,
+    856290143, 856290146, 905363915, 1106598502, 1106598503, 1106598504, 1106598505,
+    1196399741, 1196399742, 1196399743, 1196399756, 1196399797, 1196399798, 1196399799,
+    1196399800, 1196399801, 1196399802, 1196399803, 1197061361, 1206532587, 1206532588,
+    1207074263, 1207074264, 1207215785, 1217463137, 1217463138, 1217463139,
+}
 
 
 def permitted(way):
     tags = way.tags
+    if tags.get('highway') == 'service':
+        return way.id in HUST_LANES and len(way.nodes) >= 2
     access = next((tags.get(k) for k in ('motorcar', 'motor_vehicle', 'vehicle', 'access') if k in tags), '')
     return access not in DENIED and tags.get('area') != 'yes' and len(way.nodes) >= 2
 
@@ -158,7 +170,7 @@ def short_runs(refs, junctions, virtual_ids):
 
 
 def build(source, output, residential):
-    classes = MAIN | {k+'_link' for k in MAIN} | {'unclassified', 'living_street'}
+    classes = MAIN | {k+'_link' for k in MAIN} | {'unclassified', 'living_street', 'service'}
     if residential:
         classes.add('residential')
     selected = osmium.filter.TagFilter(*[('highway', k) for k in sorted(classes)])
@@ -202,6 +214,8 @@ def build(source, output, residential):
         if len(refs) != len(w.nodes):
             continue
         name = road_label(w.tags)
+        if kind == 'service':
+            name = name or 'Đường nội bộ Bách khoa'
         direction = w.tags.get('oneway:motorcar',w.tags.get('oneway',''))
         one_way = int(direction in ('yes','true','1','-1','reverse') or (direction == '' and (w.tags.get('junction')=='roundabout' or kind=='motorway')))
         if direction in ('-1','reverse'):
@@ -212,7 +226,7 @@ def build(source, output, residential):
             if max(abs(line[-1][0]-line[0][0]),abs(line[-1][1]-line[0][1])) >= 700:
                 overview.append([v for pt in line for v in pt])
         for run, travelled in short_runs(refs,junctions,virtual_ids):
-            line = simplify([(a,b) for _,a,b in run],3)
+            line = simplify([(a,b) for _,a,b in run],1 if kind == 'service' else 3)
             if len(set(line)) >= 2:
                 coords = [v for pt in line for v in pt]
                 edges += 1

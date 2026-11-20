@@ -34,7 +34,7 @@ function selectCourse(id){
   wait=crossingTime=steering=0;green=rightSignal=leftSignal=stopped=parked=false;keys.clear();
   el('damage').hidden=el('incident').hidden=el('exitRun').hidden=el('askCoach').hidden=true;
   el('courseSelect').disabled=el('lessonMode').disabled=false;
-  el('start').textContent='Bắt đầu lái →';el('hint').textContent='Sẵn sàng xuất phát';document.title='Tay Lái Việt · '+course.name;
+  el('start').textContent='Bắt đầu lái →';el('hint').textContent='Sẵn sàng xuất phát';document.title='ViVu3D · '+course.name;
   window.resetDriveTyres?.();window.clearWindscreen?.();window.clearDriveImpact?.();window.setDriveCourse?.(course);refreshStages();drawMap();
 }
 function traffic(){return [...(window.getDriveObstacles?.() || []), ...(window.courseObstacles?.() || [])];}
@@ -272,7 +272,7 @@ function frame(now){
     for(const id of ['theory','lesson','history','fullStart','start'])el(id).disabled=mode==='question'||mode==='incident';
     el('askCoach').disabled=mode!=='driving';
   }
-  window.renderDrive?.(distance,lateral,elapsed,green,steering,speed,mode);
+  window.renderDrive?.(distance,lateral,elapsed,green,steering,speed,mode,now);
   roadMarker();
   el('turn').hidden=(!rightSignal && !leftSignal) || mode==='done';label(el('turn'),leftSignal?'⬅':'➜');
   label(el('speed'),String(Math.round(speed)).padStart(2,'0'));

@@ -1,7 +1,7 @@
 'use strict';
 // The baked imagery and elevation share the bounds of Web Mercator z8 tiles
 // x=200..206, y=110..122. Heights are metres above sea level.
-function createVietnamRelief(T,scene,compact){
+function createVietnamRelief(T,scene,compact,landscapes){
   const urls='streetscape/surfaces/vietnam-',imagery=new T.TextureLoader().load(urls+'landcover.webp');
   imagery.colorSpace=T.SRGBColorSpace;
   const datum={value:0},passWeight={value:0},eye={value:new T.Vector2()},anchor={value:new T.Vector2()};
@@ -20,6 +20,7 @@ function createVietnamRelief(T,scene,compact){
       '#include <map_fragment>\n float mottling=(standNoise(canopy*.028)-.5)*.46+(standNoise(canopy*.083)-.5)*.23; diffuseColor.rgb*=1.+mottling*(1.-smoothstep(3500.,11000.,horizonDistance));')
       .replace('#include <fog_fragment>',
       '#ifdef USE_FOG\n gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor,.17+.79*(1.-exp(-horizonDistance*.00009)));\n #endif');
+    landscapes.shade(shader,'canopy','1.');
   };
   const texels=Float32Array.from({length:256},(_,v)=>3500*(v/255)**1.6);
   // Fixed geographic lattice: shared ridgelines retain exactly the same vertices
@@ -65,15 +66,27 @@ function createVietnamRelief(T,scene,compact){
     canvas.width=canvas.height=1;heights.onload=null;heights.removeAttribute('src');finishLoad();
   };heights.src=urls+'elevation.png';
   // The road mesh, terrain and wheels use the same two triangles in each 64 m cell.
-  const step=64,nodes=new Map();
-  let base=0;
+  // Directly index nearby lattice vertices. The coordinate tags keep distant
+  // locations distinct when they reuse a slot, including west/south of spawn.
+  const step=64,cacheSide=64,cacheMask=cacheSide-1;
+  const nodes=new Float64Array(cacheSide*cacheSide),nodeX=new Int32Array(nodes.length),nodeZ=new Int32Array(nodes.length);
+  nodes.fill(NaN);
+  let base=0,sightRevision=-1;
+  function measured(x,z,coarse){
+    const h=landscapes.elevation(x,z);
+    // A DSM includes roofs and crowns. Retain the street datum in lowlands
+    // and limit discontinuities between measured terrain and the regional DEM.
+    return h===null?coarse:coarse+Math.max(-95,Math.min(95,h-coarse))*
+      T.MathUtils.smoothstep(Math.max(coarse,h-15),18,90)*.85;
+  }
   function node(i,j){
-    const key=i+','+j;if(nodes.has(key))return nodes.get(key);
+    const key=(j&cacheMask)*cacheSide+(i&cacheMask);
+    if(nodeX[key]===i&&nodeZ[key]===j&&!Number.isNaN(nodes[key]))return nodes[key];
     const x=i*step,z=j*step;
     // A low-pass reconstruction removes abrupt changes of grade at DEM texel edges.
     const sample=(dx,dz)=>elevation(...uvAt(x+dx,z+dz));
     const h=sample(0,0)*.5+(sample(-105,0)+sample(105,0)+sample(0,-105)+sample(0,105))*.125;
-    let value=(h-base)*.43;
+    let value=(measured(x,z,h)-base)*.43;
     if(activePass?.stage.id==='kim-bang'){
       const east=(x-activePass.x)*activePass.eastScale,south=z-activePass.z;
       const weight=1-T.MathUtils.smoothstep(Math.hypot(east,south),3600,5600);
@@ -81,7 +94,7 @@ function createVietnamRelief(T,scene,compact){
       const local=activePass.grid.elevation(east,south);
       value+=((local-10)*.80+(10-base)*.43-value)*weight;
     }
-    nodes.set(key,value);return value;
+    nodeX[key]=i;nodeZ[key]=j;nodes[key]=value;return value;
   }
   function ground(x,z){
     if(!pixels||!graph)return 0;
@@ -125,10 +138,12 @@ function createVietnamRelief(T,scene,compact){
     return true;
   }
   function setOrigin(g,x,z){
-    if(graph!==g){graph=g;anchorX=anchorZ=NaN;nodes.clear();base=graph&&pixels?elevation(...uvAt(0,0)):0;datum.value=base;}
     const pass=g?byGraph.get(g):null;
-    if(activePass!==pass){activePass=pass;anchorX=anchorZ=NaN;nodes.clear();}
-    if(nodes.size>12000)nodes.clear();
+    if(sightRevision!==landscapes.revision||graph!==g||activePass!==pass){
+      anchorX=anchorZ=NaN;nodes.fill(NaN);
+      sightRevision=landscapes.revision;activePass=pass;
+      if(graph!==g){graph=g;base=graph&&pixels?elevation(...uvAt(0,0)):0;datum.value=base;}
+    }
     originX=x;originZ=z;
   }
   function update(x,z){
@@ -146,7 +161,7 @@ function createVietnamRelief(T,scene,compact){
         const blend=nearPeak?1-T.MathUtils.smoothstep(Math.hypot(ax+dx-peak.x,az+dz-peak.z),135,640):0;
         summitSurface.setXY(i,blend?ground(ax+dx,az+dz):0,blend);
         const [u,v]=uvAt(ax+dx,az+dz);
-        let h=elevation(u,v);coarse[i]=h;
+        let h=elevation(u,v);h=measured(ax+dx,az+dz,h);coarse[i]=h;
         if(activePass){
           const p=activePass,east=(ax+dx-p.x)*p.eastScale,south=az+dz-p.z;
           const tx=east*p.cos+south*p.sin,tz=-east*p.sin+south*p.cos;

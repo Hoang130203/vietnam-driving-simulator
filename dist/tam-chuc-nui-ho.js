@@ -107,7 +107,8 @@
     }
     const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(tints,3));g.computeVertexNormals();
     const soil=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide}));soil.receiveShadow=true;k.group.add(soil);
-    box(0xae927c,10,1.23,4,49,.32,42,-.75);
+    soil.userData.shoreCover=true;
+    k.deck(0xae927c,10,1.23,4,49,.32,42,-.75);
     function hall(cx,cz,w,d,yaw,main){
       const cs=Math.cos(yaw),sn=Math.sin(yaw),timber=0x674231;
       const place=(color,x,y,z,width,height,depth)=>box(color,cx+x*cs+z*sn,y,cz-x*sn+z*cs,width,height,depth,yaw);
@@ -142,7 +143,7 @@
     for(let i=1;i<walkway.length;i++){
       const [ax,az]=walkway[i-1],[bx,bz]=walkway[i],dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz);
       const cx=(ax+bx)/2,cz=(az+bz)/2,yaw=Math.atan2(dx,dz),nx=dz/len,nz=-dx/len;
-      box(deck,cx,1.23,cz,3.15,.46,len+.55,yaw);
+      k.deck(deck,cx,1.23,cz,3.15,.46,len+.55,yaw);
       for(const side of [-1,1]){
         box(rail,cx+nx*side*1.48,2.36,cz+nz*side*1.48,.13,.18,len,yaw);
         box(rail,cx+nx*side*1.48,1.94,cz+nz*side*1.48,.10,.11,len,yaw);

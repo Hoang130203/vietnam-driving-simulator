@@ -50,6 +50,7 @@ function createTempleFoundations(T,{group,vertexCount}){
           diffuseColor.rgb*=mix(.69,.91+.13*grain,face.x*face.y);`);
       };
       support=new T.Mesh(g,material);support.name='Retaining stonework';support.castShadow=true;support.receiveShadow=true;group.add(support);
+      support.userData.shoreCover=true;
     }
     const points=body.getAttribute('position');let moved=false;
     for(const f of fixtures){

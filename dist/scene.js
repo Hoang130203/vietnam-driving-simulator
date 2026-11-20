@@ -6,7 +6,6 @@
   const impactFX = window.createImpactEffects(scene, canvas);
   scene.fog = new T.FogExp2(0xf1cfac, 0.0061);
   const renderer = new T.WebGLRenderer({canvas, antialias:true, alpha:false, powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.35));
   const camera = new T.PerspectiveCamera(48, 1, 0.12, 600);
   scene.add(new T.HemisphereLight(0xe2ecff, 0x958779, 1.56));
   const sun = new T.DirectionalLight(0xffce8a, 2.55);
@@ -18,7 +17,7 @@
   renderer.shadowMap.autoUpdate=false;
   renderer.shadowMap.needsUpdate=true;
   sun.castShadow=true;
-  sun.shadow.mapSize.set(2048,2048);
+  const graphics=createDrivingGraphics(renderer,camera,sun);
   Object.assign(sun.shadow.camera,{left:-132,right:132,top:103,bottom:-103,near:.5,far:225});
   sun.shadow.normalBias=.065;
   sun.shadow.bias=-.00024;
@@ -707,16 +706,9 @@
 
     return cabinAmount>.012;
   }
-  let width=0,height=0;
-  window.renderDrive=function(distance=0,lateral=2,time=0,green=false,steering=0,speed=0,mode='driving'){
-    const w=canvas.clientWidth,h=canvas.clientHeight;
-    if(w<1||h<1)return;
-    if(w!==width||h!==height){
-      width=w;height=h;renderer.setSize(w,h,false);
-      const aspect=w/h;
-      camera.aspect=aspect;camera.updateProjectionMatrix();
-
-    }
+  window.renderDrive=function(distance=0,lateral=2,time=0,green=false,steering=0,speed=0,mode='driving',now=performance.now()){
+    if(!canvas.clientWidth||!canvas.clientHeight)return;
+    graphics.frame(now,mode==='driving');
     player.position.set(lateral,0,-distance+2.13);
     const showCabin=positionCamera(distance,lateral,time,steering,mode,speed);
     camera.updateMatrixWorld();
@@ -727,7 +719,8 @@
     renderer.autoClear=true;
     if(driverCabin){
       driverCabin.update(showCabin,speed,steering,distance,courses.find(c=>c.id===selectedCourse)||courses[0]);
-      if(showCabin)driverCabin.reflect(renderer,scene,cabinRig,distance,lateral);
+      if(mode==='ready')driverCabin.prepare(renderer,scene,camera);
+      if(showCabin)driverCabin.reflect(renderer,scene,cabinRig,distance,lateral,graphics.profile.mirrorMs);
     }
     renderer.render(scene,camera);
   };

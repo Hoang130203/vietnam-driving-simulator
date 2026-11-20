@@ -26,9 +26,19 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 - [Cúp Bánh Mì](http://127.0.0.1:8000/cup.html)
 - [Sân tập và thi thử](http://127.0.0.1:8000/hall.html)
 
-Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
+Các chế độ lái 3D mặc định dùng đồ họa **Tự động**. Game chọn mức ban đầu theo thông tin phần cứng mà trình duyệt cung cấp, hạ chất lượng khi khung hình chậm kéo dài và tăng lại sau một khoảng chạy ổn định. Để tự chọn, mở **Bố trí buồng lái → Chất lượng đồ họa** ở Xuyên Việt, Cúp Bánh Mì hoặc Sân tập. Các mức **Thấp**, **Vừa** và **Cao** được lưu trên trình duyệt và áp dụng cho các chế độ lái.
+
+Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Ở ngã rẽ, bảng chỉ hướng ghi tên đường hoặc địa danh có lối ô tô tới. Nhấn **M** hoặc chạm bản đồ nhỏ để xem đường quanh xe, kéo để xem xung quanh và dùng **+ / −** để đổi tỷ lệ. Nhấn **M** hoặc **Esc** để lái tiếp. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
 
 Trong Xuyên Việt, mở **Danh lam 3D** ở mục điểm xuất phát để chọn địa danh qua hình xem trước. Khi tới gần, nhấn **Ngắm địa danh 3D** để xoay, chỉnh khoảng cách hoặc mở ảnh đối chiếu. Trong **Quần thể Tam Chúc**, chọn góc toàn cảnh hoặc một trong tám công trình để ngắm từ gần. Nút **Trở lại xe** đưa góc nhìn về nơi đã dừng. [Ảnh và tư liệu đối chiếu](dist/landmark-references.txt).
+
+Trong bản đồ điểm xuất phát, gõ tên đường, số nhà hoặc địa danh, có dấu hoặc không dấu. Thêm tên tỉnh hoặc quận để phân biệt những nơi trùng tên. Thử **48 Hàng Ngang, Hà Nội**, **QL21** hoặc **cây xăng gần đây**. Khi chọn kết quả, bản đồ đánh dấu vị trí để bạn bắt đầu lái. [Tìm Ba Sao trên trang game](https://vivu3d.com/?search=Ba%20Sao) · [Nguồn dữ liệu tìm kiếm](dist/vn-search/CREDITS.txt).
+
+Chọn **Ba Sao · Quốc lộ 21** rồi lái theo đường Điện Biên Phủ về phía Khả Phong để đi từ khu dân cư ra chân núi. Khi chạy trên máy, có thể [mở ngay Ba Sao](http://127.0.0.1:8000/?drive=ba-sao). Biển giao thông báo trước khúc cua, giao lộ và cho biết chiều được phép đi. Chợ, trường học, trạm xăng, quán cà phê và bệnh viện có ký hiệu trên bản đồ.
+
+Game tải cảnh theo vị trí xe. Dữ liệu mặt bằng nhà OSM trên toàn quốc được đóng gói sẵn. Google Open Buildings bổ sung công trình từ ảnh vệ tinh qua mạng, với dữ liệu lưu sẵn quanh 10 thành phố, Tam Chúc và hành lang Ba Sao. Game ưu tiên chiều cao hoặc số tầng OSM, sau đó đến chiều cao vệ tinh ước tính. Mặt tiền và mái hiên được dựng trong game. [Nguồn nhà OSM](dist/vn-osm-buildings/CREDITS.txt) · [Nguồn nhà và chiều cao vệ tinh](dist/vn-structures/CREDITS.txt).
+
+Dân cư WorldPop, loại đường, địa điểm lân cận và giờ Việt Nam điều chỉnh số xe và người đi bộ. Lớp phủ ESA WorldCover phân bố đồng ruộng, rừng, đất xây dựng và mặt nước. [Nguồn dân cư và lớp phủ](dist/vn-environment/CREDITS.txt) · [Nguồn địa điểm](dist/vn-amenities/CREDITS.txt).
 
 ## Đóng góp và báo lỗi
 

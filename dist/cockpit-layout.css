@@ -31,7 +31,7 @@
 .arcade .touch button.active {transform:translateY(2px);background:var(--yellow);color:#122019;border-color:#fff}
 .arcade .osm-credit {right:var(--right);bottom:max(0px,env(safe-area-inset-bottom))}
 .journey #landmark {color:#ffe2a5;font-size:13px}
-.journey #tourView{pointer-events:auto;margin-top:4px;padding:4px 8px;font-size:12px}
+.journey :is(#tourView, #scenicRadio){pointer-events:auto;margin-top:4px;padding:4px 8px;font-size:12px}
 #tourCamera{position:fixed;bottom:calc(var(--bottom) + 16px);left:50%;transform:translateX(-50%);display:flex;
   gap:16px;align-items:center;justify-content:space-between;max-width:94vw;width:max-content;padding:10px 14px;
   border:1px solid #697974;border-radius:9px;background:#142125ed}
