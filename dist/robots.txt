@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /page-content/
 
 Sitemap: https://vivu3d.com/sitemap.xml

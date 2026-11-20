@@ -1,7 +1,7 @@
 import {bundleJourneyScripts} from "./bundle-journey.mjs";
 import {preparePageUrls} from "./page-urls.mjs";
 import {execFileSync,spawn} from "node:child_process";
-import {mkdir,readFile,writeFile} from "node:fs/promises";
+import {mkdir,readFile,rename,writeFile} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
 import path from "node:path";
 import {pipeline} from "node:stream/promises";
@@ -20,6 +20,14 @@ const results = await Promise.all([once(archive,"close"),once(unpack,"close"),pi
 if(results[0][0]!==0||results[1][0]!==0) throw new Error("Could not export the game assets.");
 const pagePaths = await preparePageUrls(client);
 await bundleJourneyScripts(client);
+// Sites normalizes public .html assets with a 307 before invoking the Worker.
+// Keep the document bytes in the asset store and let the Worker own page URLs.
+const documents = path.join(client, "page-content");
+await mkdir(documents, {recursive:true});
+for (const page of pagePaths) {
+  const stem = page === "/" ? "index" : page.slice(1);
+  await rename(path.join(client, stem + ".html"), path.join(documents, stem + ".bin"));
+}
 const stageScript = await readFile(path.join(client,"mountain-stages.js"),"utf8");
 const stages = JSON.parse(stageScript.slice(stageScript.indexOf("window.mountainStages=")+"window.mountainStages=".length).trim().replace(/;$/,""));
 const courses = {river:2240,pass:2480};

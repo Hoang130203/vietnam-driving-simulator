@@ -85,6 +85,17 @@ async function streamWater(graph){
    return await water.load(car.x,car.z);
  }catch{/* Road navigation stays available when this scenery layer is offline. */}
 }
+let framesStarted=false;
+async function prepareWorld(graph,token){
+ gfx??=createWorldScene($('world'),breakfastCall);
+ gfx.preloadVehicle(car.model);gfx.resetFx();
+ loadStructuresNear(graph,car.x,car.z);
+ await Promise.all([gfx.terrainReady,streamWater(graph),gfx.loadDistrict(graph,car.x,car.z)]);
+ if(token!==loadToken)return false;
+ refreshView();seedTraffic();
+ if(!framesStarted){framesStarted=true;requestAnimationFrame(frame);}
+ return true;
+}
 async function startAt(place,restore=null,guided=null){
  guide=null;scenicTrace=null;guideStarted=0;customSaveKey=null;
  $('startGuided').disabled=true;$('guidedInfo').hidden=true;
@@ -93,7 +104,6 @@ async function startAt(place,restore=null,guided=null){
  car.opening=firstDrive;car.openingPose=firstDrive?1:0;car.dawn=firstDrive?1:0;openingCameraTime=0;
  document.body.removeAttribute('data-awaiting-motion');
  document.body.toggleAttribute('data-lakeside',firstDrive);
- gfx.preloadVehicle(car.model);
  const site=place[3]||destinations.find(entry=>restore?.destination===entry.id);
  car.scenicHour=scenicPasses.has(site?.id)?scenicHour():null;
  const departure=restore?null:JourneyDepartures.byId(site?.id);
@@ -146,12 +156,16 @@ async function startAt(place,restore=null,guided=null){
    if(!guided&&scenicPasses.has(site?.id))scenicTrace=createScenicTrace(mountainStages.find(stage=>stage.id===site.id),graph);
    nextWeatherCheck=0;roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
    car.region=place[2]<10.8?'delta':place[2]>21.6||(place[1]>107&&place[2]>11&&place[2]<15)?'highlands':'city';
-   duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();gfx.resetFx();
+   duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();
    if(Number.isFinite(restore?.yaw)){car.x=start.x;car.z=start.z;car.yaw=restore.yaw;trackRoad();}
    loadX=car.x;loadZ=car.z;streamRetry=0;
-   loadStructuresNear(graph,car.x,car.z);
-   await Promise.all([gfx.terrainReady,streamWater(graph),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
-   refreshView();drawDepartureMap();seedTraffic();mode='grid';
+   if(!gfx&&departure&&!guided){
+     // These departures have a responsive scene photograph. Their real road
+     // map, atlas and planner are ready before we need a WebGL context.
+     await streamWater(graph);if(token!==loadToken)return;
+     nearby=graph.nearby(car.x,car.z,560);
+   }else if(!await prepareWorld(graph,token))return;
+   drawDepartureMap();mode='grid';
    $('challenge').disabled=guided;$('startGuided').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Lái tiếp':'Cầm lái';
  }catch(e){if(token===loadToken){$('startGuided').disabled=false;$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
 }
@@ -623,10 +637,21 @@ $('showBoard').onclick=()=>worldBoard.open();
 $('openSetup').onclick=()=>$('journeySetup').showModal();
 $('closeSetup').onclick=()=>$('journeySetup').close();
 $('scoreBoard').onclick=()=>guide?.route.id?boardFor(guide.route).open(guide.timeMs):worldBoard.open(distance-tripStart);
-function begin(){
- if(mode==='error'){if(loadRequest&&indexData&&gfx)startAt(loadRequest.place,loadRequest.restore,loadRequest.guided);else location.reload();return;}
+async function begin(){
+ if(mode==='error'){if(loadRequest&&indexData)startAt(loadRequest.place,loadRequest.restore,loadRequest.guided);else location.reload();return;}
  if(!player||mode!=='grid')return;
  if($('journeySetup').open)$('journeySetup').close();
+ if(!gfx){
+   const token=loadToken;mode='loading';
+   $('launch').disabled=$('challenge').disabled=true;$('launch').textContent='Đang tải cảnh 3D…';
+   try{
+     if(!await prepareWorld(roads,token))return;
+   }catch(e){
+     if(token===loadToken){mode='error';$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;}
+     return;
+   }
+   $('launch').disabled=false;$('challenge').disabled=Boolean(guide);
+ }
  $('openingStill').hidden=true;
  activeTrip=true;tripStart=distance;
  const address=new URL(location.href);
@@ -834,7 +859,7 @@ function featuredDeparture(departure){
 }
 $('departureChoices').addEventListener('click',event=>{
  const link=event.target.closest('a[data-departure]');
- if(!link||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||!indexData||!gfx)return;
+ if(!link||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||!indexData)return;
  event.preventDefault();
  if(link.hasAttribute('aria-current')&&mode!=='error')return;
  history.replaceState(null,'',link.href);
@@ -871,7 +896,7 @@ function samePlace(a,b){return a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2];}
 function choosePlace(place,focus=false){
  pendingPlace=place;const site=place[3];
  if(focus)focusedPin=place;
- activeResult=matches.findIndex(p=>samePlace(p,place));$('travel').disabled=!gfx||!indexData||!!site?.islands;
+ activeResult=matches.findIndex(p=>samePlace(p,place));$('travel').disabled=!indexData||!!site?.islands;
  const raceLink=$('racePass');raceLink.hidden=!site?.km;
  if(site?.km)raceLink.href='cup.html?route='+encodeURIComponent(site.id);
  const approach=site?.approachMeters>=20?' · đường ô tô cách khoảng '+Math.round(site.approachMeters)+' m':'';
@@ -1037,13 +1062,12 @@ $('country').onclick=e=>{
 };
 $('travel').onclick=()=>{
  if(atlasChoice){const {accept}=atlasChoice;atlasChoice=null;accept(pendingPlace);$('atlas').close();return;}
- originatedInPause=false;$('atlas').close();if($('journeySetup').open)$('journeySetup').close();if(indexData&&gfx)startAt(pendingPlace);};
+ originatedInPause=false;$('atlas').close();if($('journeySetup').open)$('journeySetup').close();if(indexData)startAt(pendingPlace);};
 window.addEventListener('resize',()=>{if($('atlas').open)drawAtlas();});
 async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('Chưa tải được dữ liệu đường.');return r.json();}
 (async()=>{
  $('openMap').disabled=true;
  try{
-   gfx=createWorldScene($('world'),breakfastCall);
    const [roadIndex,trafficIndex]=await Promise.all([fetchJSON('vn-roads/index.json'),fetchJSON('vn-traffic/index.json').catch(()=>null)]);
    indexData=roadIndex;
    if(trafficIndex?.graphSourceSha256===roadIndex.sourceSha256&&trafficIndex.osmTimestamp===roadIndex.osmTimestamp)indexData.trafficTiles=trafficIndex.tiles;
@@ -1065,7 +1089,6 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
      const saved=JourneyDepartures.trip;
      await startAt([saved.label||'Hành trình đang lái',saved.lon,saved.lat],saved,savedCustomRoute(saved));
    }
-   requestAnimationFrame(frame);
    const search=params.get('search')?.trim();
    if(search){await openAtlas();$('findPlace').value=search;resetPlaces();}
    else if(collection)await openAtlas('model');

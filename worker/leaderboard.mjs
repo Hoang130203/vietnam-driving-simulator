@@ -160,10 +160,17 @@ async function serveGameAsset(request, env, url) {
       return Response.redirect(url.href, 301);
     }
   }
+  const isPage = pagePaths.has(pathname);
+  if (isPage) {
+    const stem = pathname === "/" ? "index" : pathname.slice(1);
+    url.pathname = "/page-content/" + stem + ".bin";
+  }
   let response = await env.ASSETS.fetch(new Request(url,request));
-  if (response.status === 404 && pagePaths.has(pathname)) {
-    url.pathname = pathname === "/" ? "/index.html" : pathname + ".html";
-    response = await env.ASSETS.fetch(new Request(url,request));
+  if (isPage && response.ok) {
+    const headers = new Headers(response.headers);
+    headers.set("Content-Type", "text/html; charset=utf-8");
+    headers.delete("Content-Disposition");
+    response = new Response(response.body, {status:response.status, headers});
   }
   const range = request.headers.get("Range");
   if (request.method !== "GET" || !range || response.status !== 200 ||
