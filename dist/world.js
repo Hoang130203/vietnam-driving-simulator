@@ -678,14 +678,24 @@ const mountainPlaces=mountainStages.map(stage=>({
 }));
 const destinations=[...models,...mountainPlaces,...catalog];
 const tourPlace=site=>[site.km?site.name:site.name+' · '+site.city,...site.start,site];
+// Representative island positions (longitude, latitude), rounded for the national atlas.
+// Hoàng Sa: https://danang.gov.vn/vi/web/dng/w/ubnd-huyen-hoang-sa-i
+// Trường Sa: https://dulichso.khanhhoa.gov.vn/article/bia-chu-quyen-quan-dao-truong-sa-tai-dao-song-tu-tay-va-dao-nam-yet-980
+const archipelagoPlaces=[
+ {name:'Hoàng Sa',province:'Đà Nẵng',lon:111.95,lat:16.45,
+  islands:[[111.19,15.78],[111.60,16.53],[111.77,16.05],[112.33,16.83],[112.72,16.67]]},
+ {name:'Trường Sa',province:'Khánh Hòa',lon:113.9,lat:10.0,
+  islands:[[111.92,8.63],[114.37,10.18],[114.30,11.43]]}
+].map(site=>['Quần đảo '+site.name,site.lon,site.lat,{...site,kind:'Quần đảo',region:'Trung Bộ'}]);
 for(const [label,values] of [['Vùng',['Bắc Bộ','Trung Bộ','Nam Bộ']],['Tỉnh, thành phố',[...new Set(catalog.map(s=>s.province))].sort((a,b)=>a.localeCompare(b,'vi'))]]){
  const group=document.createElement('optgroup');group.label=label;
  for(const value of values)group.append(new Option(value,value));$('tourFilter').append(group);
 }
-let matches=[],mapPins=[],projection,pageSize=24,focusedPin=null,activeResult=-1;
+let matches=[],mapPins=[],mapLabels=[],projection,pageSize=24,focusedPin=null,activeResult=-1;
 const finder=createAtlasFinder({entries:searchEntries,onLoading:searchLoading,onResults:showSearchResults});
 function searchEntries(){
  const places=destinations.map(s=>({place:tourPlace(s),context:[s.kind,s.city,s.searchNames,s.formerProvince,s.region].filter(Boolean).join(' ')}));
+ for(const place of archipelagoPlaces)places.push({place,featured:true,context:place[0]+' Việt Nam'});
  for(const p of featured)places.push({place:p,featured:true,context:p===baSaoDrive?'Ba Sao Kim Bảng Hà Nam Ninh Bình QL21':''});
  for(const p of atlasData?.places||[])places.push({place:p});
  return places;
@@ -699,11 +709,11 @@ function samePlace(a,b){return a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2];}
 function choosePlace(place,focus=false){
  pendingPlace=place;const site=place[3];
  if(focus)focusedPin=place;
- activeResult=matches.findIndex(p=>samePlace(p,place));$('travel').disabled=!gfx||!indexData;
+ activeResult=matches.findIndex(p=>samePlace(p,place));$('travel').disabled=!gfx||!indexData||!!site?.islands;
  const raceLink=$('racePass');raceLink.hidden=!site?.km;
  if(site?.km)raceLink.href='cup.html?route='+encodeURIComponent(site.id);
  const approach=site?.approachMeters>=20?' · đường ô tô cách khoảng '+Math.round(site.approachMeters)+' m':'';
- $('picked').textContent=place[4]?[place[0],place[4].context].filter(Boolean).join(' · '):site?.km?site.name+' · '+site.km.toLocaleString('vi-VN')+' km trong Cúp':site?site.name+' · '+(site.province||site.city)+' · '+site.kind+approach:place[0]+' · '+place[2].toFixed(3)+'° B, '+place[1].toFixed(3)+'° Đ';
+ $('picked').textContent=site?.islands?place[0]+' · '+site.province+', Việt Nam · Chỉ xem bản đồ':place[4]?[place[0],place[4].context].filter(Boolean).join(' · '):site?.km?site.name+' · '+site.km.toLocaleString('vi-VN')+' km trong Cúp':site?site.name+' · '+(site.province||site.city)+' · '+site.kind+approach:place[0]+' · '+place[2].toFixed(3)+'° B, '+place[1].toFixed(3)+'° Đ';
  for(const b of $('places').children){const selected=Number(b.dataset.index)===activeResult;b.setAttribute('aria-selected',selected);b.setAttribute('aria-pressed',selected);}
  const option=$('places').children[activeResult];
  if(option)$('findPlace').setAttribute('aria-activedescendant',option.id);else $('findPlace').removeAttribute('aria-activedescendant');
@@ -741,6 +751,7 @@ function renderPlaces(count,keepScroll=false){
  matches.slice(0,pageSize).forEach((p,i)=>{
    const b=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('span');
    title.textContent=p[3]?.name||p[0];detail.textContent=p[3]?.km?'Đường đèo · '+p[3].km.toLocaleString('vi-VN')+' km':p[3]?[p[3].kind,p[3].province||p[3].city].filter(Boolean).join(' · '):'Điểm xuất phát';
+   if(p[3]?.islands){title.textContent=p[0];detail.textContent=p[3].province+', Việt Nam · Chỉ xem bản đồ';}
    if(p[4])detail.textContent=[p[4].kind,p[4].context,atlasDistance(p[4].km)+' từ '+(p[4].anchor||'xe')].filter(Boolean).join(' · ');
    if(p===baSaoDrive)detail.textContent='Điểm xuất phát · Phường Tam Chúc · Ninh Bình (Hà Nam cũ)';
    if(filter==='model'&&p[3]?.custom){
@@ -758,16 +769,38 @@ function renderPlaces(count,keepScroll=false){
 function resetPlaces(){focusedPin=null;pageSize=$('tourFilter').value==='model'?models.length:24;placeList();}
 $('morePlaces').onclick=()=>{pageSize+=24;placeList(true);};
 $('tourFilter').onchange=resetPlaces;
+function drawArchipelago(g,place,at,w,h){
+ const site=place[3],points=site.islands.map(([lon,lat])=>at(lon,lat));
+ if(!points.some(([x,y])=>x>=0&&x<=w&&y>=0&&y<=h))return;
+ g.save();
+ g.fillStyle=pendingPlace===place?'#ffad77':'#cde2ac';
+ for(const [x,y] of points){
+   g.beginPath();g.arc(x,y,2.4,0,Math.PI*2);g.fill();
+   mapPins.push({x,y,place});
+ }
+ g.font='600 12px "Segoe UI", sans-serif';g.textAlign='center';
+ const half=g.measureText(place[0]).width/2;
+ const x=clamp(at(site.lon,site.lat)[0],half+4,w-half-4);
+ const y=clamp(Math.min(...points.map(p=>p[1]))-19,15,h-17);
+ g.strokeStyle='#132b32';g.lineWidth=3;g.lineJoin='round';g.fillStyle='#eff4df';
+ g.strokeText(place[0],x,y);g.fillText(place[0],x,y);
+ g.font='11px "Segoe UI", sans-serif';g.strokeText('(Việt Nam)',x,y+13);g.fillText('(Việt Nam)',x,y+13);
+ mapLabels.push({left:x-half-3,right:x+half+3,top:y-13,bottom:y+16,place});
+ g.restore();
+}
 function drawAtlas(){
  const c=$('country'),g=c.getContext('2d'),w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
  const ratio=Math.min(2,devicePixelRatio);c.width=Math.round(w*ratio);c.height=Math.round(h*ratio);g.setTransform(ratio,0,0,ratio,0,0);
- let west=101.75,east=110.25,south=7.8,north=24.2;
- if(focusedPin){
+ let west=101.75,east=117.6,south=6.5,north=24.2;
+ if(focusedPin&&!focusedPin[3]?.islands){
    const lon=focusedPin[3]?.lon??focusedPin[1],lat=focusedPin[3]?.lat??focusedPin[2];
    west=lon-.022;east=lon+.022;south=lat-.022;north=lat+.022;
- }else if(matches.length&&($('tourFilter').value!=='all'||$('findPlace').value.trim())){
+ }else if(focusedPin||matches.length&&($('tourFilter').value!=='all'||$('findPlace').value.trim())){
    west=Infinity;east=-Infinity;south=Infinity;north=-Infinity;
-   for(const p of matches){const lon=p[3]?.lon??p[1],lat=p[3]?.lat??p[2];west=Math.min(west,lon);east=Math.max(east,lon);south=Math.min(south,lat);north=Math.max(north,lat);}
+   for(const p of focusedPin?[focusedPin]:matches){
+     const site=p[3],points=site?.islands||[[site?.lon??p[1],site?.lat??p[2]]];
+     for(const [lon,lat] of points){west=Math.min(west,lon);east=Math.max(east,lon);south=Math.min(south,lat);north=Math.max(north,lat);}
+   }
    const pad=Math.max(.018,Math.min(.3,Math.max(east-west,north-south)*.13));
    west-=pad;east+=pad;south-=pad;north+=pad;
  }
@@ -775,16 +808,19 @@ function drawAtlas(){
  const at=(lon,lat)=>[cx+(lon-lon0)*scale*.96,cy-(lat-lat0)*scale];
  projection=(x,y)=>[lon0+(x-cx)/(scale*.96),lat0-(y-cy)/scale];
  g.fillStyle='#132b32';g.fillRect(0,0,w,h);g.strokeStyle='#284149';g.lineWidth=.6;g.beginPath();
- for(let lon=101;lon<112;lon++){const [x]=at(lon,16);g.moveTo(x,0);g.lineTo(x,h);}
- for(let lat=8;lat<25;lat++){const [,y]=at(106,lat);g.moveTo(0,y);g.lineTo(w,y);}g.stroke();
+ for(let lon=Math.floor(west);lon<=Math.ceil(east);lon++){const [x]=at(lon,16);g.moveTo(x,0);g.lineTo(x,h);}
+ for(let lat=Math.floor(south);lat<=Math.ceil(north);lat++){const [,y]=at(106,lat);g.moveTo(0,y);g.lineTo(w,y);}g.stroke();
  g.strokeStyle='#a8cb9c';g.lineWidth=.65;g.beginPath();
  for(const line of atlasData?.lines||[]){for(let i=0;i<line.length;i+=2){const p=at(line[i]/1e5,line[i+1]/1e5);if(!i)g.moveTo(...p);else g.lineTo(...p);}}g.stroke();
- mapPins=[];for(const place of matches){
+ mapPins=[];mapLabels=[];for(const place of matches){
+   if(place[3]?.islands)continue;
    const site=place[3],[x,y]=at(site?.lon??place[1],site?.lat??place[2]);mapPins.push({x,y,place});
    g.fillStyle=site?.custom?'#ffe2a5':'#97cdb9';g.beginPath();g.arc(x,y,site?.custom?3:1.55,0,Math.PI*2);g.fill();
  }
  g.font='600 11px Segoe UI';g.fillStyle='#f5ecd2';
  for(const p of [featured[0],featured[2],featured[1]]){const [x,y]=at(p[1],p[2]);if(x<0||x>w||y<0||y>h)continue;g.fillRect(x-1.5,y-1.5,3,3);g.fillText(p[0],clamp(x+5,2,w-g.measureText(p[0]).width-2),y-4);}
+ for(const place of archipelagoPlaces)drawArchipelago(g,place,at,w,h);
+ if(pendingPlace[3]?.islands)return;
  const [x,y]=at(pendingPlace[3]?.lon??pendingPlace[1],pendingPlace[3]?.lat??pendingPlace[2]);g.strokeStyle='#fff';g.fillStyle='#ff713c';g.lineWidth=1.6;g.beginPath();g.arc(x,y,4.5,0,Math.PI*2);g.fill();g.stroke();
 }
 function setAtlasView(map){
@@ -829,6 +865,8 @@ $('findPlace').onkeydown=e=>{
 $('country').onclick=e=>{
  if(!projection)return;
  const rect=$('country').getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
+ const label=mapLabels.find(b=>x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom);
+ if(label){choosePlace(label.place,true);return;}
  let best=null,range=10;
  for(const pin of mapPins){const d=Math.hypot(pin.x-x,pin.y-y);if(d<range){best=pin.place;range=d;}}
  const [lon,lat]=projection(x,y);choosePlace(best||['Điểm trên bản đồ',lon,lat],true);

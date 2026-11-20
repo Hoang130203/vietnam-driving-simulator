@@ -1,7 +1,7 @@
 'use strict';
 // Parse and search the country index away from the driving and map render loop.
 const types={
-  road:['Đường',''],address:['Địa chỉ',''],city:['Thành phố',''],town:['Thị trấn',''],village:['Làng, thôn',''],locality:['Địa danh',''],
+  road:['Đường',''],address:['Địa chỉ',''],city:['Thành phố',''],town:['Thị trấn',''],village:['Làng, thôn',''],locality:['Địa danh',''],archipelago:['Quần đảo','quan dao'],
   fuel:['Cây xăng','cay xang|tram xang|tram nhien lieu|gas station'],cafe:['Quán cà phê','quan ca phe|ca phe|cafe|coffee'],
   market:['Chợ','cho|market'],school:['Trường học','truong hoc|truong|dai hoc|school'],hospital:['Bệnh viện','benh vien|benh vien da khoa|hospital'],
   restaurant:['Nhà hàng','nha hang|quan an|restaurant'],hotel:['Khách sạn','khach san|hotel'],shop:['Cửa hàng','cua hang|shop'],
@@ -41,7 +41,8 @@ function plan(text){
   let query=fold(text),near=/\b(?:gan day|gan toi|gan xe|quanh day|quanh toi|quanh xe|near me|nearby)\b/.test(query);
   query=query.replace(/\b(?:gan day|gan toi|gan xe|quanh day|quanh toi|quanh xe|near me|nearby)\b/g,' ').replace(/ +/g,' ').trim();
   const original=query;
-  const category=categories.find(c=>query===c.text||query.startsWith(c.text+' '));
+  // “Trường Sa” is a place name even though “trường” alone can mean school.
+  const category=categories.find(c=>(c.text!=='truong'||!/^truong sa(?: |$)/.test(query))&&(query===c.text||query.startsWith(c.text+' ')));
   if(category)query=query.slice(category.text.length).trim();
   const anchor=category&&query.match(/^(?:gan|quanh) (.+)$/)?.[1];
   if(anchor){query='';near=true;}
