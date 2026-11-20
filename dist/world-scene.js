@@ -85,9 +85,17 @@
     material.fern=new T.MeshLambertMaterial({map:texture('surfaces/bank-fern.webp'),alphaTest:.38,side:T.DoubleSide,color:0xd6dfd1});
     // A photographed crown already contains branch and leaf shading. Shared
     // upward normals avoid black panels when a crossed sheet faces away from the sun.
+    const foliageEye=new T.Vector3();
     for(const canopy of [material.tree,material.pine,material.palm,material.fern]){
-      canopy.customProgramCacheKey=()=>canopy===material.pine||canopy===material.fern?'understory':'canopy';
+      canopy.customProgramCacheKey=()=>canopy===material.fern?'fern':canopy===material.pine?'pine':'canopy';
       canopy.onBeforeCompile=shader=>{
+        // Finish the transition inside the area shared by successive 155 m rebuilds.
+        const range=canopy===material.fern?'120.,185.':'325.,425.';
+        shader.uniforms.foliageEye={value:foliageEye};
+        shader.vertexShader='uniform vec3 foliageEye; varying float foliageFade;\n'+shader.vertexShader.replace('#include <project_vertex>',
+          '#include <project_vertex>\n foliageFade=0.;\n#ifdef USE_INSTANCING\n foliageFade=foliageEye.z*smoothstep('+range+',distance(instanceMatrix[3].xz,foliageEye.xy));\n#endif');
+        shader.fragmentShader='varying float foliageFade;\n'+shader.fragmentShader.replace('#include <alphatest_fragment>',
+          '#include <alphatest_fragment>\n if(foliageFade>0. && foliageFade>=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715)))))discard;');
         shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>',
           '#include <beginnormal_vertex>\n objectNormal=vec3(0.,1.,0.);');
         shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>',
@@ -688,7 +696,7 @@
             const tree=registerObstacle({id,kind:'tree',x:lx,z:lz,radius:Math.max(.16,h*.02),height:h,parts:[]});
             const planes=2;
             for(let k=0;k<planes;k++)instance(pine?'pine':'tree',unitPlane,lx,h*.485,lz,w,h,1,angle+k*Math.PI/2,tint,tree);
-            if(dist>210||rand()>.76)return;
+            if(dist>365||rand()>.76)return;
             for(let k=0;k<3;k++){
               const fx=lx+(rand()-.5)*12,fz=lz+(rand()-.5)*12,fh=.6+rand()*1.0;
               if(!blocked(fx,fz,1.5))instance('fern',unitPlane,fx,fh*.47,fz,fh*2.24,fh,1,rand()*Math.PI,tint);
@@ -986,6 +994,7 @@
     }
     const driveFx=createDrivingFX(T,scene);
     function render(car,traffic,dt,inside=false){
+      foliageEye.set(car.x-originX,car.z-originZ,car.sightView?0:1);
       if(!car||!Number.isFinite(car.x)||!Number.isFinite(car.z))return;
       if(car.sightView||car.flood)inside=false;
       resize();dt=Math.max(0,Math.min(.12,dt||0));version++;totalDriven+=Math.abs(car.speed||0)*dt;
