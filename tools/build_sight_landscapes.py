@@ -10,7 +10,6 @@ from io import BytesIO
 import json
 import math
 from pathlib import Path
-import subprocess
 from tempfile import TemporaryDirectory
 import threading
 import time
@@ -24,7 +23,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import tifffile
-from pack_sight_surfaces import pack_page
+from pack_sight_surfaces import pack_pages, stops
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,7 +132,6 @@ def build(degree, cells, workers):
         stem = OUT/f'{tag}-{start//32}'
         colour.save(stem.with_suffix('.webp'), quality=85, method=5)
         surface.save(stem.with_suffix('.png'), optimize=True)
-        pack_page(stem.with_suffix('.png'))
     print(tag, len(cells), flush=True)
     return tag, [[x%GRID, y%GRID] for x,y in cells]
 
@@ -168,16 +166,6 @@ def build_water(index):
         list(batches.map(pack,groups.items()))
 
 
-def stops():
-    extract = r"""const fs=require('fs');global.window=global;
-    const scripts=Array.from(fs.readFileSync('dist/index.html','utf8').matchAll(/src="([^"]+\.js)"/g),m=>m[1]);
-    for(const file of scripts.slice(scripts.indexOf('tourism-catalog.js'),scripts.indexOf('vietnam-landmarks.js')+1))
-      require('./dist/'+file);
-    console.log(JSON.stringify([...VietnamTourism.entries,...VietnamLandmarks.entries]
-      .flatMap(p=>[[p.lon,p.lat],p.start])));"""
-    return json.loads(subprocess.check_output(['node','-e',extract],cwd=ROOT))
-
-
 def main():
     coords = stops()
     degrees = defaultdict(set)
@@ -190,6 +178,7 @@ def main():
         jobs = [groups.submit(build, degree, cells, workers) for degree,cells in sorted(degrees.items())]
         index = dict(job.result() for job in jobs)
     (OUT/'index.json').write_text(json.dumps(index,separators=(',',':'))+'\n', encoding='utf8')
+    pack_pages(OUT, index, coords)
     build_water(index)
 
 
