@@ -1,7 +1,7 @@
 'use strict';
 // The tops share the ground triangulation used by the road. The vertical faces
 // extend into the bank, including on the downhill side of a raised road.
-function createGroundedWalkways(T,{cx,cz,step,height,ground,wet}){
+function createGroundedWalkways(T,{cx,cz,step,height,ground,wet,needsDetail}){
   const tops=[],coping=[],frontages=[],faces=[],cells=new Map();
   const cell=(x,z)=>Math.floor(x/16)+','+Math.floor(z/16);
   function face(ax,az,bx,bz,lift){
@@ -21,7 +21,12 @@ function createGroundedWalkways(T,{cx,cz,step,height,ground,wet}){
     }
   }
   function ribbon(s,start,end,left,right,target,lift,skipWet){
-    const count=Math.ceil((end-start)/4);
+    // On ordinary dry ground, face() and surface() already split at every
+    // terrain triangle. Only a bank or a graded road needs closer samples.
+    const x0=s.ax+s.fx*start,z0=s.az+s.fz*start,x1=s.ax+s.fx*end,z1=s.az+s.fz*end;
+    const pad=Math.max(Math.abs(left),Math.abs(right));
+    const fine=needsDetail(Math.min(x0,x1)-pad,Math.min(z0,z1)-pad,Math.max(x0,x1)+pad,Math.max(z0,z1)+pad);
+    const count=Math.ceil((end-start)/(fine?4:32));
     let open=false;
     for(let i=0;i<count;i++){
       const a=start+(end-start)*i/count,b=start+(end-start)*(i+1)/count;

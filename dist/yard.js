@@ -68,8 +68,8 @@ function parkBox(i){
 }
 const scene=new Y.Scene();scene.background=new Y.Color(0xa9c6d6);scene.fog=new Y.FogExp2(0xc2cfce,.0055);
 const renderer=new Y.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 const camera=new Y.PerspectiveCamera(54,1,.1,550);
+const graphics=createDrivingGraphics(renderer,camera);
 new Y.TextureLoader().load('streetscape/sky.jpg',texture=>{
  texture.mapping=Y.EquirectangularReflectionMapping;texture.colorSpace=Y.SRGBColorSpace;
  scene.background=texture;scene.environment=texture;
@@ -209,7 +209,7 @@ const car={x:0,y:0,h:0,v:0,steer:0,gear:1,signal:'',belt:false,hazard:false};
 const input=createDriveInput(),penalties=[],mapCtx=$('map').getContext('2d');
 let index=0,s=0,oldS=0,mode='ready',score=100,wallStart=0,time=0,stageStart=0,overhead=false;
 let done=new Set(),flags={},emergency=null,emergencyIndex=6,emergencyOnly=false,lastTime=performance.now();
-let note='',noteUntil=0,lastHud='',lastWidth=0,lastHeight=0;
+let note='',noteUntil=0,lastHud=-Infinity;
 pick.add(new Option('Tình huống nguy hiểm bất ngờ',11));
 function resetFlags(){flags={stop:false,hold:0,roll:0,park:false,reverse:0,fast:false,slow:false,track:false,off:false,wrong:false,overspeed:0,overTime:0,stageTime:0};stageStart=time;}
 function tell(msg,seconds=3){note=msg;noteUntil=time+seconds;}
@@ -238,7 +238,7 @@ function scenario(requested){
  Object.assign(car,{x:p.x,y:p.y,h:p.h,v:0,steer:0,gear:1,signal:'',belt:index!==0,hazard:false});
  mode='ready';time=0;score=100;penalties.length=0;input.clear();done.clear();
  resetFlags();emergency=null;emergencyIndex=[4,6,8][Math.floor(Math.random()*3)];
- note='';noteUntil=0;lastHud='';$('go').disabled=false;$('go').textContent=exam?'Bắt đầu thi':'Bắt đầu lái';
+ note='';noteUntil=0;lastHud=-Infinity;$('go').disabled=false;$('go').textContent=exam?'Bắt đầu thi':'Bắt đầu lái';
  $('name').textContent=emergencyOnly?'Tình huống nguy hiểm':lessons[index][0];
  $('guide').textContent=emergencyOnly?'Khi nhận tín hiệu, phanh ngay, bật đèn cảnh báo H. Chờ hết báo động rồi tắt H.':lessons[index][1];
  syncButtons();hud();
@@ -387,25 +387,36 @@ function hud(){
  else cue='Còn '+Math.max(0,Math.ceil(z.to-s))+' m trong bài.';
  $('cue').textContent=cue;
 }
+const mapScale=Math.min((190-18)/(right-left),(138-12)/(topY-bottom));
+const px=x=>95+(x-(right+left)/2)*mapScale,py=y=>69-(y-(topY+bottom)/2)*mapScale;
+const mapZones=zones.map(z=>{
+ const path=new Path2D();let begun=false;
+ for(const p of route){
+  if(p.s<z.from||p.s>z.to)continue;
+  if(begun)path.lineTo(px(p.x),py(p.y));else path.moveTo(px(p.x),py(p.y));
+  begun=true;
+ }
+ return path;
+});
 function miniMap(){
- const ctx=mapCtx,w=190,h=138,k=Math.min((w-18)/(right-left),(h-12)/(topY-bottom));
- const px=x=>w/2+(x-(right+left)/2)*k,py=y=>h/2-(y-(topY+bottom)/2)*k;
- ctx.fillStyle='#1b2c27';ctx.fillRect(0,0,w,h);
- zones.forEach((z,i)=>{ctx.strokeStyle=i===index?'#dfeb88':'#819387';ctx.lineWidth=i===index?3:1.5;ctx.beginPath();let begun=false;
-  for(const p of route){if(p.s<z.from||p.s>z.to)continue;if(!begun)ctx.moveTo(px(p.x),py(p.y));else ctx.lineTo(px(p.x),py(p.y));begun=true;}ctx.stroke();
+ const ctx=mapCtx;
+ ctx.fillStyle='#1b2c27';ctx.fillRect(0,0,190,138);
+ mapZones.forEach((path,i)=>{
+  ctx.strokeStyle=i===index?'#dfeb88':'#819387';ctx.lineWidth=i===index?3:1.5;ctx.stroke(path);
  });
  ctx.save();ctx.translate(px(car.x),py(car.y));ctx.rotate(car.h);ctx.fillStyle='white';ctx.beginPath();ctx.moveTo(0,-5);ctx.lineTo(3.6,4);ctx.lineTo(-3.6,4);ctx.closePath();ctx.fill();ctx.restore();
 }
 function frame(now){
  const dt=clamp((now-lastTime)/1000,0,.08);lastTime=now;drive(dt);
- const w=$('world').clientWidth,h=$('world').clientHeight;
- if(w&&h&&(lastWidth!==w||lastHeight!==h)){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();lastWidth=w;lastHeight=h;}
+ graphics.frame(now,mode==='running');
  const height=altitude(s);vehicle.position.set(car.x,height+.05,-car.y);vehicle.rotation.order='YXZ';vehicle.rotation.y=-car.h;vehicle.rotation.x=Math.atan((altitude(s+1)-altitude(s-1))/2)*Math.cos(car.h-point(s).h);
  const back=overhead?5.5:7.8,up=overhead?17:4.6,look=overhead?0:3.5;
  camera.position.set(car.x-Math.sin(car.h)*back,height+up,-car.y+Math.cos(car.h)*back);
  camera.lookAt(car.x+Math.sin(car.h)*look,height+.3,-car.y-Math.cos(car.h)*look);
  lamp.material.color.setHex(index===4&&lightGreen()?0x36e865:0xff3f25);
- renderer.render(scene,camera);hud();miniMap();requestAnimationFrame(frame);
+ renderer.render(scene,camera);
+ if(now-lastHud>=100){hud();miniMap();lastHud=now;}
+ requestAnimationFrame(frame);
 }
 const controls={q:'left',e:'right',b:'belt',h:'hazard',g:'shift',r:'reverse'};
 function changeCamera(){overhead=!overhead;$('camera').textContent=overhead?'Góc bám xe':'Nhìn toàn cảnh';}

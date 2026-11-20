@@ -66,7 +66,11 @@ function createVietnamRelief(T,scene,compact,landscapes){
     canvas.width=canvas.height=1;heights.onload=null;heights.removeAttribute('src');finishLoad();
   };heights.src=urls+'elevation.png';
   // The road mesh, terrain and wheels use the same two triangles in each 64 m cell.
-  const step=64,nodes=new Map();
+  // Directly index nearby lattice vertices. The coordinate tags keep distant
+  // locations distinct when they reuse a slot, including west/south of spawn.
+  const step=64,cacheSide=64,cacheMask=cacheSide-1;
+  const nodes=new Float64Array(cacheSide*cacheSide),nodeX=new Int32Array(nodes.length),nodeZ=new Int32Array(nodes.length);
+  nodes.fill(NaN);
   let base=0,sightRevision=-1;
   function measured(x,z,coarse){
     const h=landscapes.elevation(x,z);
@@ -76,7 +80,8 @@ function createVietnamRelief(T,scene,compact,landscapes){
       T.MathUtils.smoothstep(Math.max(coarse,h-15),18,90)*.85;
   }
   function node(i,j){
-    const key=i+','+j;if(nodes.has(key))return nodes.get(key);
+    const key=(j&cacheMask)*cacheSide+(i&cacheMask);
+    if(nodeX[key]===i&&nodeZ[key]===j&&!Number.isNaN(nodes[key]))return nodes[key];
     const x=i*step,z=j*step;
     // A low-pass reconstruction removes abrupt changes of grade at DEM texel edges.
     const sample=(dx,dz)=>elevation(...uvAt(x+dx,z+dz));
@@ -89,7 +94,7 @@ function createVietnamRelief(T,scene,compact,landscapes){
       const local=activePass.grid.elevation(east,south);
       value+=((local-10)*.80+(10-base)*.43-value)*weight;
     }
-    nodes.set(key,value);return value;
+    nodeX[key]=i;nodeZ[key]=j;nodes[key]=value;return value;
   }
   function ground(x,z){
     if(!pixels||!graph)return 0;
@@ -133,11 +138,12 @@ function createVietnamRelief(T,scene,compact,landscapes){
     return true;
   }
   function setOrigin(g,x,z){
-    if(sightRevision!==landscapes.revision){sightRevision=landscapes.revision;anchorX=anchorZ=NaN;nodes.clear();}
-    if(graph!==g){graph=g;anchorX=anchorZ=NaN;nodes.clear();base=graph&&pixels?elevation(...uvAt(0,0)):0;datum.value=base;}
     const pass=g?byGraph.get(g):null;
-    if(activePass!==pass){activePass=pass;anchorX=anchorZ=NaN;nodes.clear();}
-    if(nodes.size>12000)nodes.clear();
+    if(sightRevision!==landscapes.revision||graph!==g||activePass!==pass){
+      anchorX=anchorZ=NaN;nodes.fill(NaN);
+      sightRevision=landscapes.revision;activePass=pass;
+      if(graph!==g){graph=g;base=graph&&pixels?elevation(...uvAt(0,0)):0;datum.value=base;}
+    }
     originX=x;originZ=z;
   }
   function update(x,z){

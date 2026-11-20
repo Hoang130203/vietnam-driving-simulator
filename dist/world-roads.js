@@ -12,6 +12,7 @@ class VietnamRoads {
  constructor(index,lon,lat){
    this.available=new Set(index.tiles);this.splits=index.splits||{};this.subtiles=new Set(index.subtiles||[]);
    this.remote=index.tileBase;this.local=new Set(index.localTiles||[]);this.lon=lon;this.lat=lat;
+   this.trafficTiles=new Set(index.trafficTiles||[]);
    this.mx=111320*Math.cos(lat*Math.PI/180);this.my=110900;
    this.cache=new Map();this.edges=new Map();this.nodes=new Map();this.buckets=new Map();
    this.stamp=0;
@@ -22,7 +23,10 @@ class VietnamRoads {
    if(!this.cache.has(key)){
      const pending=(async()=>{
        const base=this.remote&&!this.local.has(key)?this.remote:'vn-roads/';
-       return fetchMapTile(base+key+'.gz');
+       const [rows,details]=await Promise.all([fetchMapTile(base+key+'.gz'),this.trafficTiles.has(key)
+         ?fetchMapTile('vn-traffic/'+key+'.gz').catch(()=>null):undefined]);
+       if(details===null)this.cache.delete(key);
+       return {rows,details};
      })().catch(e=>{this.cache.delete(key);throw e;});
      this.cache.set(key,pending);
    }return this.cache.get(key);
@@ -43,7 +47,7 @@ class VietnamRoads {
    const stamp=++this.stamp,tiles=await Promise.all(keys.map(k=>this.tile(k)));
    if(stamp!==this.stamp)return;
    const fresh=new Map(),nodes=new Map(),buckets=new Map();
-   for(const rows of tiles)for(const row of rows){
+   for(const {rows,details} of tiles)for(const row of rows){
      const [id,start,end,name,kind,oneway,coords]=row;if(fresh.has(id))continue;
      let edge=this.edges.get(id);
      if(!edge){
@@ -57,6 +61,14 @@ class VietnamRoads {
        edge={id,start,end,name,kind,oneway:Boolean(oneway),points,dist,length};
        if(kind==='service')edge.authoredHalfWidth=window.VietnamRoadWidths?.get(Math.min(start,end)+':'+Math.max(start,end));
      }
+     if(!edge.traffic&&details?.[id]){
+       edge.traffic=details[id];
+       edge.controls=(edge.traffic.controls||[]).map(([node,lon,lat,flags,direction])=>{
+         const p=this.point(lon/1e5,lat/1e5);
+         const s=node===start?0:node===end?edge.length:this.nearest(p.x,p.z,[edge]).s;
+         return {node,s,flags,direction};
+       });
+     }
      fresh.set(id,edge);
      for(const n of new Set([start,end])){if(!nodes.has(n))nodes.set(n,[]);nodes.get(n).push(edge);}
      // Sample a long straight segment too, so the spatial index covers its middle.
@@ -67,7 +79,8 @@ class VietnamRoads {
      }
      for(const k of cells){if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(edge);}
    }
-   this.edges=fresh;this.nodes=nodes;this.buckets=buckets;this.signature=signature;
+   this.edges=fresh;this.nodes=nodes;this.buckets=buckets;
+   this.signature=tiles.some(tile=>tile.details===null)?null:signature;
    for(const k of this.cache.keys())if(!keys.includes(k))this.cache.delete(k);
  }
  nearby(x,z,r){
@@ -96,11 +109,26 @@ class VietnamRoads {
    const yaw=Math.atan2((b.x-a.x)*dir,(a.z-b.z)*dir);
    return {x:a.x+(b.x-a.x)*f+Math.cos(yaw)*lane,z:a.z+(b.z-a.z)*f+Math.sin(yaw)*lane,yaw};
  }
+ allows(c,node,edge,dir){
+   const rules=c.edge.traffic?.turns;
+   if(!rules)return true;
+   const mode=c.kind==='scooter'?2:1;
+   let mandatory=false,allowed=false;
+   for(const [,via,target,type,mask] of rules){
+     if(via!==node||!(mask&mode))continue;
+     let matches=edge.traffic?.way===target;
+     if(matches&&target===c.edge.traffic.way&&type.endsWith('_u_turn'))matches=edge.id===c.edge.id&&dir===-c.dir;
+     if(type.startsWith('only_')){mandatory=true;allowed||=matches;}
+     else if(matches)return false;
+   }
+   return !mandatory||allowed;
+ }
  options(c){
    const node=c.dir>0?c.edge.end:c.edge.start,base=this.sample({...c,s:c.dir>0?c.edge.length:0}).yaw,list=[];
    for(const edge of this.nodes.get(node)||[])for(const dir of [1,-1]){
      if(dir<0&&edge.oneway||edge.id===c.edge.id&&dir===-c.dir)continue;
      if((dir>0?edge.start:edge.end)!==node)continue;
+     if(!this.allows(c,node,edge,dir))continue;
      const next={edge,dir,s:dir>0?0:edge.length};
      const turn=this.sample(next).yaw-base;
      list.push({...next,angle:Math.atan2(Math.sin(turn),Math.cos(turn))});
@@ -115,7 +143,8 @@ class VietnamRoads {
      if(meters<=.00001)break;
      const options=this.options(c);
      let next=options.length?choose(options):null;
-     if(!next&&!c.edge.oneway)next={edge:c.edge,s:c.s,dir:-c.dir};
+     const node=c.dir>0?c.edge.end:c.edge.start;
+     if(!next&&!c.edge.oneway&&this.allows(c,node,c.edge,-c.dir))next={edge:c.edge,s:c.s,dir:-c.dir};
      if(!next)break;
      Object.assign(c,{edge:next.edge,dir:next.dir,s:next.s});
    }return moved;

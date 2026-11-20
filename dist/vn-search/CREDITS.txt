@@ -17,4 +17,4 @@ thuộc vào đóng góp OpenStreetMap ở từng nơi.
 
 Dữ liệu phái sinh được phân phối theo ODbL 1.0. index.json ghi
 liên kết bản nguồn và mã SHA-256. Mã tạo dữ liệu nằm trong
-tools/build_vn_search.py ở kho mã nguồn Tay Lái Việt.
+tools/build_vn_search.py ở kho mã nguồn ViVu3D.

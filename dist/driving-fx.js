@@ -1,6 +1,6 @@
 ﻿/* Player feedback shared by Xuyên Việt and Cúp Bánh Mì. Simulation positions are
    stored in metres; only the GPU buffers use the renderer's local origin. */
-window.createDrivingFX = function (T, scene) {
+window.createDrivingFX = function (T, scene, renderer) {
   'use strict';
   const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -212,7 +212,7 @@ window.createDrivingFX = function (T, scene) {
       positions.set([p.x-ox,p.y,p.z-oz],i*3);sizes[i]=p.size*(1+age*3.5);opacity[i]=p.alpha*(1-age);count++;
     }
     puffs.visible=count>0;
-    if(count){for(const a of Object.values(smokeGeo.attributes))a.needsUpdate=true;smokeMat.uniforms.pixels.value=window.innerHeight*Math.min(devicePixelRatio||1,1.5)*.78;}
+    if(count){for(const a of Object.values(smokeGeo.attributes))a.needsUpdate=true;smokeMat.uniforms.pixels.value=renderer.domElement.height*.78;}
     let sparkDraw=0;
     for(const p of sparks){
       if(p.life<=0)continue;p.life-=dt;

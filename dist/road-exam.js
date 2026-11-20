@@ -96,7 +96,7 @@ function roadCoordinates(x,z,near){
   return {d,offset};
 }
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas:$('world'),antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.25:1.55));scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
+scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
 const sky=new T.TextureLoader().load('streetscape/sky.jpg',tex=>{tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.background=tex;if(!scene.environment)scene.environment=tex;});
 if(arcade)new T.TextureLoader().load('streetscape/'+(route.stage?'pass':route.id)+'-reflection.jpg',tex=>{
  tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.environment=tex;
@@ -106,11 +106,11 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
 scene.fog=new T.FogExp2(0xb4c6c5,.00135);
 scene.add(new T.HemisphereLight(0xcde4ff,0x887d64,1.05));
 const sun=new T.DirectionalLight(0xffdfaf,2.8);sun.castShadow=true;sun.position.set(-38,45,22);scene.add(sun,sun.target);
-const shadowSize=matchMedia('(pointer:coarse)').matches?1024:2048;
 renderer.shadowMap.autoUpdate=false;
-sun.shadow.mapSize.set(shadowSize,shadowSize);Object.assign(sun.shadow.camera,{left:-43,right:43,top:43,bottom:-43,near:1,far:170});sun.shadow.camera.updateProjectionMatrix();
+Object.assign(sun.shadow.camera,{left:-43,right:43,top:43,bottom:-43,near:1,far:170});sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.normalBias=.025;sun.shadow.bias=-.00022;
 const camera=new T.PerspectiveCamera(62,1,.08,3300);
+const graphics=createDrivingGraphics(renderer,camera,sun);
 const geom={box:new T.BoxGeometry(1,1,1),leaf:new T.PlaneGeometry(1,1),houseRoof:new T.ConeGeometry(Math.SQRT1_2,1,4).rotateY(Math.PI/4),pole:new T.CylinderGeometry(.5,.5,1,8)};
 const batches=new Map(),temp=new T.Object3D();
 function scatter(kind,color,x,y,z,w,h,l,angle=0,pitch=0){
@@ -705,9 +705,13 @@ const map=$('map').getContext('2d');
 const xs=points.map(p=>p.x),zs=points.map(p=>p.z);
 const minX=Math.min(...xs),maxX=Math.max(...xs),minZ=Math.min(...zs),maxZ=Math.max(...zs),mapScale=Math.min(153/(maxX-minX||1),101/(maxZ-minZ||1));
 function mapPoint(x,z){return [87+(x-(minX+maxX)/2)*mapScale,60+(z-(minZ+maxZ)/2)*mapScale];}
+const mapRoute=new Path2D();
+for(let i=0;i<points.length;i+=4){
+ const [x,y]=mapPoint(points[i].x,points[i].z);
+ if(i)mapRoute.lineTo(x,y);else mapRoute.moveTo(x,y);
+}
 function mapDraw(){
- map.clearRect(0,0,175,121);map.lineWidth=3;map.strokeStyle='#acc58c';map.beginPath();
- for(let i=0;i<points.length;i+=4){const p=mapPoint(points[i].x,points[i].z);if(i)map.lineTo(...p);else map.moveTo(...p);}map.stroke();
+ map.clearRect(0,0,175,121);map.lineWidth=3;map.strokeStyle='#acc58c';map.stroke(mapRoute);
  if(arcade){
    map.fillStyle='#ff7959';
    for(const r of rivals){const [x,y]=mapPoint(r.car.position.x,r.car.position.z);map.beginPath();map.arc(x,y,2.5,0,Math.PI*2);map.fill();}
@@ -722,21 +726,17 @@ const mirrorAdapter={
    cam.quaternion.premultiply(yawQ);renderer.render(scene,cam);
  }
 };
-let w=0,h=0,lastHud=0,lastShadow=-1000,slowFrames=0;
+let lastHud=0,lastShadow=-1000;
 function render(now){
  const elapsed=now-lastFrame,dt=clamp(elapsed/1000,0,.1);lastFrame=now;
- slowFrames=elapsed>52?slowFrames+1:Math.max(0,slowFrames-1);
- if(slowFrames>=18&&renderer.getPixelRatio()>.75){
-   renderer.setPixelRatio(Math.max(.75,renderer.getPixelRatio()*.83));slowFrames=0;
- }
+ graphics.frame(now,state.mode==='drive');
  if(arcade){const steps=Math.max(1,Math.ceil(dt*90));for(let i=0;i<steps;i++)raceUpdate(dt/steps);}else update(dt);
- const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
- if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
+ const s=state,ground=at(s.d);
  rig.position.set(s.x,ground.y+(arcade?s.lift:0),s.z);
  rig.rotation.set(Math.atan(roadGrade(s.d,s.h))+(arcade?s.jumpPitch:0),-s.h,0,'YXZ');yawQ.copy(rig.quaternion);
  if(!mountainField)hills.position.set(s.x,0,s.z);
  const focus=at(s.d+20);sun.target.position.set(Math.round(focus.x),Math.round(focus.y),Math.round(focus.z));sun.position.copy(sun.target.position);sun.position.x-=38;sun.position.y+=45;sun.position.z+=22;
- if(now-lastShadow>(s.mode==='drive'?42:300)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
+ if(now-lastShadow>(s.mode==='drive'?graphics.profile.shadowMs:300)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
  outer.visible=!inside;cabin.update(inside,s.v*3.6,s.steer,s.d,route);
  eye.set(inside?-.31:0,inside?1.10:3.4,inside?.53:7.6).applyQuaternion(yawQ).add(rig.position);
  look.set(inside?-.31:0,inside?.02:.6,inside?-12:-6).applyQuaternion(yawQ).add(rig.position);camera.position.copy(eye);camera.lookAt(look);
@@ -750,8 +750,9 @@ function render(now){
  }
  courseWeather.render(camera,now);
  courseWater.update(now*.001,courseWeather.rainfall);
- if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
- if(!route.stage)courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
+ if(s.mode==='ready'||s.mode==='grid')cabin.prepare(renderer,scene,camera);
+ if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0,graphics.profile.mirrorMs);
+ if(!route.stage)courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150),graphics.profile);
  renderer.render(scene,camera);
  driveAudio.update({boost:arcade&&cupBody.driving&&cupBody.boost,slip:arcade?cupBody.slip:0,speed:Math.abs(s.v)*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':arcade&&['grid','countdown'].includes(s.mode)?'idling':'ready'});
  if(now-lastHud>90){if(arcade)raceHud();else hud();mapDraw();lastHud=now;}requestAnimationFrame(render);

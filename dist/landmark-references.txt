@@ -258,3 +258,31 @@ https://www.openstreetmap.org/way/1517604966
 
 Lối đi bộ, đường bậc, bãi cỏ và vùng cây được đối chiếu với dữ liệu OpenStreetMap, © OpenStreetMap contributors, ODbL 1.0. Ranh sân lát đá trước ba điện được ước lượng từ ảnh trên cao.
 https://www.openstreetmap.org/#map=17/20.5532/105.7960
+
+Nghệ An
+
+Cửa Tiền Thành cổ Vinh, Vinh
+Mô hình dựng cổng vòm đá ong gạch vồ kiểu Vauban, hai cánh tường có lỗ châu mai, cầu qua hào và vọng lâu hai tầng mái đao theo ảnh tư liệu Thành cổ Vinh.
+https://baonghean.vn/cong-thanh-co-vinh-lan-dau-tien-dep-lung-linh-duoi-anh-den-10226330.html
+https://www.openstreetmap.org/way/1525796404
+
+Nhà Bác Hồ ở Làng Sen, Nam Đàn
+Ngôi nhà tranh năm gian mái rạ, vách liếp tre, nhà ngang, giếng nước, hàng cau và hàng rào dâm bụt tại khu di tích Kim Liên.
+https://baonghean.vn/binh-yen-nhung-nep-nha-tranh-noi-que-bac-10198832.html
+https://vi.wikipedia.org/wiki/Khu_di_t%C3%ADch_l%E1%BB%8Bch_s%E1%BB%AD_Kim_Li%C3%AAn
+https://www.openstreetmap.org/way/241936043
+
+Tam Quan Đền Cuông, Diễn Châu
+Cổng tam quan ba tầng lầu cổ kính dưới chân núi Mộ Dạ bên Quốc lộ 1A, dựng kèm rễ cây si cổ thụ và cặp trụ biểu.
+https://baonghean.vn/ve-dep-co-kinh-cua-den-thieng-tren-nui-mo-da-10269873.html
+https://visitnghean.gov.vn/diem-tham-quan/den-cuong
+
+Đền Ông Hoàng Mười, Hưng Nguyên
+Nghi môn tứ trụ, sân gạch đỏ, tam quan hai tầng mái cong và hai lầu bát giác của Mỏ Hạc Linh Từ ven nhánh sông Lam.
+https://baonghean.vn/hang-van-nguoi-chiem-bai-den-ong-hoang-muoi-nhung-ngay-dau-nam-10268484.html
+https://www.openstreetmap.org/node/6322104886
+
+Cột mốc Km 0 Đường Hồ Chí Minh, Tân Kỳ
+Quảng trường bát giác lát đá, cột mốc Km 0 đá granit đầu đỏ, phù điêu Trường Sơn, cột cờ và nhà bia cạnh Đường Hồ Chí Minh.
+https://baonghean.vn/cot-moc-so-0-noi-bat-dau-con-duong-huyen-thoai-10295387.html
+https://www.openstreetmap.org/node/9331310775

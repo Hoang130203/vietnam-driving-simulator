@@ -1,6 +1,6 @@
 # Quy tắc ứng xử
 
-Quy tắc này áp dụng trong issue, pull request và các trao đổi liên quan đến Tay Lái Việt.
+Quy tắc này áp dụng trong issue, pull request và các trao đổi liên quan đến ViVu3D.
 
 - Trao đổi lịch sự và tập trung góp ý vào thay đổi cụ thể.
 - Tôn trọng người mới, sự khác biệt về kinh nghiệm và cách sử dụng dự án.

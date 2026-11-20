@@ -141,5 +141,11 @@ function buildMappedShore(T, options){
     }
     return includeBank||level>bed?{level,bed}:null;
   }
-  return {sample,addCover,dispose(){land.remove(bank);patch.dispose();land.geometry.setIndex(landIndex);}};
+  function intersects(x0,z0,x1,z1){
+    const firstX=Math.max(0,Math.floor((x0-left)/coarse)),lastX=Math.min(31,Math.floor((x1-left)/coarse));
+    const firstZ=Math.max(0,Math.floor((z0-top)/coarse)),lastZ=Math.min(31,Math.floor((z1-top)/coarse));
+    for(let j=firstZ;j<=lastZ;j++)for(let i=firstX;i<=lastX;i++)if(active[j*32+i])return true;
+    return false;
+  }
+  return {sample,addCover,intersects,dispose(){land.remove(bank);patch.dispose();land.geometry.setIndex(landIndex);}};
 }

@@ -41,8 +41,8 @@ function signDestinations(graph, places) {
     const node = dir > 0 ? edge.start : edge.end;
     for (const incoming of graph.nodes.get(node) || []) {
       if (incoming.id === edge.id) continue;
-      if (incoming.end === node) offer(incoming, 1, distance + incoming.length, place);
-      if (incoming.start === node && !incoming.oneway) offer(incoming, -1, distance + incoming.length, place);
+      if (incoming.end === node && graph.allows({edge:incoming, dir:1}, node, edge, dir)) offer(incoming, 1, distance + incoming.length, place);
+      if (incoming.start === node && !incoming.oneway && graph.allows({edge:incoming, dir:-1}, node, edge, dir)) offer(incoming, -1, distance + incoming.length, place);
     }
   }
   return routes;

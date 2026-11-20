@@ -42,7 +42,7 @@ async function fitCoupe(parent,paint,isPlayer,name,driver){
 }
 fitCoupe(outer,0xcb331e,true,raceModels[chosenCar],null).then(()=>outer.remove(fallback)).catch(()=>loadSedan().catch(()=>{}));
 const cupBody={model:chosenCar};
-const cupFx=createDrivingFX(T,scene);
+const cupFx=createDrivingFX(T,scene,renderer);
 let crashTime=0,crashKind='';
 const rivals = [
   {name:'Bảy Bánh Mì',lane:-3.4,grid:16,pace:.99,cornerGrip:12,model:'gt',takesRamp:true,color:0xcaa14c},

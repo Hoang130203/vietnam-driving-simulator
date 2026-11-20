@@ -8,7 +8,6 @@ window.createDrivingWater = function(T, mapped) {
   const mirrorMap={value:null},mirrorMatrix={value:new T.Matrix4()},mirrorStrength={value:0};
   const reflected=new T.PerspectiveCamera(),direction=new T.Vector3(),up=new T.Vector3();
   const plane=new T.Plane(),clip=new T.Vector4(),corner=new T.Vector4();
-  const mobile=matchMedia('(pointer:coarse)').matches;
   let target=null,lastReflection=-Infinity;
   const material = new T.MeshPhysicalMaterial({
     color: 0xffffff, roughness: .43, metalness: 0, ior: 1.333,
@@ -136,14 +135,14 @@ window.createDrivingWater = function(T, mapped) {
     bounds.value.set(x,z,scale/size);
     origin.value.set(cx,cz);lastReflection=-Infinity;
   }
-  function reflect(renderer,scene,camera,level,now,near){
-    if(!near||camera.position.y<=level){mirrorStrength.value=0;lastReflection=-Infinity;return;}
-    if(now-lastReflection<(mobile?260:130))return;
+  function reflect(renderer,scene,camera,level,now,near,profile){
+    if(!profile.waterWidth||!near||camera.position.y<=level){mirrorStrength.value=0;lastReflection=-Infinity;return;}
+    if(now-lastReflection<profile.waterMs)return;
     lastReflection=now;
     if(!target){
-      target=new T.WebGLRenderTarget(mobile?256:480,mobile?144:270);
+      target=new T.WebGLRenderTarget(profile.waterWidth,profile.waterWidth*9/16);
       mirrorMap.value=target.texture;
-    }
+    }else if(target.width!==profile.waterWidth)target.setSize(profile.waterWidth,profile.waterWidth*9/16);
     camera.updateMatrixWorld();
     camera.getWorldDirection(direction);direction.y*=-1;
     up.set(0,1,0).applyQuaternion(camera.quaternion);up.y*=-1;
@@ -171,15 +170,20 @@ window.createDrivingWater = function(T, mapped) {
 // Shared polygon cuts, map tile seams and islands therefore need no special edges.
 window.waterBankField = function(mask,current,size,metres) {
   const depth=new Float32Array(size*size),out=new Uint8Array(size*size*4);
-  for(let i=0;i<depth.length;i++)depth[i]=mask[i*4+3]/255;
-  for(let i=0;i<depth.length;i++)depth[i]=depth[i]>=.98?24:depth[i]*metres*.5;
+  for(let i=0;i<depth.length;i++){
+    const alpha=mask[i*4+3];
+    depth[i]=alpha>=250?24:alpha/255*metres*.5;
+  }
   for(const step of [1,-1]){
     for(let n=0;n<depth.length;n++){
-      const i=step===1?n:depth.length-1-n,x=i%size,j=i-size*step;
+      const i=step===1?n:depth.length-1-n;
+      if(!depth[i])continue;
+      const x=i%size,j=i-size*step;
       if(x-step>=0&&x-step<size)depth[i]=Math.min(depth[i],depth[i-step]+metres);
       if(j<0||j>=depth.length)continue;
       depth[i]=Math.min(depth[i],depth[j]+metres);
-      for(const dx of [-1,1])if(x+dx>=0&&x+dx<size)depth[i]=Math.min(depth[i],depth[j+dx]+1.414*metres);
+      if(x>0)depth[i]=Math.min(depth[i],depth[j-1]+1.414*metres);
+      if(x+1<size)depth[i]=Math.min(depth[i],depth[j+1]+1.414*metres);
     }
   }
   for(let i=0;i<depth.length;i++){

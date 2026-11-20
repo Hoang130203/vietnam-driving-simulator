@@ -4,6 +4,7 @@
 (() => {
   const storageKey = 'taylai.cockpit.v1';
   const groups = [
+    {key:'graphics', title:'Chất lượng đồ họa', options:[['auto','Tự động'], ['low','Thấp'], ['medium','Vừa'], ['high','Cao']], initial:'auto'},
     {key:'mapSize', title:'Cỡ bản đồ nhỏ', options:[['small','Gọn'], ['standard','Chuẩn'], ['large','Rộng']], initial:'standard'},
     {key:'mapSide', title:'Vị trí bản đồ', device:'keyboard', options:[['left','Bên trái'], ['right','Bên phải']], initial:'left'},
     {key:'steering', title:'Tay đánh lái', device:'touch', options:[['left','Tay trái'], ['right','Tay phải']], initial:'left'},
@@ -16,6 +17,18 @@
     const selected = group.options.some(([value]) => value === saved?.[group.key]) ? saved[group.key] : group.initial;
     settings[group.key] = document.body.dataset[group.key] = selected;
   }
+  // The exam hall can change this preference while a lesson is open in its iframe.
+  window.addEventListener('storage', event => {
+    if (event.key !== storageKey && event.key !== null) return;
+    let next;
+    try { next = JSON.parse(event.newValue); } catch { return; }
+    for (const group of groups) {
+      const value = group.options.some(([id]) => id === next?.[group.key]) ? next[group.key] : group.initial;
+      settings[group.key] = document.body.dataset[group.key] = value;
+      const radio = document.querySelector('#cockpitSettings input[name="' + group.key + '"][value="' + value + '"]');
+      if (radio) radio.checked = true;
+    }
+  });
   const buttons = document.querySelectorAll('[data-cockpit-settings]');
   if (!buttons.length) return;
   const dialog = document.createElement('dialog');

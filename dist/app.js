@@ -272,7 +272,7 @@ function frame(now){
     for(const id of ['theory','lesson','history','fullStart','start'])el(id).disabled=mode==='question'||mode==='incident';
     el('askCoach').disabled=mode!=='driving';
   }
-  window.renderDrive?.(distance,lateral,elapsed,green,steering,speed,mode);
+  window.renderDrive?.(distance,lateral,elapsed,green,steering,speed,mode,now);
   roadMarker();
   el('turn').hidden=(!rightSignal && !leftSignal) || mode==='done';label(el('turn'),leftSignal?'⬅':'➜');
   label(el('speed'),String(Math.round(speed)).padStart(2,'0'));
