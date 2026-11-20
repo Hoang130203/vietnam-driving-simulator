@@ -1,8 +1,8 @@
-# Tay Lái Việt
+# ViVu3D
 
-[Chơi Tay Lái Việt trên web](https://driving.tang-vu.chatgpt.site/)
+[Chơi ViVu3D trên web](https://vivu3d.com/)
 
-Tay Lái Việt là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
+ViVu3D là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
 
 | Chế độ | Nội dung |
 | --- | --- |
@@ -30,7 +30,7 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 
 Trong Xuyên Việt, mở **Danh lam 3D** ở mục điểm xuất phát để chọn địa danh qua hình xem trước. Khi tới gần, nhấn **Ngắm địa danh 3D** để xoay, chỉnh khoảng cách hoặc mở ảnh đối chiếu. Trong **Quần thể Tam Chúc**, chọn góc toàn cảnh hoặc một trong tám công trình để ngắm từ gần. Nút **Trở lại xe** đưa góc nhìn về nơi đã dừng. [Ảnh và tư liệu đối chiếu](dist/landmark-references.txt).
 
-Trong bản đồ điểm xuất phát, gõ tên đường, số nhà hoặc địa danh, có dấu hoặc không dấu. Thêm tên tỉnh hoặc quận để phân biệt những nơi trùng tên. Thử **48 Hàng Ngang, Hà Nội**, **QL21** hoặc **cây xăng gần đây**. Khi chọn kết quả, bản đồ đánh dấu vị trí để bạn bắt đầu lái. [Tìm Ba Sao trên trang game](https://driving.tang-vu.chatgpt.site/?search=Ba%20Sao) · [Nguồn dữ liệu tìm kiếm](dist/vn-search/CREDITS.txt).
+Trong bản đồ điểm xuất phát, gõ tên đường, số nhà hoặc địa danh, có dấu hoặc không dấu. Thêm tên tỉnh hoặc quận để phân biệt những nơi trùng tên. Thử **48 Hàng Ngang, Hà Nội**, **QL21** hoặc **cây xăng gần đây**. Khi chọn kết quả, bản đồ đánh dấu vị trí để bạn bắt đầu lái. [Tìm Ba Sao trên trang game](https://vivu3d.com/?search=Ba%20Sao) · [Nguồn dữ liệu tìm kiếm](dist/vn-search/CREDITS.txt).
 
 Chọn **Ba Sao · Quốc lộ 21** rồi lái theo đường Điện Biên Phủ về phía Khả Phong để đi từ khu dân cư ra chân núi. Khi chạy trên máy, có thể [mở ngay Ba Sao](http://127.0.0.1:8000/?drive=ba-sao). Biển giao thông báo trước khúc cua, giao lộ và cho biết chiều được phép đi. Chợ, trường học, trạm xăng, quán cà phê và bệnh viện có ký hiệu trên bản đồ.
 

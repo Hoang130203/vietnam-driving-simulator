@@ -51,7 +51,7 @@
     const [mode,part,lesson]=hash.slice(1).split('/');
     if(!Object.hasOwn(parts,part) || !['exam','practice'].includes(mode) || (mode==='exam'&&(!session||nextPart()!==part||!order.includes(part)))){
       active=null;lastLocation='';$('module').src='about:blank';$('hall').hidden=false;$('player').hidden=true;
-      document.body.classList.remove('playing');document.title='Tay Lái Việt · Thi thử sát hạch hạng B';progress();return;
+      document.body.classList.remove('playing');document.title='ViVu3D · Thi thử sát hạch hạng B';progress();return;
     }
     if(mode==='exam' && session.results.at(-1)?.passed===false){nextAttempt();return;}
     lastLocation=hash;active={mode,part,received:false,id:session?.id};$('outcome').hidden=true;
@@ -68,7 +68,7 @@
     module.src=parts[part].file+'?'+params.toString();
     $('partName').textContent=module.title=parts[part].title;
     $('modeText').textContent=mode==='exam'?'Thi liên hoàn · phần '+(order.indexOf(part)+1)+'/3':'Luyện tự chọn';
-    $('hall').hidden=true;$('player').hidden=false;document.body.classList.add('playing');document.title=parts[part].title+' · Tay Lái Việt';window.scrollTo(0,0);
+    $('hall').hidden=true;$('player').hidden=false;document.body.classList.add('playing');document.title=parts[part].title+' · ViVu3D';window.scrollTo(0,0);
   }
   function home(){location.hash='home';}
   window.addEventListener('message',event=>{

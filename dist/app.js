@@ -34,7 +34,7 @@ function selectCourse(id){
   wait=crossingTime=steering=0;green=rightSignal=leftSignal=stopped=parked=false;keys.clear();
   el('damage').hidden=el('incident').hidden=el('exitRun').hidden=el('askCoach').hidden=true;
   el('courseSelect').disabled=el('lessonMode').disabled=false;
-  el('start').textContent='Bắt đầu lái →';el('hint').textContent='Sẵn sàng xuất phát';document.title='Tay Lái Việt · '+course.name;
+  el('start').textContent='Bắt đầu lái →';el('hint').textContent='Sẵn sàng xuất phát';document.title='ViVu3D · '+course.name;
   window.resetDriveTyres?.();window.clearWindscreen?.();window.clearDriveImpact?.();window.setDriveCourse?.(course);refreshStages();drawMap();
 }
 function traffic(){return [...(window.getDriveObstacles?.() || []), ...(window.courseObstacles?.() || [])];}
