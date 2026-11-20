@@ -4,6 +4,8 @@
 
 ViVu3D là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
 
+Ở màn **Xuyên Việt**, chọn Hà Nội (Hồ Gươm), Tam Chúc, Huế (Ngọ Môn), Kon Tum (nhà rông Kon Klor), TP.HCM (chợ Bến Thành) hoặc Cần Thơ (chợ nổi Cái Răng) để xem cảnh rồi bấm **Cầm lái**. Khi mở trang chính, game tiếp tục hành trình đã lưu. Nếu chưa có hành trình, điểm giới thiệu thay đổi theo ngày.
+
 | Chế độ | Nội dung |
 | --- | --- |
 | Xuyên Việt | Lái theo mạng đường OpenStreetMap và thời tiết địa phương. Khi tạm dừng, có thể gửi quãng đường của lượt lái lên bảng xếp hạng. |

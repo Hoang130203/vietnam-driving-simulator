@@ -1,18 +1,21 @@
 'use strict';
-function createTourDistrict(T,scene,plaster,structures,osmBuildings){
+function createTourDistrict(T,scene,plaster,structures,osmBuildings,nightLights){
   const group=new T.Group();group.name='OSM building footprints';scene.add(group);
   const wall=plaster.clone();wall.vertexColors=true;wall.side=T.DoubleSide;
   const roof=new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.9});
   // Window bays follow the measured edge length and the floor count. Shade them
   // in the wall pass, so a dense city block costs the same two draws on a phone.
   wall.onBeforeCompile=shader=>{
+    shader.uniforms.nightLights=nightLights;
     shader.vertexShader='attribute vec2 bays; attribute float openingStyle; varying float opening; varying vec2 vBays;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vBays=bays;opening=openingStyle;');
-    shader.fragmentShader='varying float opening; varying vec2 vBays;\n'+shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+    shader.fragmentShader='uniform float nightLights; varying float opening; varying vec2 vBays;\n'+shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+      vec3 roomLight=vec3(0.);
       if(opening<.5)diffuseColor.rgb=mix(vec3(.72),diffuseColor.rgb,.59);
       if(vBays.x>=0.){
         vec2 p=fract(vBays),aa=clamp(fwidth(vBays),vec2(.008),vec2(.18));
         vec2 pane=smoothstep(vec2(.2,.25)-aa,vec2(.2,.25)+aa,p)*(1.-smoothstep(vec2(.8,.78)-aa,vec2(.8,.78)+aa,p));
         float frame=1.-smoothstep(.013,.013+aa.x,abs(p.x-.5));
+        float reveal=smoothstep(.20,.26,p.x)*(1.-smoothstep(.69,.78,p.y));
         float light=.77+.22*sin(dot(floor(vBays),vec2(7.2,3.9)));
         vec3 glazing=mix(vec3(.056,.084,.088),vec3(.25,.36,.38),p.y)*light;
         if(opening>.5 && opening<1.5){
@@ -24,8 +27,17 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
           float arch=opening>2.5?sqrt(max(0.,1.-side*side)):1.-abs(side);
           pane.y*=1.-smoothstep(.55+arch*.23-aa.y,.55+arch*.23+aa.y,p.y);
         }
-        diffuseColor.rgb=mix(diffuseColor.rgb,mix(glazing,vec3(.18,.17,.15),frame),pane.x*pane.y);
-      }`);
+        float openingMask=pane.x*pane.y;
+        float sill=smoothstep(.17,.20,p.x)*(1.-smoothstep(.80,.83,p.x));
+        sill*=smoothstep(.19-aa.y,.22,p.y)*(1.-smoothstep(.227,.25+aa.y,p.y));
+        diffuseColor.rgb*=1.-.24*sill;
+        diffuseColor.rgb=mix(diffuseColor.rgb,mix(glazing*(.67+.33*reveal),vec3(.18,.17,.15),frame),openingMask);
+        if(opening<.5){
+          float room=fract(sin(dot(floor(vBays),vec2(17.3,41.7))+opening*230.)*4375.5);
+          roomLight=mix(vec3(.48,.19,.059),vec3(.62,.47,.29),room)
+                    *nightLights*smoothstep(.55,.64,room)*openingMask*reveal*(1.-.9*frame);
+        }
+      }`).replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n totalEmissiveRadiance+=roomLight;');
   };
   const palette=[0xf3e1c6,0xd3d9cc,0xe9d0bb,0xf0d9a7,0xb9c6c9,0xeae6db].map(v=>new T.Color(v));
   const roofs=[0x9f6757,0xa09a8e,0x798d92,0xaca69c].map(v=>new T.Color(v));
@@ -179,8 +191,8 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
       return false;
     }
     const batches=[wall,roof].map(mat=>({mat,pos:[],uv:[],cols:[],bays:[],styles:[]}));
-    let baseY=0,opening=0;
-    function vertex(b,x,y,z,u,v,tint){b.pos.push(x-cx,baseY+y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);if(b.mat===wall)b.styles.push(opening);}
+    let baseY=0,opening=0,facadeSeed=0;
+    function vertex(b,x,y,z,u,v,tint){b.pos.push(x-cx,baseY+y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);if(b.mat===wall)b.styles.push(opening+facadeSeed);}
     function quad(b,a,c,lo,hi,tint,count,floors){
       const span=a.distanceTo(c);
       for(const [p,y,u] of [[a,lo,0],[c,lo,span],[a,hi,0],[c,lo,span],[c,hi,span],[a,hi,0]]){
@@ -255,6 +267,7 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
       }));
       let seed=0;for(let i=0;i<id.length;i++)seed=(Math.imul(seed,31)+id.charCodeAt(i))>>>0;
       const warehouse=/warehouse|industrial|shed|garage|roof|barn/.test(kind);
+      facadeSeed=(seed%997)/2493;
       const detail=original&&window.VietnamSightDetails?.['osm-'+(id[0]==='w'?'way':'relation')+'-'+id.slice(1)];
       const use=detail?.building||kind,faith=detail?.religion;
       opening=use==='temple'||['buddhist','vietnamese_folk','chinese_folk','Phật_Giáo'].includes(faith)?1:

@@ -10,6 +10,8 @@ window.VietnamLandmarks=(()=>{
       source:'https://danangfantasticity.com/en/culture-en/danang-cathedral'},
     {id:'market',photo:'https://www.vietnam.vn/en/cho-ben-thanh-thay-ao-moi-sau-6-ngay-trung-tam-tp-hcm-ruc-ro-don-tet',name:'Chợ Bến Thành',city:'TP. Hồ Chí Minh',lon:106.698017,lat:10.772568,yaw:.532,width:89,depth:122,
       start:[106.698484,10.771409],map:'https://www.openstreetmap.org/way/39514795',
+      reserve:(x,z,pad)=>Math.abs(x)<46+pad&&z> -65-pad&&z<65+pad||
+        z>=60-pad&&z<113+pad&&Math.abs(x)<39+pad,
       source:'https://visithcmc.vn/vi/kham-pha-cho-ben-thanh-tphcm-tu-a-z-5-phut-doc/'},
     {id:'sapa',photo:'https://clublog.club-t.com/_ct/17777960',name:'Nhà thờ đá Sa Pa',city:'Sa Pa',lon:103.8423215,lat:22.335102,yaw:-2.31,width:12.6,depth:38.5,scale:[1.11,1,1.24],
       start:[103.841426,22.335771],map:'https://www.openstreetmap.org/way/1379648108',source:'https://vietnamtourism.gov.vn/en/post/11269'},
@@ -1002,8 +1004,8 @@ window.VietnamLandmarks=(()=>{
     if(shoreRanges.length)mesh.userData.shoreCover=shoreRanges;
     return group;
   }
-  function create(T,scene){
-    const cached=new Map(),finishes=createSightFinishes(T);let active=[];
+  function create(T,scene,nightLights={value:0}){
+    const cached=new Map(),finishes=createSightFinishes(T,nightLights);let active=[];
     const buildingAreas=[],gardens=[],modeledBuildings=new Set();
     function reserveBuildingArea(site,localRing){
       const ring=localRing.map(([u,v])=>new T.Vector2(site.x+u*site.c+v*site.s,site.z-u*site.s+v*site.c));
@@ -1061,6 +1063,7 @@ window.VietnamLandmarks=(()=>{
         if(!cached.has(data.id)){const mesh=model(T,data.id);finishes.apply(mesh);mesh.userData.height=new T.Box3().setFromObject(mesh).max.y*(data.scale?.[1]||1);scene.add(mesh);cached.set(data.id,mesh);}
         const mesh=cached.get(data.id);mesh.position.set(x-cx,ground(x,z),z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
         if(data.scale)mesh.scale.fromArray(data.scale);
+        mesh.userData.placeLights?.();
         const c=Math.cos(data.yaw),s=Math.sin(data.yaw);
         mesh.userData.fitGround?.((u,v)=>ground(x+u*c+v*s,z-u*s+v*c)-mesh.position.y);
         active.push({data,x,z,mesh,c,s});

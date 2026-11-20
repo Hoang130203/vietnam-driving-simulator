@@ -5,13 +5,13 @@ const featured=[['Hà Nội',105.8521,21.0277],['TP. Hồ Chí Minh',106.6994,10
 const baSaoDrive=['Ba Sao · Quốc lộ 21',105.815695,20.550735];featured.push(baSaoDrive);
 const nameOf=e=>e.name||({motorway:'Đường cao tốc',trunk:'Đường trục chính',primary:'Đường chính',secondary:'Đường liên huyện',tertiary:'Đường địa phương',residential:'Đường dân cư',service:'Đường dịch vụ'}[e.kind]||'Đường địa phương');
 const fmt=d=>(d/1000).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
-let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],nextNpc=1,mode='loading',inside=false,source=featured[0],saved;
+let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],nextNpc=1,mode='loading',inside=false,source=featured[0];
 let viewX=Infinity,viewZ=Infinity,loadX=Infinity,loadZ=Infinity,busy=false,loadToken=0,streamRetry=0,tourPins=[];
 let hp=100,nitro=100,cooldown=0,distance=0,snapshot=0,toastTime=0,crashTime=0,crashKind='car',passes=0,duel=null;
 let car={model:'supercar',x:0,z:0,yaw:0,speed:0,steer:0,brake:false},last=performance.now(),uiTick=0,spawnTick=0;
 let activeTrip=false,loadRequest=null,openingCameraTime=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
-try{saved=JSON.parse(localStorage.getItem('taylai.world.trip'));const model=localStorage.getItem('taylai.garage');if(['gt','rally'].includes(model))car.model=model;}catch{}
+try{const model=localStorage.getItem('taylai.garage');if(['gt','rally'].includes(model))car.model=model;}catch{}
 $('garage').value=car.model;
 $('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('taylai.garage',car.model);}catch{}};
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
@@ -81,13 +81,14 @@ async function startAt(place,restore=null,guided=false){
  car.opening=firstDrive;car.openingPose=firstDrive?1:0;car.dawn=firstDrive?1:0;openingCameraTime=0;
  document.body.removeAttribute('data-awaiting-motion');
  document.body.toggleAttribute('data-lakeside',firstDrive);
- if(!firstDrive)$('openingStill').hidden=true;
  gfx.preloadVehicle(car.model);
  const site=place[3]||destinations.find(entry=>restore?.destination===entry.id);
- $('journeyTitle').textContent=firstDrive?'Tam Chúc':site?.name||place[0];
+ const departure=restore?null:JourneyDepartures.byId(site?.id);
+ JourneyDepartures.select(departure);
+ $('journeyTitle').textContent=departure?.title||site?.name||place[0];
  $('journeyTitle').classList.toggle('longTitle',$('journeyTitle').textContent.length>25);
  $('journeyCaption').textContent=guided?'Theo QL21 tới đường ven hồ. Đồng hồ chạy từ lúc cầm lái đến khi về đích, kể cả khi tạm dừng.':restore?'Tiếp tục hành trình đã lưu · '+fmt(restore.distance):
-   firstDrive||site?.id==='tam-chuc'?'Theo đường ven hồ tới quần thể chùa Tam Chúc.':
+   departure?departure.caption:
    samePlace(place,baSaoDrive)?'Theo đường Điện Biên Phủ về phía Khả Phong, qua khu dân cư Ba Sao và chân núi.':
    site?.km?'Chinh phục '+fmt(site.km*1000)+' đường đèo.':[site?.kind,site?.city].filter(Boolean).join(' · ')||'Khám phá những con đường quanh điểm xuất phát.';
  if(guided)$('journeyTitle').textContent=tamChucDrive.title;
@@ -107,6 +108,7 @@ async function startAt(place,restore=null,guided=false){
    const sight=place[3]||destinations.find(v=>restore?.destination===v.id)||VietnamLandmarks.entries.find(v=>place[0]===v.name+' · '+v.city);
    if(sight)place=[place[0],place[1],place[2],sight];
    car.tourStop=Boolean(sight?.custom||sight&&VietnamLandmarks.entries.includes(sight));
+   car.departureView=departure?.view?{...departure.view,...graph.point(site.lon,site.lat),yaw:site.yaw}:null;
    const bearing=firstDrive?104:samePlace(place,baSaoDrive)?12:sight?.bearing;
    if(Number.isFinite(bearing)&&!restore&&!nearest.edge.oneway){
      nearest.dir=Math.cos(graph.sample(nearest).yaw-bearing*Math.PI/180)>=0?1:-1;
@@ -554,6 +556,11 @@ function begin(){
  if($('journeySetup').open)$('journeySetup').close();
  $('openingStill').hidden=true;
  activeTrip=true;tripStart=distance;
+ const address=new URL(location.href);
+ if(address.searchParams.has('intro')){
+   address.searchParams.delete('intro');
+   history.replaceState(null,'',address);
+ }
  if(guide){guideStarted=performance.now();guidedBoard.start();}else worldBoard.start();
  $('raceMode').hidden=Boolean(guide);
  $('scoreBoard').textContent=guide?'Bảng hạng Ba Sao → Tam Chúc':'Xem hạng và gửi thành tích';
@@ -746,6 +753,17 @@ const mountainPlaces=mountainStages.map(stage=>({
 }));
 const destinations=[...models,...mountainPlaces,...catalog];
 const tourPlace=site=>[site.km?site.name:site.name+' · '+site.city,...site.start,site];
+function featuredDeparture(departure){
+ return departure.id==='tam-chuc'?openingPlace:tourPlace(models.find(site=>site.id===departure.id));
+}
+$('departureChoices').addEventListener('click',event=>{
+ const link=event.target.closest('a[data-departure]');
+ if(!link||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||!indexData||!gfx)return;
+ event.preventDefault();
+ if(link.hasAttribute('aria-current')&&mode!=='error')return;
+ history.replaceState(null,'',link.href);
+ startAt(featuredDeparture(JourneyDepartures.byId(link.dataset.departure)));
+});
 // Representative island positions (longitude, latitude), rounded for the national atlas.
 // Hoàng Sa: https://danang.gov.vn/vi/web/dng/w/ubnd-huyen-hoang-sa-i
 // Trường Sa: https://dulichso.khanhhoa.gov.vn/article/bia-chu-quyen-quan-dao-truong-sa-tai-dao-song-tu-tay-va-dao-nam-yet-980
@@ -951,7 +969,6 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
    if(trafficIndex?.graphSourceSha256===roadIndex.sourceSha256&&trafficIndex.osmTimestamp===roadIndex.osmTimestamp)indexData.trafficTiles=trafficIndex.tiles;
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
    $('openingAtlas').disabled=false;$('openMap').disabled=false;$('travel').disabled=false;
-   const valid=new URLSearchParams(location.search).get('intro')!=='tam-chuc'&&saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
    const params=new URLSearchParams(location.search),stage=mountainPlaces.find(p=>p.id===params.get('pass'));
    const collection=params.get('collection')==='ha-nam';
    const stopId=params.get('landmark');
@@ -959,7 +976,11 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
    if(landmark||stage)await startAt(tourPlace(landmark||stage));
    else if(params.get('drive')===tamChucDrive.id)await startAt(baSaoDrive,null,true);
    else if(params.get('drive')==='ba-sao')await startAt(baSaoDrive);
-   else await startAt(valid?[saved.label||'Hành trình đang lái',saved.lon,saved.lat]:openingPlace,valid?saved:null);
+   else if(JourneyDepartures.initial)await startAt(featuredDeparture(JourneyDepartures.initial));
+   else{
+     const saved=JourneyDepartures.trip;
+     await startAt([saved.label||'Hành trình đang lái',saved.lon,saved.lat],saved);
+   }
    requestAnimationFrame(frame);
    const search=params.get('search')?.trim();
    if(search){await openAtlas();$('findPlace').value=search;resetPlaces();}

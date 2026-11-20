@@ -1,6 +1,38 @@
 'use strict';
-function createSightFinishes(T){
+function createSightFinishes(T,nightLights){
   const damp={value:0},pending=new Map();
+  // Local coordinates in the authored models. The fourth value is the reach
+  // in metres of a light on the stonework, under the eaves, or above a deck.
+  const fixtures={
+    turtle:{tint:0xffce87,bulbs:[[3,.9,4.9,10],[-3.8,1,-2,9],[0,1.5,-5,9]]},
+    'ngo-mon':{tint:0xffca90,bulbs:[[-19,2,20,23],[18,2,20,22],[0,7,7.8,16]]},
+    rong:{tint:0xffbd75,bulbs:[[-3,2,6.7,9],[3,2,6.7,9],[0,5,-5.8,13]]},
+    market:{tint:0xffdaab,bulbs:[[0,13,64,16],[-19,4,65,17],[20,4,65,17]]},
+    'cho-noi-cai-rang':{tint:0xffc173,bulbs:[[-6,3,-21,7],[1,2.8,-5,8],[8,3,12,8]]}
+  };
+  const finishes={
+    'ngo-mon':`
+      if(finishPoint.y<5.75 && abs(fn.y)<.6){
+        vec2 block=face/vec2(.78,.29);
+        block.x+=.5*mod(floor(block.y),2.);
+        vec2 edge=min(fract(block),1.-fract(block)),aa=max(fwidth(block),vec2(.002));
+        vec2 joint=smoothstep(vec2(.014)-aa*.5,vec2(.034)+aa*.5,edge);
+        float detail=1.-smoothstep(.25,1.,max(aa.x,aa.y));
+        diffuseColor.rgb*=1.+detail*(.12*(stoneHash(floor(block))-.5)-.28*(1.-joint.x*joint.y));
+      }`,
+    rong:`
+      if(finishPoint.y>5.3 && finishPoint.y<21.4){
+        float weave=face.x*38.+.48*sin(face.y*2.7+floor(face.x*5.));
+        float fibre=sin(weave*6.283)*(1.-smoothstep(.12,.68,fwidth(weave)));
+        float bundles=stoneNoise(face*vec2(8.,.46));
+        diffuseColor.rgb*=vec3(1.09,1.035,.93)*(.92+.17*bundles+.11*fibre);
+      }`,
+    turtle:`
+      if(finishPoint.y>.72 && finishPoint.y<6.7 && abs(fn.y)<.6){
+        float patina=(1.-smoothstep(.85,3.5,finishPoint.y))*smoothstep(.42,.76,stain);
+        diffuseColor.rgb*=mix(vec3(1.),vec3(.68,.78,.61),patina*.72);
+      }`
+  };
   let worker,sequence=0;
   function occlude(g){
     const p=g.attributes.position,n=g.attributes.normal,color=g.attributes.color;
@@ -24,6 +56,19 @@ function createSightFinishes(T){
   }
   function apply(group){
     const brick=['ponagar','thap-doi','thap-vinh-hung','my-son','pho-minh','phuoc-duyen'].includes(group.name);
+    const rig=fixtures[group.name];
+    const surface=finishes[group.name]||'';
+    const bulbs=rig?.bulbs.map(([x,y,z,r])=>new T.Vector4(x,y,z,r));
+    if(rig){
+      const point=new T.Vector3();
+      group.userData.placeLights=()=>{
+        group.updateWorldMatrix(true,false);
+        rig.bulbs.forEach(([x,y,z,r],i)=>{
+          point.set(x,y,z).applyMatrix4(group.matrixWorld);
+          bulbs[i].set(point.x,point.y,point.z,r);
+        });
+      };
+    }
     const seen=new Set();
     group.traverse(obj=>{
       const m=obj.material,g=obj.geometry;
@@ -32,7 +77,7 @@ function createSightFinishes(T){
       if(m.userData.sightFinish)return;
       m.userData.sightFinish=true;
       const previous=m.onBeforeCompile,program=m.customProgramCacheKey();
-      m.customProgramCacheKey=()=>program+'-sight-'+brick;
+      m.customProgramCacheKey=()=>program+'-sight-'+brick+(rig?'-lit':'')+(surface?group.name:'');
       m.onBeforeCompile=function(shader,renderer){
         previous.call(this,shader,renderer);shader.uniforms.rainOnSight=damp;
         const vary='varying vec3 finishPoint; varying vec3 finishNormal;\n';
@@ -47,6 +92,7 @@ function createSightFinishes(T){
           float wet=rainOnSight*(.25+.64*max(0.,fn.y)+.10*stain);
           diffuseColor.rgb*=1.+(stain-.5)*.18-wet*.23;
           roughnessFactor=mix(roughnessFactor,min(.29,roughnessFactor),wet);
+          ${surface}
           ${brick?`if(diffuseColor.r>diffuseColor.g*1.38 && abs(fn.y)<.8){
             vec2 course=face/vec2(.31,.095);course.x+=mod(floor(course.y),2.)*.5;
             vec2 edge=min(fract(course),1.-fract(course)),aa=max(fwidth(course),vec2(.005));
@@ -54,6 +100,22 @@ function createSightFinishes(T){
             float detail=1.-smoothstep(.24,.91,max(aa.x,aa.y));
             diffuseColor.rgb*=1.+detail*((stoneHash(floor(course))-.5)*.21-(1.-body.x*body.y)*.24);
           }`:''}`);
+        if(rig){
+          shader.uniforms.sightBulbs={value:bulbs};
+          shader.uniforms.sightLampTint={value:new T.Color(rig.tint)};
+          shader.uniforms.nightOnSight=nightLights;
+          shader.fragmentShader='uniform vec4 sightBulbs[3]; uniform vec3 sightLampTint; uniform float nightOnSight;\n'+
+            shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+              if(nightOnSight>.015){
+                float spill=0.;
+                for(int i=0;i<3;i++){
+                  vec3 lightRay=(viewMatrix*vec4(sightBulbs[i].xyz,1.)).xyz+vViewPosition;
+                  float d=max(.08,length(lightRay)),f=max(0.,1.-d/sightBulbs[i].w);
+                  spill+=f*f*max(dot(normal,lightRay/d),0.);
+                }
+                reflectedLight.directDiffuse+=diffuseColor.rgb*sightLampTint*(spill*nightOnSight*2.8);
+              }`);
+        }
       };
     });
   }

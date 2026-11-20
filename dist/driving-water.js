@@ -6,6 +6,7 @@ window.createDrivingWater = function(T, mapped) {
   const rainfall={value:0},wake={value:new T.Vector4()},wakeAge={value:0};
   const field = {value: null}, bounds = {value: new T.Vector3()};
   const mirrorMap={value:null},mirrorMatrix={value:new T.Matrix4()},mirrorStrength={value:0};
+  const mirrorLevel={value:0};
   const reflected=new T.PerspectiveCamera(),direction=new T.Vector3(),up=new T.Vector3();
   const plane=new T.Plane(),clip=new T.Vector4(),corner=new T.Vector4();
   let target=null,lastReflection=-Infinity;
@@ -157,13 +158,16 @@ window.createDrivingWater = function(T, mapped) {
     clip.multiplyScalar(2/clip.dot(corner));m[2]=clip.x;m[6]=clip.y;m[10]=clip.z+1;m[14]=clip.w;
     reflected.projectionMatrixInverse.copy(reflected.projectionMatrix).invert();
     mirrorMatrix.value.multiplyMatrices(reflected.projectionMatrix,reflected.matrixWorldInverse);
+    mirrorLevel.value=level;
     const previous=renderer.getRenderTarget(),shadow=renderer.shadowMap.needsUpdate;
+    // Wet asphalt may also sample this target. Unbind it in the capture pass.
+    mirrorMap.value=null;mirrorStrength.value=0;
     material.visible=false;renderer.shadowMap.needsUpdate=false;
     try{renderer.setRenderTarget(target);renderer.render(scene,reflected);}
-    finally{renderer.setRenderTarget(previous);material.visible=true;renderer.shadowMap.needsUpdate=shadow;}
+    finally{renderer.setRenderTarget(previous);mirrorMap.value=target.texture;material.visible=true;renderer.shadowMap.needsUpdate=shadow;}
     mirrorStrength.value=1;
   }
-  return {material,setField,reflect,setWake(x,z,yaw,strength,age){wake.value.set(x,z,yaw,strength);wakeAge.value=age;},update(seconds,rain=0){time.value=seconds;rainfall.value=rain;}};
+  return {material,setField,reflect,reflection:{mirrorMap,mirrorMatrix,mirrorStrength,mirrorLevel},setWake(x,z,yaw,strength,age){wake.value.set(x,z,yaw,strength);wakeAge.value=age;},update(seconds,rain=0){time.value=seconds;rainfall.value=rain;}};
 };
 
 // Two chamfer passes estimate the distance to the dry bank on the merged mask.

@@ -445,7 +445,8 @@
         const a=k/18,b=(k+1)/18;
         face(section(a,-.48,s),section(b,-.48,s),section(a,.28,s),section(b,.28,s),0x634c37);
         face(section(a,.28,s),section(b,.28,s),section(a,.53,s),section(b,.53,s),i%3?0x547477:0x934e36);
-        face(section(a,.31,-1),section(b,.31,-1),section(a,.31,1),section(b,.31,1),0x947255);
+        face(section(a,.49,s),section(b,.49,s),section(a,.55,s),section(b,.55,s),0xd9b36d);
+        if(s===1)face(section(a,.31,-1),section(b,.31,-1),section(a,.31,1),section(b,.31,1),0x947255);
       }
       function cuboid(x,y,z,dx,dy,dz,tint){
         const a=(u,v,t)=>[x+u*dx/2,y+v*dy/2,z+t*dz/2];
@@ -456,10 +457,30 @@
         }
       }
       for(const side of [-1,1])for(const z of [-.36,-.09])cuboid(side*w*.60,.94,z*length,.10,1.32,.10,0x947552);
-      cuboid(0,1.66,-length*.225,w*1.63,.14,length*.36,i%2?0x66878a:0xa69e87);
-      for(let k=0;k<10;k++)cuboid(((k%2)-.5)*w*.79,.65,(.04+Math.floor(k/2)*.066)*length,w*.72,.41,length*.061,k%3?0x9caa53:0xc39b55);
+      const tarp=i%2?[0x427675,0x88aaa0]:[0x836244,0xc0a47a];
+      for(let strip=0;strip<7;strip++){
+        const z=(-.41+strip*.051)*length,end=z+length*.051;
+        for(const side of [-1,1])
+          face([0,1.89,z],[0,1.89,end],[side*w*.87,1.58,z],[side*w*.87,1.58,end],tarp[strip%3===0?1:0]);
+      }
+      function fruit(x,y,z,r,h,tint){
+        const top=[x,y+h,z],low=[x,y-h*.77,z];
+        for(let k=0;k<6;k++){
+          const a=k*Math.PI/3,b=(k+1)*Math.PI/3;
+          const left=[x+r*Math.cos(a),y,z+r*Math.sin(a)],right=[x+r*Math.cos(b),y,z+r*Math.sin(b)];
+          col.setHex(tint);for(const v of [top,right,left,low,left,right]){verts.push(...v);rgb.push(col.r,col.g,col.b);}
+        }
+      }
+      const produce=[0xb28f37,0x839742,0xbfa142][i%3];
+      for(let k=0;k<10;k++){
+        const x=((k%2)-.5)*w*.79,z=(.04+Math.floor(k/2)*.066)*length;
+        cuboid(x,.52,z,w*.72,.34,length*.061,0x987045);
+        cuboid(x,.68,z,w*.75,.06,length*.065,0xcaa16e);
+        for(let j=0;j<4;j++)fruit(x+((j%2)-.5)*w*.34,.74,z+(Math.floor(j/2)-.5)*length*.031,.14,.17,produce);
+      }
       cuboid(w*.58,2.15,length*.23,.093,3.6,.093,0x9b8662);
-      cuboid(w*.58,3.54,length*.24,.23,.35,.26,0xb89253);
+      cuboid(w*.58-.19,3.86,length*.23,.42,.045,.045,0x90704c);
+      fruit(w*.58-.36,3.59,length*.23,.13,.25,produce);
       const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('color',new T.Float32BufferAttribute(rgb,3));geo.computeVertexNormals();
       const boat=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.79}));
       boat.castShadow=boat.receiveShadow=true;g.add(boat);group.add(g);
