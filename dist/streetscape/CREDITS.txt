@@ -28,11 +28,25 @@ https://polyhaven.com/a/aerial_grass_rock
 https://polyhaven.com/a/leafy_grass
 https://polyhaven.com/a/plastered_wall_04
 
-The distant terrain mesh uses Mapzen Terrain Tiles on AWS, accessed 2026-11-19. Global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey. Global ETOPO1 terrain data courtesy of the U.S. National Oceanic and Atmospheric Administration. Heights are quantized from the Terrarium tiles in the Vietnam extent. The local ground under the car is blended flat.
+The distant terrain mesh uses Mapzen Terrain Tiles on AWS, accessed 2026-11-19. Global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey. Global ETOPO1 terrain data courtesy of the U.S. National Oceanic and Atmospheric Administration. Heights are quantized from the Terrarium tiles in the Vietnam extent. The game samples this terrain for the national road relief and mountain stage elevation profiles.
 https://registry.opendata.aws/terrain-tiles/
 https://github.com/tilezen/joerd/blob/master/docs/attribution.md
+
+The mountain racing stages use additional Mapzen Terrarium tiles (2026-11-20), sampled more densely near the course and at wider intervals toward the horizon.
 
 Regional terrain colour is adapted from NASA Blue Marble Next Generation, accessed through NASA GIBS. It is a historical satellite composite.
 https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/
 
 The six Vietnamese shopfront elevations are AI-generated architectural illustrations of fictional shops.
+
+Rock Face by Greg Zaal (photography) and Dario Barresi (processing), Poly Haven, CC0. The road cut uses locally encoded 1K diffuse and OpenGL normal maps. The original scan covers 2.4 m across.
+https://polyhaven.com/a/rock_face
+https://polyhaven.com/license
+
+Fern 02 by Rob Tuytel and Rico Cilliers, Poly Haven, CC0. The transparent bank fern billboard is a side-view render of one of the original clumps with its diffuse and alpha maps.
+https://polyhaven.com/a/fern_02
+https://polyhaven.com/license
+
+Pine Tree 01 by Rob Tuytel (photography) and Rico Cilliers (modeling), Poly Haven, CC0. The mountain pine billboard is a locally rendered orthographic view of the second full-resolution tree.
+https://polyhaven.com/a/pine_tree_01
+https://polyhaven.com/license

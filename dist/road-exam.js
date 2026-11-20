@@ -26,7 +26,26 @@ function sampleStage(values,station,spacing){
 const route=(Object.hasOwn(routes,query.get('route')) && routes[query.get('route')]) || (exam&&crypto.getRandomValues(new Uint8Array(1))[0]%2?routes.pass:routes.river);
 $('route').value=route.id;$('route').disabled=exam;$('routeName').textContent=route.name;
 $('route').onchange=e=>{const u=new URL(location.href);u.searchParams.set('route',e.target.value);location.href=u.href;};
+const roadHalfWidth=route.stage?4.15:6;
 const step=4,points=[];
+function smoothRoadProfile(stage){
+  if(!stage)return null;
+  // Average over a vehicle-scale approach to a crest. Coarse DEM pixels describe
+  // hillsides and often overstate the gradient of a road cut into that hillside.
+  const h=stage.heights,rises=[];
+  for(let i=1;i<h.length;i++)rises.push((h[i]-h[i-1])/stage.step);
+  const result=[0],weights=[1,2,3,4,5,6,5,4,3,2,1];
+  let previous;
+  for(let i=0;i<rises.length;i++){
+    let slope=0;
+    for(let j=-5;j<=5;j++)slope+=weights[j+5]*rises[clamp(i+j,0,rises.length-1)]/36;
+    const target=.087*Math.tanh(slope/.087);
+    previous=previous===undefined?target:clamp(target,previous-.018,previous+.018);
+    result.push(result[i]+stage.step*previous);
+  }
+  return result;
+}
+const carriagewayHeights=smoothRoadProfile(route.stage);
 function heading(d){
   if(route.stage)return sampleStage(route.stage.angles,d-route.stage.step/2,route.stage.step)*Math.PI/180;
   const pairs=route.headings;let i=1;while(i<pairs.length-1&&pairs[i][0]<d)i++;
@@ -34,7 +53,14 @@ function heading(d){
   return (a[1]+(b[1]-a[1])*t*t*(3-2*t))*Math.PI/180;
 }
 function height(d){
-  if(route.stage)return sampleStage(route.stage.heights,d,route.stage.step);
+  if(route.stage){
+    // A cubic vertical curve gives neighbouring segments a common tangent.
+    const h=carriagewayHeights,last=h.length-1,spacing=route.stage.step;
+    const s=clamp(d/spacing,0,last),i=Math.min(last-1,Math.floor(s)),t=s-i;
+    const delta=h[i+1]-h[i],a=i?(h[i+1]-h[i-1])*.5:delta;
+    const b=i+2<=last?(h[i+2]-h[i])*.5:delta;
+    return h[i]+t*(a+t*(3*delta-2*a-b+t*(a+b-2*delta)));
+  }
   const [a,b]=route.bridge;
   const ramp=Math.max(0,Math.min(1,(d-a+64)/64,(b+64-d)/64));
   const bridge=ramp*ramp*(3-2*ramp)*2.6;
@@ -43,9 +69,9 @@ function height(d){
   const stops=passProfile;
   for(let i=1;i<stops.length;i++)if(d<=stops[i][0]){
     const [x,y]=stops[i-1],[end,top]=stops[i],t=clamp((d-x)/(end-x),0,1);
-    return y+(top-y)*t*t*(3-2*t)+bridge;
+    return .72*(y+(top-y)*t*t*(3-2*t))+bridge;
   }
-  return stops.at(-1)[1]+bridge;
+  return .72*stops.at(-1)[1]+bridge;
 }
 function roadGrade(d,yaw){return (height(d+2)-height(d-2))*.25*Math.cos(yaw-heading(d));}
 const passProfile=[[0,0],[80,0],[420,24],[560,24],[1120,68],[1370,73],[2060,19],[2480,7]];
@@ -95,19 +121,27 @@ function scatter(kind,color,x,y,z,w,h,l,angle=0,pitch=0){
 function beside(d,l,kind,color,w,h,depth,base=0,angle=0){
   const p=at(d,l);scatter(kind,color,p.x,p.y+base+h/2,p.z,w,h,depth,-p.h+angle,h<.65&&angle===0?Math.atan(roadGrade(d,p.h)):0);
 }
-let seed=route.id==='pass'?732:351;
+let seed=Array.from(route.id).reduce((hash,c)=>Math.imul(hash,31)+c.charCodeAt(0)|0,351);
 function random(){seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;}
-function ribbon(left,right,color,raise,roadMaterial){
+function ribbon(left,right,color,raise,roadMaterial,dashed=false){
   const verts=[],uv=[],indices=[];
   for(let i=0;i<points.length;i++){
     for(const [edge,u] of [[left,0],[right,1]]){const p=at(i*step,edge);verts.push(p.x,p.y+raise,p.z);uv.push(u,i*step/9);}
-    if(i){const n=i*2;indices.push(n-2,n-1,n,n-1,n+1,n);}
+    if(i&&(!dashed||i%3===1)){const n=i*2;indices.push(n-2,n-1,n,n-1,n+1,n);}
   }
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
   const material=roadMaterial||new T.MeshLambertMaterial({color,side:T.DoubleSide});
   if(roadMaterial)material.onBeforeCompile=shader=>{
     shader.vertexShader='varying vec2 roadUv;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n roadUv=uv;');
-    shader.fragmentShader='varying vec2 roadUv;\n'+shader.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n float lane=fract(roadUv.x*2.);vec2 tracks=(vec2(lane)-vec2(.28,.72))*11.;float tires=exp(-tracks.x*tracks.x)+exp(-tracks.y*tracks.y);diffuseColor.rgb*=1.-tires*(.11+.04*sin(roadUv.y*.7));');
+    shader.fragmentShader='varying vec2 roadUv;\n'+shader.fragmentShader.replace('#include <map_fragment>',`
+      #include <map_fragment>
+      float drift=sin(roadUv.y*.24)*.019;
+      float lane=fract(roadUv.x*2.+drift);
+      vec2 tracks=(vec2(lane)-vec2(.28,.72))*9.;
+      float tires=exp(-tracks.x*tracks.x)+exp(-tracks.y*tracks.y);
+      float mottle=texture2D(map,vMapUv*.124+vec2(.41,.13)).r;
+      diffuseColor.rgb*=clamp(.9+mottle*.36,.88,1.10)*(1.-tires*(.13+.05*sin(roadUv.y*.7)));
+    `);
   };
   const surface=new T.Mesh(geo,material);surface.receiveShadow=true;scene.add(surface);
 }
@@ -115,7 +149,10 @@ const surfaces=createRoadSurfaces(T,renderer),roadSurface=surfaces.scanned('asph
 roadSurface.side=T.DoubleSide;surfaces.transform(roadSurface,3,2.25);
 // Race.js also uses the road texture for the starting apron.
 const asphalt=roadSurface.map;
-ribbon(-6.7,6.7,0x8a856e,-.06);ribbon(-6,6,0xb4b8b8,0,roadSurface);ribbon(-5.83,-5.74,0xf1eee0,.015);ribbon(5.74,5.83,0xf1eee0,.015);
+if(route.id==='river')ribbon(-roadHalfWidth-.7,roadHalfWidth+.7,0x8a856e,-.06);
+ribbon(-roadHalfWidth,roadHalfWidth,0xb4b8b8,0,roadSurface);
+for(const side of [-1,1])ribbon(side*roadHalfWidth-.22*side-.055,side*roadHalfWidth-.22*side+.055,0xc8c6ad,.012);
+ribbon(-.068,.068,0xc8a75b,.014,null,true);
 const river=route.id==='river', [bridgeStart,bridgeEnd]=route.bridge;
 const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 function nearest(x,z){
@@ -124,21 +161,76 @@ function nearest(x,z){
   for(let i=0;i<points.length;i+=10)test(i);
   const coarse=index;
   for(let i=Math.max(0,coarse-10);i<=Math.min(points.length-1,coarse+10);i++)test(i);
-  const p=points[index],side=(x-p.x)*Math.cos(p.h)+(z-p.z)*Math.sin(p.h);
-  return {d:index*step,side,dist:Math.sqrt(best),y:p.y};
+  // Project to the closest segment instead of a 4 m station. This avoids tiny
+  // stair steps along shoulders when the road climbs around a switchback.
+  let answer;
+  for(let i=Math.max(0,index-1);i<=Math.min(index,points.length-2);i++){
+    const a=points[i],b=points[i+1],dx=b.x-a.x,dz=b.z-a.z;
+    const t=clamp(((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz),0,1),cx=a.x+t*dx,cz=a.z+t*dz;
+    const dist=Math.hypot(x-cx,z-cz);
+    if(!answer||dist<answer.dist)answer={d:(i+t)*step,side:((x-cx)*(-dz)+(z-cz)*dx)/step,
+      dist,y:a.y+(b.y-a.y)*t,cx,cz};
+  }
+  return answer;
+}
+function courseRelief(raw){
+  if(!raw||river)return null;
+  // The race profile has gentler grades than the surveyed land surface. Bring
+  // the entire valley into the same local vertical datum, interpolating offsets
+  // from multiple stretches of the road at hairpins and on adjacent switchbacks.
+  const controls=points.filter((p,i)=>i%8===0).map(p=>({x:p.x,z:p.z,bias:p.y-raw.ground(p.x,p.z)}));
+  const spacing=56,cache=new Map();
+  function offset(i,j){
+    const key=i+','+j;if(cache.has(key))return cache.get(key);
+    const x=i*spacing,z=j*spacing;let weighted=0,weights=0,nearest=Infinity;
+    for(const p of controls){
+      const dx=x-p.x,dz=z-p.z,d2=dx*dx+dz*dz;if(d2>1300*1300)continue;
+      nearest=Math.min(nearest,d2);
+      const w=1/(d2+2400)**2;weighted+=w*p.bias;weights+=w;
+    }
+    const value=weights?weighted/weights*(1-smooth(450,1250,Math.sqrt(nearest))):0;
+    cache.set(key,value);return value;
+  }
+  const depth=(x,z)=>Math.max(0,raw.seaLevel-raw.ground(x,z));
+  return {id:raw.id,depth,ground(x,z){
+    const u=x/spacing,v=z/spacing,i=Math.floor(u),j=Math.floor(v),fx=u-i,fz=v-j;
+    const a=offset(i,j),b=offset(i+1,j),c=offset(i,j+1),d=offset(i+1,j+1);
+    const land=raw.ground(x,z),correction=(a+(b-a)*fx)*(1-fz)+(c+(d-c)*fx)*fz;
+    return Math.max(raw.seaLevel,land)+correction*smooth(0,15,land-raw.seaLevel);
+  }};
+}
+const mountainField=courseRelief(window.stageRelief);
+if(mountainField){
+  scene.fog.density=.00019;camera.far=22000;camera.updateProjectionMatrix();
 }
 const waterLevel=river?-3:height((bridgeStart+bridgeEnd)/2)-8;
 function surface(x,z,n){
   const a=n.dist,d=n.d;
-  const rolling=1.1*Math.sin(x/19+z/44)+1.6*Math.cos(z/37)+Math.sin(x/11-z/29)*.35;
-  const high=(river?10:45)+(river?7:27)*Math.sin(x/65+z/117)+(river?5:13)*Math.cos(z/53);
-  let y=n.y-.45+smooth(9,50,a)*rolling+smooth(31,155,a)*high;
+  let y;
+  if(mountainField){
+    const natural=mountainField.ground(x,z);
+    if(a>68)return natural;
+    const cross=natural-mountainField.ground(n.cx,n.cz);
+    // Horizontal bench at the asphalt, a steep exposed uphill cut, a shallower
+    // downhill fill, then the sampled relief at its measured lateral distance.
+    const slope=cross/Math.max(4,a),ridge=.75+.25*Math.sin(d*.019+Math.sin(d*.031));
+    const cut=Math.max(0,Math.min(.65,slope))*7*ridge;
+    const fill=Math.max(0,Math.min(.8,-slope))*2.8;
+    const shaped=n.y-.32+cross*smooth(9,48,a)
+      +cut*smooth(12,23,a)*(1-smooth(26,68,a))-fill*smooth(11,23,a)*(1-smooth(35,80,a));
+    y=T.MathUtils.lerp(shaped,natural,smooth(17,68,a));
+  }else{
+    const rolling=1.1*Math.sin(x/19+z/44)+1.6*Math.cos(z/37)+Math.sin(x/11-z/29)*.35;
+    const high=(river?10:45)+(river?7:27)*Math.sin(x/65+z/117)+(river?5:13)*Math.cos(z/53);
+    y=n.y-.45+smooth(9,50,a)*rolling+smooth(31,155,a)*high;
+  }
   const center=(bridgeStart+bridgeEnd)/2+clamp(n.side,-90,90)*.15;
   const channel=1-smooth((bridgeEnd-bridgeStart)*.30,(bridgeEnd-bridgeStart)*.52,Math.abs(d-center));
   const stream=river?smooth(12,23,-n.side)*(1-smooth(64,81,-n.side))*(1-smooth(bridgeEnd,bridgeEnd+76,d)):0;
-  return T.MathUtils.lerp(y,waterLevel-2,Math.max(channel,stream));
+  const waterBlend=route.stage?0:mountainField?channel*(1-smooth(65,155,a)):Math.max(channel,stream);
+  return T.MathUtils.lerp(y,waterLevel-2,waterBlend);
 }
-function besideWater(d){return river||Math.abs(d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.8;}
+function besideWater(d){return !route.stage&&(river||Math.abs(d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.8);}
 function ground(x,z){return surface(x,z,nearest(x,z));}
 const box=new T.Box3().setFromPoints(points.map(p=>new T.Vector3(p.x,0,p.z)));
 function groundMap(path){
@@ -147,44 +239,93 @@ function groundMap(path){
 }
 const meadow=groundMap('verge-grass.webp'),earth=groundMap('verge-earth.webp');
 const courseWater=createDrivingWater(T,false);
+let nearTerrain=null;
+function renderedGround(x,z){
+  if(!nearTerrain)return ground(x,z);
+  const {grid,x0,z0,nx,nz,data}=nearTerrain,u=(x-x0)/grid,v=(z-z0)/grid,i=Math.floor(u),j=Math.floor(v);
+  if(i<0||j<0||i>=nx-1||j>=nz-1)return ground(x,z);
+  const f=u-i,g=v-j,a=i+j*nx,b=a+1,c=a+nx,d=c+1;
+  return f+g<=1?data[a]+f*(data[b]-data[a])+g*(data[c]-data[a]):
+    data[d]+(1-f)*(data[c]-data[d])+(1-g)*(data[b]-data[d]);
+}
 function terrain(){
   const grid=6,margin=235,nx=Math.ceil((box.max.x-box.min.x+2*margin)/grid)+1,nz=Math.ceil((box.max.z-box.min.z+2*margin)/grid)+1;
   const verts=[],colors=[],uv=[],soil=[],indices=[],base=new T.Color(),tea=new T.Color(0xcbd3b0),sand=new T.Color(0xe5d6bb);
-  const waterVerts=[],profiles=[],waterIndices=[];
+  const waterVerts=[],profiles=[],waterIndices=[],cutWeights=[],seaWeights=[],data=new Float32Array(nx*nz);
+  nearTerrain={grid,x0:box.min.x-margin,z0:box.min.z-margin,nx,nz,data};
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
     const x=box.min.x-margin+i*grid,z=box.min.z-margin+j*grid,n=nearest(x,z),y=surface(x,z,n);
-    const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
-    const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
-    const angle=heading+(crossChannel?Math.PI/2:0),current=river?.6:.93;
-    const level=besideWater(n.d)?waterLevel:-1e4;
-    waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(level-y)*2.6);
+    data[j*nx+i]=y;
+    const level=besideWater(n.d)&&(!mountainField||n.dist<145)?waterLevel:-1e4;
+    if(!route.stage){
+      const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
+      const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
+      const angle=heading+(crossChannel?Math.PI/2:0),current=river?.6:.93;
+      waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(level-y)*2.6);
+    }
+    const cut=mountainField?Math.min(1,Math.max(0,(y-n.y+.3)/Math.max(4,n.dist)) * 4)
+      *smooth(9,17,n.dist)*(1-smooth(35,75,n.dist)):0;
+    cutWeights.push(cut);seaWeights.push(mountainField?mountainField.depth(x,z):0);
     const patch=.45+.21*Math.sin(x/33+z/75)+.22*Math.cos(x/85-z/24);
     base.set(river?0xa4b89b:0x94aca0).lerp(tea,patch).lerp(sand,1-smooth(level,level+1.8,y));
     uv.push(x/3.6,z/3.6);soil.push(Math.max(1-smooth(6,11,n.dist),1-smooth(level+.5,level+2.3,y)));
+    if(mountainField){
+      base.set(0xaabf9e).lerp(tea,patch*.31);
+      const wood=smooth(45,230,n.dist)*(.84+.16*Math.sin(x*.023+z*.011));
+      base.r*=1-.55*wood;base.g*=1-.24*wood;base.b*=1+.14*wood;
+    }
     base.multiplyScalar(.96+.03*Math.sin(x*.67+z*.22));verts.push(x,y,z);colors.push(base.r,base.g,base.b);
     if(j&&i){const k=j*nx+i;indices.push(k-nx-1,k-1,k-nx,k-1,k,k-nx);}
   }
-  for(let i=0;i<indices.length;i+=3){
+  if(!route.stage)for(let i=0;i<indices.length;i+=3){
     const a=indices[i],b=indices[i+1],c=indices[i+2];
     if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0)waterIndices.push(a,b,c);
   }
-  const waterGeometry=new T.BufferGeometry();
-  waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
-  waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
-  waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
-  const water=new T.Mesh(waterGeometry,courseWater.material);water.receiveShadow=true;scene.add(water);
+  if(waterIndices.length){
+    const waterGeometry=new T.BufferGeometry();
+    waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
+    waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
+    waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
+    const water=new T.Mesh(waterGeometry,courseWater.material);water.receiveShadow=true;scene.add(water);
+  }
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();
-  g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('soil',new T.Float32BufferAttribute(soil,1));
+  g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('soil',new T.Float32BufferAttribute(soil,1));g.setAttribute('cut',new T.Float32BufferAttribute(cutWeights,1));g.setAttribute('marine',new T.Float32BufferAttribute(seaWeights,1));
   const land=new T.MeshLambertMaterial({vertexColors:true,map:meadow});
+  const rock=mountainField?groundMap('surfaces/cut-rock-color.webp'):null;
+  const rockNormal=mountainField?groundMap('surfaces/cut-rock-normal.webp'):null;
+  if(rockNormal)rockNormal.colorSpace=T.NoColorSpace;
   land.onBeforeCompile=shader=>{
     shader.uniforms.earthMap={value:earth};
-    shader.vertexShader='attribute float soil; varying float soilWeight;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n soilWeight=soil;');
-    shader.fragmentShader='uniform sampler2D earthMap; varying float soilWeight;\n'+shader.fragmentShader.replace('#include <map_fragment>','diffuseColor *= mix(texture2D(map,vMapUv),texture2D(earthMap,vMapUv*1.6),smoothstep(.12,.9,soilWeight));');
+    const vars='varying float soilWeight; varying float exposed; varying float seaDepth; varying vec3 hillside; varying vec3 hillsideNormal;\n';
+    shader.vertexShader='attribute float soil; attribute float cut; attribute float marine;\n'+vars+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n soilWeight=soil; exposed=cut; seaDepth=marine; hillside=position; hillsideNormal=normal;');
+    let colour='diffuseColor *= mix(texture2D(map,vMapUv),texture2D(earthMap,vMapUv*1.6),smoothstep(.12,.9,soilWeight));';
+    if(mountainField){
+      shader.uniforms.cutStone={value:rock};shader.uniforms.cutNormal={value:rockNormal};
+      colour+=`
+        vec3 hn=normalize(hillsideNormal);
+        vec2 side=abs(hn.xz);float west=side.x/(side.x+side.y+.001);
+        vec2 u=hillside.zy/3.3, v=hillside.xy/3.3;
+        vec2 warp=.24*vec2(sin(hillside.y*.077+hillside.z*.033),sin(hillside.x*.069+hillside.y*.081));
+        u+=warp;v-=warp;
+        float seam=sin(hillside.x*.31+hillside.z*.23)*sin(hillside.y*.49-hillside.z*.17);
+        float amount=smoothstep(.27,.85,exposed*.83+max(0.,.79-hn.y)*1.75+seam*.23);
+        vec3 rockColour=mix(texture2D(cutStone,v).rgb,texture2D(cutStone,u).rgb,west);
+        vec3 veins=texture2D(cutStone,(u+v)*.21+vec2(.27,.76)).rgb;
+        rockColour=mix(vec3(dot(rockColour,vec3(.27,.57,.16))),rockColour,.48)*
+          (1.16+dot(veins,vec3(.3,.5,.2))*.8)+vec3(.014,.018,.021);
+        vec3 rockyNormal=mix(texture2D(cutNormal,v).xyz,texture2D(cutNormal,u).xyz,west)*2.-1.;
+        float weather=.89+.06*sin(dot(hillside,vec3(.088,.33,-.069)))+.05*sin(hillside.y*.09);
+        diffuseColor.rgb=mix(diffuseColor.rgb,rockColour*weather*(1.+rockyNormal.x*.12-rockyNormal.y*.16),amount);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.047,.134,.139),smoothstep(.3,2.,seaDepth));`;
+    }
+    shader.fragmentShader=vars+'uniform sampler2D earthMap; uniform sampler2D cutStone; uniform sampler2D cutNormal;\n'
+      +shader.fragmentShader.replace('#include <map_fragment>',colour);
   };
   const field=new T.Mesh(g,land);field.receiveShadow=true;scene.add(field);
 }
 terrain();
-const hills=distantHills();
+const hills=mountainField?mountainHorizon(nearTerrain,mountainField):distantHills();
 const foliage={};
 for(const kind of ['tree','palm']){
  const texture=new T.TextureLoader().load('streetscape/roadside-'+kind+'.webp');texture.colorSpace=T.SRGBColorSpace;
@@ -193,7 +334,7 @@ for(const kind of ['tree','palm']){
  geom[kind]=new T.PlaneGeometry(1,1);
 }
 function tree(d,l){
- const p=at(d,l),n=nearest(p.x,p.z),y=surface(p.x,p.z,n);
+ const p=at(d,l),n=nearest(p.x,p.z),y=renderedGround(p.x,p.z);
  if(n.dist<10||besideWater(n.d)&&y<waterLevel+.6||Math.abs(n.d-route.junction)<22)return;
  const palm=river&&random()<.42,kind=palm?'palm':'tree';
  const h=(palm?8:6.8)+random()*(palm?7:5.8),w=h*(palm?.588:.923)*(.9+random()*.2);
@@ -204,43 +345,49 @@ function tree(d,l){
  }
 }
 function teaRows(d0,end,side){
-  const verts=[],indices=[],colors=[],col=new T.Color();
+  const verts=[],indices=[],colors=[],uv=[],col=new T.Color();
   for(let row=0;row<13;row++){
-    const l=side*(14+row*2.2);let prev=-1;
-    for(let d=d0;d<=end;d+=3){
-      const p=at(d,l),n=nearest(p.x,p.z),y=surface(p.x,p.z,n);
+    let prev=-1;
+    for(let d=d0;d<=end;d+=1.25){
+      const hedge=side*(14+row*2.2+.4*Math.sin(d*.019+row*.17));
+      const p=at(d,hedge),n=nearest(p.x,p.z),y=renderedGround(p.x,p.z);
       if(n.dist<12||besideWater(n.d)&&y<waterLevel+2){prev=-1;continue;}
-      const k=verts.length/3;
-      for(const [delta,raise,tone] of [[-.78,.08,0x304a32],[-.48,.66,0x597d3b],[.42,.84,0x779642],[.78,.09,0x436335]]){
-        const q=at(d,l+delta);verts.push(q.x,y+raise,q.z);col.set(tone).multiplyScalar(.93+.12*Math.sin(d*1.34+row));colors.push(col.r,col.g,col.b);
+      const k=verts.length/3,scale=.94+.08*Math.sin(d*1.71+row*2.2)+.05*Math.cos(d*.42-row);
+      const tint=.83+.13*Math.sin(d*.27+row)+.09*Math.sin(d*2.3+row);
+      for(const [delta,raise,tone] of [[-.76,.04,0x536749],[-.52,.54,0x8b9f69],
+                                        [0,.73,0x9daa78],[.49,.60,0x8d9b66],[.74,.04,0x637747]]){
+        const q=at(d,hedge+delta*scale);
+        verts.push(q.x,renderedGround(q.x,q.z)+raise*scale,q.z);uv.push(d/1.1,(delta+.76)*.6);
+        col.set(tone).multiplyScalar(tint);colors.push(col.r,col.g,col.b);
       }
-      if(prev>=0)for(let t=0;t<3;t++)indices.push(prev+t,prev+t+1,k+t,prev+t+1,k+t+1,k+t);
+      if(prev>=0)for(let t=0;t<4;t++)indices.push(prev+t,prev+t+1,k+t,prev+t+1,k+t+1,k+t);
       prev=k;
     }
   }
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();
-  scene.add(new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide})));
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));
+  g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  const rows=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true,map:meadow,side:T.DoubleSide}));
+  rows.receiveShadow=true;scene.add(rows);
 }
-if(!river)for(const [d,end,side] of [[8,230,-1],[60,395,1],[580,950,-1],[1150,1450,1],[1580,1890,-1],[2010,2380,1]])teaRows(d,end,side);
-for(let d=3;d<route.finish+60;d+=9)beside(d,0,'box',0xecc45c,.12,.025,4);
-for(let d=bridgeStart;d<=bridgeEnd;d+=4){
-  beside(d,0,'box',0x857e6d,13.5,.6,4.2,-.62);
+if(route.id==='pass')for(const [d,end,side] of [[8,230,-1],[60,395,1],[580,950,-1],[1150,1450,1],[1580,1890,-1],[2010,2380,1]])teaRows(d,end,side);
+if(!route.stage)for(let d=bridgeStart;d<=bridgeEnd;d+=4){
+  beside(d,0,'box',0x857e6d,roadHalfWidth*2+1.5,.6,4.2,-.62);
   for(const side of [-1,1]){
-    beside(d,side*6.28,'box',0x97988d,.35,.26,4.15);
-    beside(d,side*6.42,'box',0xc4c9b8,.18,.16,4.18,1.04);
-    beside(d,side*6.42,'pole',0x88948c,.13,.9,.13,.24);
-    beside(d,side*6.42,'box',0x87928c,.08,.08,4.18,.6);
+    beside(d,side*(roadHalfWidth+.28),'box',0x97988d,.35,.26,4.15);
+    beside(d,side*(roadHalfWidth+.42),'box',0xc4c9b8,.18,.16,4.18,1.04);
+    beside(d,side*(roadHalfWidth+.42),'pole',0x88948c,.13,.9,.13,.24);
+    beside(d,side*(roadHalfWidth+.42),'box',0x87928c,.08,.08,4.18,.6);
   }
-  if((d-bridgeStart)%24===0)for(const side of [-1,1])beside(d,side*4,'pole',0x827e71,1.2,12,1.2,-12);
+  if((d-bridgeStart)%24===0)for(const side of [-1,1])beside(d,side*(roadHalfWidth-2),'pole',0x827e71,1.2,12,1.2,-12);
 }
 for(let d=15;d<route.finish+50;d+=13){
-  if(d>bridgeStart-10&&d<bridgeEnd+10)continue;
+  if(!route.stage&&d>bridgeStart-10&&d<bridgeEnd+10)continue;
   for(const side of [-1,1]){
     const deep=river&&side<0?75:river?12:33;
     if(random()>.2)tree(d+random()*6,side*(deep+random()*15));
     if(random()>.35)tree(d+random()*10,side*(deep+18+random()*24));
   }
-  if(d%65<14&&d>70&&Math.abs(d-route.junction)>65){
+  if(!route.stage&&d%65<14&&d>70&&Math.abs(d-route.junction)>65){
     const side=river?1:(random()>.45?1:-1),l=side*(river?20+random()*7:49+random()*8),h=3.5+random()*2,w=5+random()*4;
     const p=at(d,l),base=ground(p.x,p.z)-p.y-.45;
     beside(d,l,'box',random()>.5?0xc6b699:0xa4ae99,w,h,8,base);
@@ -250,7 +397,7 @@ for(let d=15;d<route.finish+50;d+=13){
   }
 }
 const junction=at(route.junction);
-for(const side of [-1,1]){
+if(!route.stage)for(const side of [-1,1]){
   const angle=junction.h+side*Math.PI/2;
   scatter('box',0x757670,junction.x+Math.sin(angle)*29,junction.y-.09,junction.z-Math.cos(angle)*29,8,.16,64,-angle);
 }
@@ -262,31 +409,41 @@ function board(d,l,text,bg='#235642',w=5,mount=3){
   const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,p.y+mount,p.z);face.rotation.y=-p.h;scene.add(face);
   if(mount===3)beside(d,l,'pole',0x797c74,.12,3,.12);
 }
-board(36,7,route.name.toLocaleUpperCase('vi'));board(route.bridge[0]-17,7.9,route.near);board(route.junction-42,8,route.sign>0?'BẾN CHỢ  →':'←  NÔNG TRƯỜNG');
+board(36,7,route.name.toLocaleUpperCase('vi'));if(!route.stage)board(route.bridge[0]-17,7.9,route.near);if(!route.stage)board(route.junction-42,8,route.sign>0?'BẾN CHỢ  →':'←  NÔNG TRƯỜNG');
 if(arcade){
- for(let d=3;d<route.finish;d+=3){
+ if(!route.stage)for(let d=3;d<route.finish;d+=3){
    if(Math.abs(heading(d+10)-heading(d))<.027 && d>65 && d<route.finish-36)continue;
    const paint=Math.floor(d/3)%2?0xf5dfbe:0xd94e30;
    for(const side of [-1,1])beside(d,side*5.94,'box',paint,.48,.075,3.04);
  }
  for(const [d,label] of [[36,'XUẤT PHÁT'],[route.finish/2,'NỬA CHẶNG'],[route.finish,'VỀ ĐÍCH']]){
-   for(const side of [-1,1])beside(d,side*6.5,'box',0xff4e24,.5,6,.6);
-   beside(d,0,'box',0x252a36,13.4,1.15,.65,5.45);
+   if(route.stage&&d===route.finish/2)continue;
+   for(const side of [-1,1])beside(d,side*(roadHalfWidth+.5),'box',0x8e6649,.5,6,.6);
+   beside(d,0,'box',0x252a36,roadHalfWidth*2+1.4,1.15,.65,5.45);
    board(d-.4,0,label,'#bc381c',5.1,6);
-   for(let n=0;n<14;n++)for(let row=0;row<2;row++)beside(d+row*.73,n*.84-5.46,'box',(n+row)%2?0x252630:0xf0efdc,.84,.025,.73,.018);
+   for(let n=0;n<14;n++)for(let row=0;row<2;row++)beside(d+row*.73,(n-6.5)*roadHalfWidth/7,'box',(n+row)%2?0x252630:0xf0efdc,roadHalfWidth/7,.025,.73,.018);
  }
 }else{board(route.finish-35,8,'ĐIỂM DỪNG XE','#365c70');board(115,7,'TỐI ĐA 50 km/h','#625b46');}
 buildRoadside();
+if(!river)buildMountainVerges();
 for(const b of batches.values()){
- const m=new T.InstancedMesh(geom[b.kind],foliage[b.kind]||new T.MeshLambertMaterial({color:b.color}),b.matrices.length);b.matrices.forEach((mat,i)=>m.setMatrixAt(i,mat));m.castShadow=true;m.receiveShadow=true;scene.add(m);
+ const m=new T.InstancedMesh(geom[b.kind],foliage[b.kind]||new T.MeshLambertMaterial({color:b.color}),b.matrices.length);b.matrices.forEach((mat,i)=>m.setMatrixAt(i,mat));m.castShadow=b.kind!=='undergrowth';m.receiveShadow=!foliage[b.kind];scene.add(m);
 }
 const rig=new T.Group();scene.add(rig);
 const cabin=buildDriverCabin(T,rig), outer=new T.Group();rig.add(outer);
 const fallback=new T.Mesh(new T.BoxGeometry(1.8,1.1,4),new T.MeshStandardMaterial({color:0xcda05e}));fallback.position.y=.75;outer.add(fallback);
 async function loadSedan(){
- const res=await fetch('streetscape/sedan.json.gz');const bytes=new Uint8Array(await res.arrayBuffer());
- const json=bytes[0]===31?await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json():JSON.parse(new TextDecoder().decode(bytes));
- const model=new T.ObjectLoader().parse(json),bounds=new T.Box3().setFromObject(model),scale=4.18/(bounds.max.z-bounds.min.z);
+ let model;
+ try{
+   const loaded=await TrafficModels.load.loadAsync('traffic/hatchback.glb');
+   model=loaded.scene.clone(true);
+ }catch{
+   const res=await fetch('streetscape/sedan.json.gz');if(!res.ok)throw Error('Sedan asset unavailable');
+   const bytes=new Uint8Array(await res.arrayBuffer());
+   const json=bytes[0]===31?await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json():JSON.parse(new TextDecoder().decode(bytes));
+   model=new T.ObjectLoader().parse(json);
+ }
+ const bounds=new T.Box3().setFromObject(model),scale=4.18/(bounds.max.z-bounds.min.z);
  model.scale.setScalar(scale);model.rotation.y=Math.PI;model.position.y=-bounds.min.y*scale;model.traverse(n=>{if(n.isMesh)n.castShadow=true;});outer.clear();outer.add(model);
 }
 if(!arcade)loadSedan().catch(()=>{});
@@ -463,7 +620,7 @@ function render(now){
  const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
  if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
  rig.position.set(s.x,ground.y,s.z);rig.rotation.set(Math.atan(roadGrade(s.d,s.h)),-s.h,0,'YXZ');yawQ.copy(rig.quaternion);
- hills.position.set(s.x,0,s.z);
+ if(!mountainField)hills.position.set(s.x,0,s.z);
  const focus=at(s.d+20);sun.target.position.set(Math.round(focus.x),Math.round(focus.y),Math.round(focus.z));sun.position.copy(sun.target.position);sun.position.x-=38;sun.position.y+=45;sun.position.z+=22;
  if(now-lastShadow>(s.mode==='drive'?42:300)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
  outer.visible=!inside;cabin.update(inside,s.v*3.6,s.steer,s.d,route);
@@ -473,7 +630,7 @@ function render(now){
  for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.set(Math.atan(roadGrade(c.d,p.h)),-p.h,0,'YXZ');}
  courseWater.update(now*.001);
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
- courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
+ if(!route.stage)courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
  renderer.render(scene,camera);
  driveAudio.update({boost:arcade&&cupBody.driving&&cupBody.boost,slip:arcade?cupBody.slip:0,speed:Math.abs(s.v)*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':arcade&&['grid','countdown'].includes(s.mode)?'idling':'ready'});
  if(now-lastHud>90){if(arcade)raceHud();else hud();mapDraw();lastHud=now;}requestAnimationFrame(render);

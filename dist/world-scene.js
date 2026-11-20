@@ -1,16 +1,21 @@
 'use strict';
 (() => {
   const widths={motorway:7.3,trunk:6.9,primary:6.1,secondary:5.2,tertiary:4.6,residential:3.4,unclassified:3.4,service:2.8};
-  window.worldRoadHalfWidth=kind=>String(kind).endsWith('_link')?3.8:widths[kind]||4.2;
+  const namedPass=e=>e&&typeof e==='object'&&e.name?.startsWith('Đèo ')&&!e.oneway;
+  window.worldRoadHalfWidth=edge=>{
+    const kind=typeof edge==='string'?edge:edge?.kind;
+    const w=String(kind).endsWith('_link')?3.8:widths[kind]||4.2;
+    return namedPass(edge)?Math.min(w,3.85):w;
+  };
 
   window.createWorldScene=function(canvas){
     const T=window.THREE,scene=new T.Scene();
     const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
     const small=matchMedia('(pointer:coarse)').matches;
     renderer.setPixelRatio(Math.min(devicePixelRatio,small?1.25:1.65));
-    renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.06;
+    renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.98;
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
-    scene.background=new T.Color(0xaec5d2);scene.fog=new T.FogExp2(0xb7c9cc,.00235);
+    scene.background=new T.Color(0xaec5d2);scene.fog=new T.FogExp2(0xc2d1d0,.00072);
     const camera=new T.PerspectiveCamera(61,1,.14,28000);
     const skyLoader=new T.TextureLoader();
     function texture(file,tile=false){
@@ -21,8 +26,8 @@
     }
     skyLoader.load('streetscape/sky.jpg',t=>{t.colorSpace=T.SRGBColorSpace;t.mapping=T.EquirectangularReflectionMapping;scene.background=t;});
     skyLoader.load('streetscape/river-reflection.jpg',t=>{t.colorSpace=T.SRGBColorSpace;t.mapping=T.EquirectangularReflectionMapping;scene.environment=t;});
-    scene.add(new T.HemisphereLight(0xd1e6ff,0x857760,1.13));
-    const sun=new T.DirectionalLight(0xffdfab,2.85);
+    scene.add(new T.HemisphereLight(0xd9ebff,0x888574,1.15));
+    const sun=new T.DirectionalLight(0xffefcf,2.30);
     sun.castShadow=true;sun.shadow.mapSize.setScalar(small?1024:2048);
     Object.assign(sun.shadow.camera,{left:-43,right:43,bottom:-43,top:43,near:1,far:175});
     sun.shadow.camera.updateProjectionMatrix();sun.shadow.normalBias=.025;sun.shadow.bias=-.00025;scene.add(sun,sun.target);
@@ -37,6 +42,26 @@
       awning:basic(0x9c9f92),tree:new T.MeshLambertMaterial({map:texture('roadside-tree.webp'),alphaTest:.46,side:T.DoubleSide,color:0xd4dbcc,emissive:0x262b23}),
       palm:new T.MeshLambertMaterial({map:texture('roadside-palm.webp'),alphaTest:.46,side:T.DoubleSide,color:0xd6dccb,emissive:0x262b23})
     };
+    const stoneNormal=skyLoader.load('streetscape/surfaces/cut-rock-normal.webp');
+    stoneNormal.wrapS=stoneNormal.wrapT=T.RepeatWrapping;
+    material.cut=new T.MeshStandardMaterial({map:texture('surfaces/cut-rock-color.webp',true),normalMap:stoneNormal,
+      normalScale:new T.Vector2(.62,.62),roughness:.96,side:T.DoubleSide,color:0xbcb5a6});
+    material.pine=new T.MeshLambertMaterial({map:texture('surfaces/mountain-pine.webp'),alphaTest:.34,side:T.DoubleSide,color:0xe7ede4});
+    material.fern=new T.MeshLambertMaterial({map:texture('surfaces/bank-fern.webp'),alphaTest:.38,side:T.DoubleSide,color:0xd6dfd1});
+    // A photographed crown already contains branch and leaf shading. Shared
+    // upward normals avoid black panels when a crossed sheet faces away from the sun.
+    for(const canopy of [material.tree,material.pine,material.palm,material.fern]){
+      canopy.customProgramCacheKey=()=>canopy===material.pine||canopy===material.fern?'understory':'canopy';
+      canopy.onBeforeCompile=shader=>{
+        shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>',
+          '#include <beginnormal_vertex>\n objectNormal=vec3(0.,1.,0.);');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>',
+          '#include <normal_fragment_begin>\n normal*=faceDirection;');
+        if(canopy===material.pine||canopy===material.fern)shader.fragmentShader=shader.fragmentShader.replace(
+          '#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb*=2.25;');
+      };
+    }
+    material.rail=new T.MeshStandardMaterial({color:0xaab2af,metalness:.55,roughness:.49,side:T.DoubleSide});
     material.asphalt.side=material.earth.side=T.DoubleSide;
     material.pavers=new T.MeshStandardMaterial({color:0xb5ada4,roughness:.91});
     material.pavers.onBeforeCompile=shader=>{
@@ -59,8 +84,8 @@
         name:'Shopfront '+name,map:texture('surfaces/front-'+name+'.webp'),roughness:.91,metalness:0
       });
     }
-    const meadow=surfaces.scanned('meadow',0xc8d0a6,.56);
-    const upland=surfaces.scanned('grass',0xadcd9c,.67);
+    const meadow=surfaces.scanned('meadow',0xafbd9d,.56);
+    const upland=surfaces.scanned('grass',0x8ea68d,.67);
     const landWidth=2048;
     const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth,32,32),meadow);
     const landOrigin=new T.Vector2();
@@ -83,6 +108,12 @@
     const wireMaterial=new T.LineBasicMaterial({color:0x50554d,transparent:true,opacity:.64});
     const temp=new T.Object3D(),tone=new T.Color();
     const roadsideImpact=createRoadsideImpact(T,scene,relief.ground);
+    let roadway=relief.ground,wooded=false;
+    const driveGround=(x,z)=>roadway(x,z);
+    function driveGrade(x,z,yaw){
+      const dx=2.2*Math.sin(yaw),dz=-2.2*Math.cos(yaw);
+      return (roadway(x+dx,z+dz)-roadway(x-dx,z-dz))/4.4;
+    }
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
     const landmarks=window.VietnamLandmarks?.create(T,scene);
     const district=createTourDistrict(T,scene,material.wall);
@@ -152,7 +183,10 @@
       for(const [mat,tile] of [[meadow,3.1],[upland,14.2]]){
         surfaces.transform(mat,landWidth/tile,landWidth/tile,(gx/tile)%1,(-gz/tile)%1);
       }
-      const segments=[],cells=new Map(),roadData=[],landData=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
+      const natural=localGround;
+      const passRoad=edges.some(namedPass);
+      wooded=passRoad||relief.altitude(cx,cz)>280;
+      const segments=[],cells=new Map(),roadData=[],landData=[],bankData=[],railVerts=[],railIndices=[],cutVerts=[],cutUv=[],cutIndices=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
       obstacleCells=new Map();
       roadsideImpact.rebase(cx,cz);
       const cellSize=32,cutoff=650;
@@ -272,11 +306,15 @@
       }
       function quad(points,ax,az,bx,bz,cx,cz,dx,dz){points.push(ax,az,bx,bz,cx,cz,cx,cz,bx,bz,dx,dz);}
       function strip(target,s,start,end,l,r){
-        const ax=s.ax+s.fx*start,az=s.az+s.fz*start,bx=s.ax+s.fx*end,bz=s.az+s.fz*end;
-        quad(target,ax+s.nx*l,az+s.nz*l,ax+s.nx*r,az+s.nz*r,bx+s.nx*l,bz+s.nz*l,bx+s.nx*r,bz+s.nz*r);
+        const n=s.graded?Math.max(1,Math.ceil((end-start)/5)):1;
+        for(let j=0;j<n;j++){
+          const a=start+(end-start)*j/n,b=start+(end-start)*(j+1)/n;
+          const ax=s.ax+s.fx*a,az=s.az+s.fz*a,bx=s.ax+s.fx*b,bz=s.az+s.fz*b;
+          quad(target,ax+s.nx*l,az+s.nz*l,ax+s.nx*r,az+s.nz*r,bx+s.nx*l,bz+s.nz*l,bx+s.nx*r,bz+s.nz*r);
+        }
       }
       for(const e of edges){
-        const width=window.worldRoadHalfWidth(e.kind);
+        const width=window.worldRoadHalfWidth(e);
         for(let i=1;i<e.points.length;i++){
           const a=e.points[i-1],b=e.points[i];
           let ax=a.x-cx,az=a.z-cz,bx=b.x-cx,bz=b.z-cz;
@@ -290,7 +328,19 @@
           const mx=graph?111320*Math.cos(latitude*Math.PI/180)/graph.mx:1;
           const sourceLength=Math.hypot(dx*mx,dz);
           const s={ax,az,bx,bz,fx,fz,nx,nz,len:length,sourceLength,w:width,kind:e.kind,oneway:e.oneway,rank:perp,seed};
-          segments.push(s);strip(landData,s,0,s.len,-width-.85,width+.85);strip(roadData,s,0,s.len,-width,width);
+          s.graded=namedPass(e)||wooded&&!district.builtUp(cx+(ax+bx)*.5,cz+(az+bz)*.5)&&!['residential','service','living_street'].includes(e.kind);
+          if(s.graded){
+            const n=Math.max(1,Math.ceil(length/12));s.interval=length/n;s.crown=[];
+            for(let j=0;j<=n;j++){
+              const x=ax+fx*s.interval*j,z=az+fz*s.interval*j;
+              // Build a level cross-section above the uphill shoulder. The two
+              // batters reconnect it to natural ground without canting the car.
+              s.crown.push(Math.max(natural(x,z),natural(x+nx*width,z+nz*width),natural(x-nx*width,z-nz*width))+.10+width*.018);
+            }
+          }
+          segments.push(s);strip(landData,s,0,s.len,-width-.85,width+.85);
+          if(s.graded){strip(roadData,s,0,s.len,-width,0);strip(roadData,s,0,s.len,0,width);}
+          else strip(roadData,s,0,s.len,-width,width);
           for(const [x,z] of [[ax,az],[bx,bz]]){
             const k=Math.round(x*10)+','+Math.round(z*10);
             const node=junctions.get(k);if(node){node.r=Math.max(node.r,width);node.n++;}else junctions.set(k,{x,z,r:width,n:1});
@@ -298,9 +348,86 @@
           bounds(s,width+9,key=>{if(!cells.has(key))cells.set(key,[]);cells.get(key).push(s);});
         }
       }
+      // Share the formation height at every OSM node to keep joined ribbons continuous.
+      const crestNodes=new Map(),nodeKey=(x,z)=>Math.round((cx+x)*10)+','+Math.round((cz+z)*10);
+      for(const s of segments)if(s.graded){
+        for(const [x,z,h] of [[s.ax,s.az,s.crown[0]],[s.bx,s.bz,s.crown.at(-1)]]){
+          const k=nodeKey(x,z);
+          crestNodes.set(k,Math.max(crestNodes.get(k)??-Infinity,h));
+        }
+      }
+      for(const s of segments)if(s.graded){
+        s.crown[0]=crestNodes.get(nodeKey(s.ax,s.az));
+        s.crown[s.crown.length-1]=crestNodes.get(nodeKey(s.bx,s.bz));
+      }
+      roadway=!wooded?relief.ground:(x,z)=>{
+        const lx=x-cx,lz=z-cz,naturalY=natural(lx,lz);
+        let best=Infinity,height=naturalY;
+        for(const s of cells.get(nearbyCell(lx,lz))||[]){
+          if(!s.graded)continue;
+          const d=Math.max(0,Math.min(s.len,(lx-s.ax)*s.fx+(lz-s.az)*s.fz));
+          const cross=Math.hypot(lx-s.ax-s.fx*d,lz-s.az-s.fz*d);
+          if(cross>=s.w+4||cross>=best)continue;
+          const j=Math.min(s.crown.length-2,Math.floor(d/s.interval)),f=d/s.interval-j;
+          const crown=s.crown[j]*(1-f)+s.crown[j+1]*f;
+          const t=Math.max(0,Math.min(1,(s.w+4-cross)/3.35));
+          height=naturalY+(crown-Math.min(s.w,cross)*.018-naturalY)*t;
+          best=cross;
+        }
+        return height;
+      };
+      function cutClearance(x,z,own){
+        let gap=8;
+        for(const other of cells.get(nearbyCell(x,z))||[]){
+          if(other===own)continue;
+          const t=Math.max(0,Math.min(other.len,(x-other.ax)*other.fx+(z-other.az)*other.fz));
+          gap=Math.min(gap,Math.hypot(x-other.ax-t*other.fx,z-other.az-t*other.fz)-other.w);
+        }return Math.max(0,Math.min(1,(gap-.6)/4));
+      }
+      // Taper the fill into the natural slope beneath road bends and at joints.
       function cap(points,x,z,r){
         let a=0;
         for(let i=1;i<=12;i++){const b=i*Math.PI/6;points.push(x,z,x+Math.sin(a)*r,z+Math.cos(a)*r,x+Math.sin(b)*r,z+Math.cos(b)*r);a=b;}
+      }
+      for(const s of segments)if(s.graded)for(const sign of [-1,1]){
+        const mid=s.len*.5,x=s.ax+s.fx*mid,z=s.az+s.fz*mid;
+        const uphill=natural(x+s.nx*sign*8,z+s.nz*sign*8)-natural(x,z)>.35;
+        strip(bankData,s,0,s.len,sign*(s.w+.68),sign*(s.w+(uphill?2.15:4.25)));
+        if(!uphill||s.len<7||wetMask&&wet(x,z)||district.builtUp(cx+x,cz+z))continue;
+        const count=Math.max(2,Math.ceil(s.len/2.4));
+        let prev=-1;
+        for(let j=0;j<=count;j++){
+          const u=s.len*j/count,px=s.ax+s.fx*u,pz=s.az+s.fz*u;
+          const wx=px+cx,wz=pz+cz,coarse=.5+.5*Math.sin(wx*.03+wz*.016+.8*Math.sin(wz*.047));
+          const fracture=Math.sin(wx*.88+wz*.42)*.19+Math.cos(wz*1.14-wx*.29)*.13;
+          const toe=1.45+.44*coarse+fracture;
+          const footX=px+sign*s.nx*(s.w+toe),footZ=pz+sign*s.nz*(s.w+toe);
+          const backX=footX+sign*s.nx*5.5,backZ=footZ+sign*s.nz*5.5;
+          const rise=Math.max(0,natural(backX,backZ)-natural(footX,footZ));
+          const ends=Math.min(1,u/4,(s.len-u)/4),gap=Math.min(cutClearance(footX,footZ,s),cutClearance(backX,backZ,s));
+          const height=Math.min(3.9,.15+rise*(1.15+coarse)+coarse*coarse*1.65)*gap*ends;
+          if(height<.08){prev=-1;continue;}
+          const row=cutVerts.length/3,bankBase=roadway(wx+(footX-px),wz+(footZ-pz));
+          for(const [lateral,y] of [[0,bankBase-.28],[.30+fracture,bankBase+height*.35],[.63-fracture,bankBase+height*.77],
+            [1.28+coarse,bankBase+height],[3.1,natural(footX+sign*s.nx*3.1,footZ+sign*s.nz*3.1)+height*.32],[5.5,natural(backX,backZ)-.22]]){
+            const xx=footX+sign*s.nx*lateral,zz=footZ+sign*s.nz*lateral;
+            cutVerts.push(xx,y,zz);cutUv.push(((xx+cx)*s.fx+(zz+cz)*s.fz)*.33,(y+lateral*.67)*.33);
+          }
+          if(prev>=0){
+            for(let k=0;k<5;k++)cutIndices.push(prev+k,row+k,prev+k+1,prev+k+1,row+k,row+k+1);
+            if(height>.48){
+              const length=s.len/count;
+              registerObstacle({id:s.seed+':cut:'+j,kind:'barrier',x:footX-s.fx*length*.5,z:footZ-s.fz*length*.5,
+                fx:s.fx,fz:s.fz,w:length*.5,d:.13,height,parts:[]});
+            }
+          }
+          prev=row;
+          if(j%3===1&&s.rank<260&&height>.8){
+            const fh=.6+coarse*.65;
+            instance('fern',unitPlane,footX+sign*s.nx*1.6,bankBase+height-natural(footX,footZ)+fh*.37,footZ+sign*s.nz*1.6,fh*2.24,fh,1,wx*.43+wz*.21);
+          }
+        }
+
       }
       for(const node of junctions.values()){cap(roadData,node.x,node.z,node.r);cap(landData,node.x,node.z,node.r+.85);}
       function openNearEnd(s,x,z){
@@ -328,13 +455,13 @@
             instance('concrete',unitBox,mx+s.nx*lip,.035,mz+s.nz*lip,.16,.14,end-start,angle);
           }
         }
-        if(s.w>=4.2){
+        if(s.w>=4.2||s.graded){
           for(const side of [-1,1])strip(white,s,start,end,side*s.w*.94-.055,side*s.w*.94+.055);
           for(let u=start+1;u<end;u+=10)strip(s.oneway?white:yellow,s,u,Math.min(end,u+3.7),-.074,.074);
           if(s.w>=6.75)for(let u=start+2;u<end;u+=11)for(const side of [-1,1])strip(white,s,u,Math.min(end,u+3),side*s.w*.49-.065,side*s.w*.49+.065);
         }
         if(s.rank>620||s.len<3)continue;
-        if(s.w>=4.2&&s.len>=24){
+        if(!s.graded&&s.w>=4.2&&s.len>=24){
           const spacing=s.w>6?31:38;
           let last=null;
           for(let station=9;station<end-4;station+=spacing){
@@ -368,7 +495,7 @@
           for(const sign of [-1,1]){
             let seed=(s.seed^Math.imul(1+2*index+(sign>0?1:0),1597334677))>>>0;
             const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-            const priority=random(),house=random()<(dense?.73:.34),type=Math.floor(random()*shopTypes.length);
+            const priority=random(),house=random()<(s.graded?.035:dense?.73:.34),type=Math.floor(random()*shopTypes.length);
             const width=4.5+random()*2.9,depth=5+random()*3.9;
             const dist=s.w+(house?3.5+depth/2:3)+random()*(house?3:5);
             const hx=x+sign*s.nx*dist,hz=z+sign*s.nz*dist,footprint=house?Math.hypot(width,depth)/2+.8:1.7;
@@ -393,6 +520,9 @@
               // Local +Z faces the road, with the façade just outside the wall.
               const sx=-s.nx*sign,sz=-s.nz*sign,rot=Math.atan2(sx,sz);
               buildingBase=localGround(hx,hz);
+              const foot=Math.abs(localGround(hx+width*.5,hz)-localGround(hx-width*.5,hz))+
+                Math.abs(localGround(hx,hz+depth*.5)-localGround(hx,hz-depth*.5));
+              if(foot>.14)instance('concrete',unitBox,hx,-foot*.43,hz,width+.06,foot*.9+.10,depth+.06,rot);
               instance('wall',unitBox,hx,h*.5,hz,width,h,depth,rot,[0xe9d4b5,0xc7d6bb,0xf3dfb0][type%3]);
               instance('front'+type,unitPlane,hx+sx*(depth/2+.025),h/2,hz+sz*(depth/2+.025),width,h,1,rot);
               for(const side of [-1,1]){
@@ -419,11 +549,81 @@
               for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle,null,tree);}
             }
       }
+      if(wooded){
+        // World-aligned, seeded stands keep their identity as streamed road tiles move.
+        // Dense stands only grow in gaps between mapped roads, water and settlements.
+        const pitch=20,radius=460;
+        for(let ix=Math.floor((cx-radius)/pitch);ix<=Math.ceil((cx+radius)/pitch);ix++){
+          for(let iz=Math.floor((cz-radius)/pitch);iz<=Math.ceil((cz+radius)/pitch);iz++){
+            let seed=(Math.imul(ix,73856093)^Math.imul(iz,19349663))>>>0;
+            const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+            const wx=(ix+rand())*pitch,wz=(iz+rand())*pitch;
+            const openness=.46+.19*Math.sin(wx*.013+wz*.004)+.18*Math.sin(wz*.019-wx*.005);
+            if(rand()>openness+.24||district.builtUp(wx,wz)||onApproach(wx,wz))continue;
+            const lx=wx-cx,lz=wz-cz,dist=Math.hypot(lx,lz);
+            if(dist>radius||blocked(lx,lz,5.5)||obstacleCells.has(obstacleKey(lx,lz)))continue;
+            const altitude=relief.altitude(wx,wz),cool=altitude>650;
+            const pine=cool&&rand()<.73;
+            const h=(pine?10:6.7)+rand()*(pine?10:7.1),w=h*(pine?.5:.82)*(.82+rand()*.32);
+            const angle=rand()*Math.PI,tint=tone.setHSL(.24+rand()*.10,.08+rand()*.14,.66+rand()*.18).getHex();
+            const id='stand:'+ix+':'+iz;
+            const tree=registerObstacle({id,kind:'tree',x:lx,z:lz,radius:Math.max(.16,h*.02),height:h,parts:[]});
+            const planes=dist>275&&small?1:2;
+            for(let k=0;k<planes;k++)instance(pine?'pine':'tree',unitPlane,lx,h*.485,lz,w,h,1,angle+k*Math.PI/2,tint,tree);
+            if(dist>210||rand()>.76)continue;
+            for(let k=0;k<3;k++){
+              const fx=lx+(rand()-.5)*12,fz=lz+(rand()-.5)*12,fh=.6+rand()*1.0;
+              if(!blocked(fx,fz,1.5))instance('fern',unitPlane,fx,fh*.47,fz,fh*2.24,fh,1,rand()*Math.PI,tint);
+            }
+          }
+        }
+      }
+      if(cutVerts.length){
+        const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(cutVerts,3));
+        g.setAttribute('uv',new T.Float32BufferAttribute(cutUv,2));g.setIndex(cutIndices);g.computeVertexNormals();
+        const bank=new T.Mesh(g,material.cut);bank.name='Exposed rock cuttings';bank.castShadow=true;bank.receiveShadow=true;roadGroup.add(bank);
+      }
+      // A continuous folded W-beam follows the low shoulder above a drop.
+      for(const s of segments){
+        if(!s.graded||s.len<3||s.rank>530)continue;
+        const mid=s.len/2,x=s.ax+s.fx*mid,z=s.az+s.fz*mid;
+        const side=natural(x+s.nx*7,z+s.nz*7)<natural(x-s.nx*7,z-s.nz*7)?1:-1;
+        const off=side*(s.w+.47);
+        if(natural(x,z)-natural(x+side*s.nx*9,z+side*s.nz*9)<.45||
+          wetMask&&wet(x,z)||district.builtUp(cx+x,cz+z))continue;
+        const start=openNearEnd(s,s.ax,s.az),end=s.len-openNearEnd(s,s.bx,s.bz),length=end-start;
+        if(length<2)continue;
+        const count=Math.ceil(length/4),angle=Math.atan2(s.fx,s.fz);
+        let prev=-1;
+        for(let j=0;j<=count;j++){
+          const d=start+length*j/count,px=s.ax+s.fx*d+s.nx*off,pz=s.az+s.fz*d+s.nz*off;
+          const y=roadway(cx+px,cz+pz);
+          const row=railVerts.length/3;
+          for(const [push,up] of [[0,.51],[.064,.55],[.012,.605],[.067,.66],[0,.70]]){
+            railVerts.push(px-side*push*s.nx,y+up,pz-side*push*s.nz);
+          }
+          if(prev>=0)for(let k=0;k<4;k++)railIndices.push(prev+k,row+k,prev+k+1,prev+k+1,row+k,row+k+1);
+          prev=row;
+          if(j===count)continue;
+          const adjust=y-natural(px,pz);
+          instance('steel',unitBox,px+side*.08*s.nx,adjust+.27,pz+side*.08*s.nz,.10,.88,.12,angle);
+          if(j%4===0)instance('white',unitBox,px,adjust+.697,pz,.12,.054,.06,angle);
+          const half=length/count*.5;
+          registerObstacle({id:s.seed+':rail:'+j,kind:'barrier',x:px+s.fx*half,z:pz+s.fz*half,fx:s.fx,fz:s.fz,w:half,d:.10,height:.70,parts:[]});
+        }
+      }
+      if(railVerts.length){
+        const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(railVerts,3));
+        g.setIndex(railIndices);g.computeVertexNormals();const rails=new T.Mesh(g,material.rail);
+        rails.name='Mountain safety rails';rails.castShadow=true;rails.receiveShadow=true;roadGroup.add(rails);
+      }
       function surface(data,mat,y,freq){
         if(!data.length)return;
         const verts=[],uv=[],step=relief.step;
+        const roadLayer=mat!==waterSurface.material;
         function vertex(x,z){
-          verts.push(x,localGround(x,z)+y,z);
+          const h=roadLayer&&wooded?roadway(cx+x,cz+z):localGround(x,z);
+          verts.push(x,h+y,z);
           uv.push(x*freq+(cx*freq)%1,z*freq+(cz*freq)%1);
         }
         // Split at terrain edges so a long road, its paint and the ground coincide
@@ -461,6 +661,7 @@
         const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;roadGroup.add(mesh);
       }
       material.white.side=material.yellow.side=T.DoubleSide;
+      surface(bankData,material.earth,-.065,.60);
       surface(waterData,waterSurface.material,-.085,.074);surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       if(wires.length){
         for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
@@ -470,7 +671,8 @@
       for(const b of batches.values()){
         const m=new T.InstancedMesh(b.geo,material[b.mat],b.poses.length);
         for(const [index,o] of b.moving)o.parts.push({index,mesh:m,rest:b.poses[index]});
-        b.poses.forEach((pose,i)=>{m.setMatrixAt(i,pose);if(b.colors[i]!==null)m.setColorAt(i,tone.set(b.colors[i]));});
+        const tinted=b.colors.some(c=>c!==null);
+        b.poses.forEach((pose,i)=>{m.setMatrixAt(i,pose);if(tinted)m.setColorAt(i,tone.set(b.colors[i]??0xffffff));});
         m.castShadow=true;m.receiveShadow=true;roadGroup.add(m);
       }
       shadowStamp=-1000;
@@ -591,8 +793,8 @@
       width=w;height=h;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();
     }
     function pose(item,car,dt,near){
-      const pitch=Math.atan(relief.grade(car.x,car.z,car.yaw)),bank=Math.atan(relief.grade(car.x,car.z,car.yaw+Math.PI/2));
-      item.root.position.set(car.x-originX,relief.ground(car.x,car.z)+.011,car.z-originZ);
+      const pitch=Math.atan(driveGrade(car.x,car.z,car.yaw)),bank=Math.atan(driveGrade(car.x,car.z,car.yaw+Math.PI/2));
+      item.root.position.set(car.x-originX,driveGround(car.x,car.z)+.011,car.z-originZ);
       item.root.rotation.set(-pitch,Math.PI-car.yaw,-bank,'YXZ');
       if(near)item.request();
       const detailed=near&&!!item.detail;item.low.visible=!detailed;
@@ -618,7 +820,7 @@
       }
       pose(player,car,dt,true);player.outside.visible=!inside;
       player.outside.rotation.set(-(car.pitch||0),0,-(car.roll||0));
-      car.y=relief.ground(car.x,car.z);playerRig.position.set(x,car.y+.011,z);
+      car.y=driveGround(car.x,car.z);playerRig.position.set(x,car.y+.011,z);
       playerRig.rotation.set(-player.root.rotation.x,-car.yaw,-player.root.rotation.z,'YXZ');
       mirrorRotation.copy(playerRig.quaternion);
       cabinCourse.finish=Math.ceil(totalDriven);cabinCourse.name=car.roadName||'Việt Nam';
@@ -644,7 +846,7 @@
       const sin=Math.sin(car.yaw),cos=Math.cos(car.yaw),speed=Math.abs(car.speed||0);
       sun.target.position.set(Math.round(x+sin*17),car.y,Math.round(z-cos*17));sun.position.copy(sun.target.position).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       const now=performance.now();if(now-shadowStamp>(small?115:66)){renderer.shadowMap.needsUpdate=true;shadowStamp=now;}
-      land.material=car.region==='highlands'?upland:meadow;relief.update(car.x,car.z);
+      land.material=wooded||car.region==='highlands'?upland:meadow;relief.update(car.x,car.z);
       if(car.showroom&&!inside){
         const portrait=camera.aspect<.85;
         eye.set(portrait?-5.6:-4.3,portrait?1.9:1.6,portrait?8.0:5.5);
@@ -686,6 +888,6 @@
       }
       lastPaint=now;
     }
-    return {terrainReady:relief.ready,grade:relief.grade,ground:relief.ground,setRoads,render,resize,contact,loadDistrict:district.load,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,relief.ground(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,relief.ground(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    return {terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();

@@ -19,38 +19,79 @@ function distantHills(){
     group.add(new T.Mesh(geo,new T.MeshBasicMaterial({vertexColors:true,side:T.DoubleSide})));
   }scene.add(group);return group;
 }
-function buildRoadside(){
-  const windowGlass='#425957',wirePoints=[];
-  const shops=[
-    ['CÀ PHÊ','BẾN SÔNG','#e4d6b4','#436658'],
-    ['BÁNH MÌ','LÒ CHÚ TƯ','#e9c76b','#923f2e'],
-    ['TẠP HÓA','THANH AN','#dbdfcd','#32586c'],
-    ['TRÀ ĐỒI','HƯƠNG SỚM','#c9d4ae','#435c43']
-  ];
-  function elevation(data){
-    const canvas=document.createElement('canvas');canvas.width=768;canvas.height=512;
-    const ctx=canvas.getContext('2d'),[goods,name,wall,ink]=data;
-    ctx.fillStyle=wall;ctx.fillRect(0,0,768,512);
-    // Recessed windows and a slatted steel door with a shaded lintel.
-    ctx.fillStyle='#52564a';ctx.fillRect(32,189,344,297);ctx.fillRect(423,190,307,227);
-    ctx.fillStyle='#737f79';ctx.fillRect(43,198,322,288);
-    for(let y=201;y<482;y+=7){ctx.fillStyle=y%3?'#8a9691':'#687672';ctx.fillRect(44,y,319,3);ctx.fillStyle='#4d5955';ctx.fillRect(44,y+4,319,1);}
-    ctx.fillStyle=windowGlass;ctx.fillRect(433,200,288,204);
-    for(let i=0;i<4;i++){const x=439+i*70;ctx.fillStyle='#677f78';ctx.fillRect(x,205,60,90);ctx.fillStyle='#485b55';ctx.fillRect(x,303,60,95);}
-    ctx.fillStyle='#b7b7a0';ctx.fillRect(415,412,325,9);
-    ctx.fillStyle=ink;ctx.fillRect(19,25,730,129);ctx.strokeStyle='#e6d9ba';ctx.lineWidth=2;ctx.strokeRect(26,32,716,115);
-    ctx.textAlign='center';ctx.fillStyle='#f6e7c6';ctx.font='bold 25px Arial';ctx.fillText(goods,384,65);
-    ctx.font='bold 63px Arial';ctx.fillText(name,384,128,680);
-    for(let n=0;n<12000;n++){ctx.fillStyle=random()>.48?'rgba(39,37,22,.055)':'rgba(255,249,228,.064)';ctx.fillRect(random()*768,random()*512,1+random()*3,1+random()*4);}
-    const grime=ctx.createLinearGradient(0,420,0,512);grime.addColorStop(0,'transparent');grime.addColorStop(1,'rgba(44,43,30,.4)');ctx.fillStyle=grime;ctx.fillRect(0,420,768,92);
-    const tx=new T.CanvasTexture(canvas);tx.colorSpace=T.SRGBColorSpace;tx.anisotropy=4;return tx;
+// Join the exact perimeter vertices of the detailed ground to progressively
+// wider rings. All ridges stay fixed in local map coordinates as the car turns.
+function mountainHorizon(near,relief){
+  const {x0,z0,grid,nx,nz}=near,x1=x0+(nx-1)*grid,z1=z0+(nz-1)*grid;
+  const vertices=[],normals=[],indices=[],uv=[],marine=[];
+  const rings=[0];
+  for(let r=18;r<13900;r+=Math.min(190,18+r*.045))rings.push(r);
+  for(let side=0;side<4;side++){
+    let previous=null;
+    for(const offset of rings){
+      const west=x0-offset,east=x1+offset,north=z0-offset,south=z1+offset;
+      const corners=[[west,north],[west,south],[east,south],[east,north]],a=corners[side],b=corners[(side+1)%4];
+      const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const count=offset===0?(side%2?nx-1:nz-1):Math.ceil(length/Math.min(190,18+offset*.045));
+      const row=[];
+      for(let i=0;i<=count;i++){
+        const f=i/count,x=a[0]+(b[0]-a[0])*f,z=a[1]+(b[1]-a[1])*f;
+        marine.push(relief.depth(x,z));row.push(vertices.length/3);vertices.push(x,relief.ground(x,z),z);uv.push(x/32,z/32);
+        const e=Math.max(28,Math.min(110,offset*.04)),dx=(relief.ground(x-e,z)-relief.ground(x+e,z))/(2*e),
+          dz=(relief.ground(x,z-e)-relief.ground(x,z+e))/(2*e),len=Math.hypot(dx,1,dz);
+        normals.push(dx/len,1/len,dz/len);
+      }
+      if(previous){
+        let i=0,j=0;
+        while(i+1<previous.length||j+1<row.length){
+          if(j+1===row.length||(i+1<previous.length&&(i+1)*count<=(j+1)*(previous.length-1))){
+            indices.push(previous[i],row[j],previous[++i]);
+          }else{
+            indices.push(previous[i],row[j],row[++j]);
+          }
+        }
+      }
+      previous=row;
+    }
   }
-  const facades=shops.map(shop=>({mat:new T.MeshLambertMaterial({map:elevation(shop)}),matrices:[]}));
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+  g.setAttribute('marine',new T.Float32BufferAttribute(marine,1));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('normal',new T.Float32BufferAttribute(normals,3));g.setIndex(indices);
+  // Reuse near-ground colour in the first band, then grade hills by aspect and
+  // canopy density. Distance fog attenuates the ridges in the scene shader.
+  const mat=new T.MeshLambertMaterial({color:0x55746b,side:T.DoubleSide,map:meadow});
+  mat.onBeforeCompile=shader=>{
+    shader.vertexShader='attribute float marine; varying float seaDepth; varying vec3 vistaPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vistaPoint=position; seaDepth=marine;');
+    shader.fragmentShader='varying float seaDepth; varying vec3 vistaPoint;\n'+shader.fragmentShader.replace('#include <map_fragment>',`
+      vec2 p=vistaPoint.xz;
+      float thickets=sin(p.x*.015+sin(p.y*.009))*sin(p.y*.022-p.x*.008);
+      vec3 finer=texture2D(map,vMapUv*2.17+p.yx*.0019).rgb;
+      float spur=sin(dot(p,vec2(.0027,.0017))+sin(p.y*.0043));
+      vec3 canopy=texture2D(map,vMapUv).rgb;
+      diffuseColor.rgb*=mix(vec3(.72,.87,.79),vec3(1.12,1.04,.84),.5+.5*spur);
+      diffuseColor.rgb*=.59+dot(canopy,vec3(.36,.49,.15))*.85+dot(finer,vec3(.29,.44,.27))*.45+thickets*.11;
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.078,.13,.14),.18);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.047,.134,.139),smoothstep(.3,2.,seaDepth));`);
+  };
+  const mesh=new T.Mesh(g,mat);mesh.name='Geographic mountain ridges';scene.add(mesh);return mesh;
+}
+function buildRoadside(){
+  const wirePoints=[],loader=new T.TextureLoader();
+  const facades=['cafe','bakery','grocer','pho'].map(name=>{
+    const image=loader.load('streetscape/surfaces/front-'+name+'.webp');image.colorSpace=T.SRGBColorSpace;image.anisotropy=4;
+    return {mat:new T.MeshStandardMaterial({map:image,roughness:.91}),matrices:[]};
+  });
   function store(d,l,variant){
-    const p=at(d,l),y=ground(p.x,p.z),rise=y-p.y;
-    const wide=5.8+variant*.46,depth=5.9,h=3.75,side=Math.sign(l);
-    beside(d,l,'box',0xc7bd9f,depth,h,wide,rise);
-    beside(d,l,'box',variant%2?0x8d6654:0x637779,depth+.42,.23,wide+.58,rise+h);
+    const p=at(d,l),wide=5.8+variant*.46,depth=5.9,h=3.75,side=Math.sign(l);
+    // A level slab stepped into the hill supports the facade and its fittings.
+    const corners=[-1,1].flatMap(a=>[-1,1].map(b=>{
+      const q=at(d+wide*.5*a,l+depth*.5*b);return renderedGround(q.x,q.z);
+    }));
+    const high=Math.max(...corners),low=Math.min(...corners);
+    if(high-low>2.2||nearest(p.x,p.z).dist<9)return;
+    const y=high+.06,rise=y-p.y;
+    scatter('box',0x817d6e,p.x,(y+low-.24)/2,p.z,depth+.23,y-low+.24,wide+.23,-p.h);
+    beside(d,l,'box',0xbdb39a,depth,h,wide,rise);
+    scatter('box',variant%2?0x806458:0x637779,p.x,y+h+.115,p.z,depth+.42,.23,wide+.58,-p.h);
     const f=at(d,l-side*(depth/2+.022));
     temp.position.set(f.x,y+h/2,f.z);temp.rotation.set(0,-p.h-side*Math.PI/2,0);temp.scale.set(wide,h,1);temp.updateMatrix();
     facades[variant].matrices.push(temp.matrix.clone());
@@ -69,7 +110,7 @@ function buildRoadside(){
   }
   const clusters=river?[16,145,305,495,935,1235,1510,1830,2080]:[20,355,700,1120,1435,1770,2205];
   for(const [i,d] of clusters.entries()){
-    if(d>route.finish-25)continue;
+    if(d>route.finish-25||route.stage&&i%3!==0)continue;
     for(let k=0;k<(i%3===0?3:2);k++)store(d+k*9.3,river?14+k*.7:(i%2?-1:1)*(16+k*.65),(i+k+(river?0:3))%4);
   }
   for(const group of facades){
@@ -78,8 +119,8 @@ function buildRoadside(){
   }
   let last;
   for(let d=1;d<route.finish+18;d+=34){
-    if(d>bridgeStart-8&&d<bridgeEnd+8){last=null;continue;}
-    const p=at(d,8.8),y=ground(p.x,p.z),height=6.8;
+    if(!route.stage&&d>bridgeStart-8&&d<bridgeEnd+8){last=null;continue;}
+    const p=at(d,8.8),y=renderedGround(p.x,p.z),height=6.8;
     scatter('pole',0xaaa69a,p.x,y+height/2,p.z,.21,height,.21);
     scatter('box',0x65665f,p.x,y+height-.38,p.z,1.55,.1,.14,-p.h);
     const wires=[];

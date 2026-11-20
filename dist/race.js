@@ -1,6 +1,6 @@
 'use strict';
 // Extend the tarmac behind the starting line for the chase camera.
-const apron=new T.Mesh(new T.PlaneGeometry(12,36),new T.MeshLambertMaterial({map:asphalt,color:0xb4b8b8}));
+const apron=new T.Mesh(new T.PlaneGeometry(roadHalfWidth*2,36),new T.MeshLambertMaterial({map:asphalt,color:0xb4b8b8}));
 apron.rotation.x=-Math.PI/2;apron.position.set(0,height(0),18);scene.add(apron);
 const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=64;
 const brush=shadowCanvas.getContext('2d'),shade=brush.createRadialGradient(32,32,10,32,32,32);
@@ -50,6 +50,7 @@ const rivals = [
   {name:'Tèo Hết Xăng',lane:3.4,grid:7,pace:26,color:0x347696,asset:'race-car'}
 ];
 for(const rival of rivals){
+  rival.lane*=roadHalfWidth/6;
   rival.d=rival.grid;rival.offset=rival.lane;rival.v=0;
   rival.car=new T.Group();scene.add(rival.car);addShadow(rival.car);
   const shell=new T.Mesh(new T.BoxGeometry(1.78,1.12,3.9),new T.MeshLambertMaterial({color:rival.color}));
@@ -68,7 +69,7 @@ for(let i=0;i<12;i++){
  const path=kind==='city-taxi'?'streetscape/city-taxi.glb':'traffic/'+kind+'.glb';
  if(!civilianAssets.has(path))civilianAssets.set(path,TrafficModels.load.loadAsync(path));
  const cruise=oncoming?-13:9+i%4;
- const npc={bike:kind==='motor-scooter',d:95+i*174,lane:oncoming?-3.65:(i%2?3.8:2.45),v:cruise,cruise,model:null};roadTraffic.push(npc);
+ const npc={bike:kind==='motor-scooter',d:95+i*174,lane:(oncoming?-3.65:(i%2?3.8:2.45))*roadHalfWidth/6,v:cruise,cruise,model:null};roadTraffic.push(npc);
  civilianAssets.get(path).then(({scene:base})=>{
    const mesh=base.clone(true),bounds=new T.Box3().setFromObject(mesh);
    const scale=(kind==='motor-scooter'?1.9:kind==='city-taxi'?4.7:3.95)/(bounds.max.z-bounds.min.z);
@@ -126,7 +127,7 @@ function openPit(kind){
 const showCupQuestion=createPitQuiz($('pit'),()=>{penalty+=3;return 'Chưa ổn! Chú Tư cộng 3 giây tiền công. Thử lại nhé.';},repair);
 function repair(){
  if(state.mode!=='pit')return;
- vitality=100;state.offset=clamp(state.offset,-3.8,3.8);parkCup();
+ vitality=100;state.offset=clamp(state.offset,-roadHalfWidth+.95,roadHalfWidth-.95);parkCup();
  grace=2;keys.clear();setMode('drive');tellRace('Máy lại giòn. Đi kiếm ổ bánh mì thôi!');
 }
 function collision(kind,hit,vx=0,vz=0,target=null){
@@ -193,9 +194,13 @@ function raceUpdate(dt){
  drafting=s.v>12&&rivals.some(r=>r.d>s.d+4&&r.d<s.d+26&&Math.abs(s.offset-r.offset)<1.5);
  boost=clamp(boost+(nitro?-27:held('shift')?0:drafting?18:7)*dt,0,100);
  const steer=Number(held('d','arrowright'))-Number(held('a','arrowleft'));
+ if(route.stage)cupBody.offroad=Math.abs(s.offset)>roadHalfWidth;
  DriveBody.step(cupBody,{grade:roadGrade(s.d,cupBody.yaw),gas,brake:held(' '),reverse:held('s','arrowdown'),steer,boost:nitro,power:setup.power+(drafting?1.6:0),top:setup.top},dt);
  syncCup();
- const angle=at(s.d).h,edge=Math.abs(s.offset)-5.35;
+ const angle=at(s.d).h;
+ const rail=route.stage&&mountainRails.get(Math.sign(s.offset))?.some(span=>s.d>=span.start&&s.d<=span.end);
+ const boundary=route.stage?roadHalfWidth+(rail ? .1 : 1.45):roadHalfWidth-.65;
+ const edge=Math.abs(s.offset)-boundary;
  if(edge>0){
    const side=-Math.sign(s.offset);
    collision('shoulder',{nx:side*Math.cos(angle),nz:side*Math.sin(angle),depth:edge});

@@ -12,7 +12,7 @@ try{saved=JSON.parse(localStorage.getItem('taylai.world.trip'));const model=loca
 $('garage').value=car.model;
 $('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('taylai.garage',car.model);}catch{}};
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
-function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge.kind)*.47);}
+function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge)*.47);}
 function save(){
  if(!player||!roads)return;
  const [lon,lat]=roads.geo(car.x,car.z);
@@ -27,7 +27,7 @@ function trackRoad(){
  if(!nearest){car.offroad=true;player.error=Infinity;return;}
  const bearing=roads.sample(nearest).yaw;
  nearest.dir=Math.cos(car.yaw-bearing)>=0?1:-1;player=nearest;
- car.offroad=nearest.error>worldRoadHalfWidth(nearest.edge.kind)**2;
+ car.offroad=nearest.error>worldRoadHalfWidth(nearest.edge)**2;
 }
 function refreshView(){
  const [lon,lat]=roads.geo(car.x,car.z);
@@ -110,7 +110,7 @@ function spawnAhead(ahead,index){
 }
 function addNpc(c,i){
  const kind=['taxi','van','scooter','sedan','rival'][i%5];
- const offset=kind==='scooter'?Math.min(3.3,worldRoadHalfWidth(c.edge.kind)*.7):Math.min(2.05,worldRoadHalfWidth(c.edge.kind)*.47);
+ const offset=kind==='scooter'?Math.min(3.3,worldRoadHalfWidth(c.edge)*.7):Math.min(2.05,worldRoadHalfWidth(c.edge)*.47);
  const p=roads.sample(c,offset);
  if(Math.hypot(car.x-p.x,car.z-p.z)<16||npcs.some(n=>Math.hypot(p.x-n.x,p.z-n.z)<13))return;
  const pace=(kind==='scooter'?6:kind==='rival'?21:9)+Math.random()*4;
@@ -145,7 +145,7 @@ function trafficStep(dt){
    n.speed=fallen?0:n.speed+clamp(target-n.speed,-9*dt,2.8*dt);
    const moved=roads.advance(n,n.speed*dt,opts=>opts.length>1&&Math.random()<.24?opts[Math.floor(Math.random()*opts.length)]:opts[0]);
    if(moved<.001&&!fallen)n.stopped+=dt;else n.stopped=0;
-   const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge.kind)*.75));
+   const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge)*.75));
    const landing=DriveBody.advanceRecoil(n,dt);Object.assign(n,pos);
    if(n.recoil){n.x+=n.recoil.x;n.z+=n.recoil.z;n.yaw+=n.recoil.angle;}
    if(fallen)wreckContact(n);

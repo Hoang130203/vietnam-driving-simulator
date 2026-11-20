@@ -37,7 +37,7 @@ class RollingDuel {
    const entry=this.path[lo];return {edge:entry.edge,dir:entry.dir,s:entry.s+entry.dir*Math.max(0,Math.min(entry.to,m)-entry.from)};
  }
  pose(){
-   const c=this.at(this.opponent),lane=Math.min(worldRoadHalfWidth(c.edge.kind)*.48,2.2);
+   const c=this.at(this.opponent),lane=Math.min(worldRoadHalfWidth(c.edge)*.48,2.2);
    Object.assign(this.actor,this.graph.sample(c,lane),{speed:this.speed});
  }
  move(cursor,traveled,dt,traffic){
@@ -45,7 +45,7 @@ class RollingDuel {
    const start=this.player;
    let nearest=null;
    for(const entry of this.path){
-     if(entry.edge.id!==cursor.edge.id||cursor.error>(worldRoadHalfWidth(entry.edge.kind)+1)**2)continue;
+     if(entry.edge.id!==cursor.edge.id||cursor.error>(worldRoadHalfWidth(entry.edge)+1)**2)continue;
      const progress=entry.from+(cursor.s-entry.s)*entry.dir;
      if(progress<entry.from-.2||progress>entry.to+.2||Math.abs(progress-start)>35)continue;
      if(nearest===null||Math.abs(progress-start)<Math.abs(nearest-start))nearest=progress;
