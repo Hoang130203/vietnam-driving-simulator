@@ -72,6 +72,15 @@ function mountainHorizon(near,relief){
       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.078,.13,.14),.18);
       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.047,.134,.139),smoothstep(.3,2.,seaDepth));`);
   };
+  if(route.stage&&marine.some(d=>d>0)){
+    const sea=[],profile=[];
+    for(let i=0;i<marine.length;i++){
+      const j=i*3,depth=relief.seaLevel-vertices[j+1];
+      sea.push(vertices[j],relief.seaLevel,vertices[j+2]);
+      profile.push(.13,-.08,(marine[i]>0?depth:Math.min(-.02,depth))*2.6);
+    }
+    addCourseWater(sea,profile,indices,'Coastal waterline');
+  }
   const mesh=new T.Mesh(g,mat);mesh.name='Geographic mountain ridges';scene.add(mesh);return mesh;
 }
 function buildRoadside(){

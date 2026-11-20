@@ -286,10 +286,39 @@ function renderedGround(x,z){
   return f+g<=1?data[a]+f*(data[b]-data[a])+g*(data[c]-data[a]):
     data[d]+(1-f)*(data[c]-data[d])+(1-g)*(data[b]-data[d]);
 }
+function addCourseWater(waterVerts,profiles,indices,name){
+  const waterIndices=[];
+  // Clip at the intersection with each rendered land triangle. This gives the
+  // renderer an actual shoreline instead of overlapping full squares of water.
+  for(let i=0;i<indices.length;i+=3){
+    const a=indices[i],b=indices[i+1],c=indices[i+2];
+    if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])<=0)continue;
+    if(Math.min(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0){waterIndices.push(a,b,c);continue;}
+    const ring=[];let p=c;
+    for(const q of [a,b,c]){
+      const dp=profiles[3*p+2],dq=profiles[3*q+2];
+      if((dp>0)!==(dq>0)){
+        const t=dp/(dp-dq);ring.push(waterVerts.length/3);
+        for(let k=0;k<3;k++)waterVerts.push(waterVerts[3*p+k]+t*(waterVerts[3*q+k]-waterVerts[3*p+k]));
+        for(let k=0;k<2;k++)profiles.push(profiles[3*p+k]+t*(profiles[3*q+k]-profiles[3*p+k]));
+        profiles.push(0);
+      }
+      if(dq>0)ring.push(q);p=q;
+    }
+    for(let k=2;k<ring.length;k++)waterIndices.push(ring[0],ring[k-1],ring[k]);
+  }
+  if(waterIndices.length){
+    const waterGeometry=new T.BufferGeometry();
+    waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
+    waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
+    waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
+    const water=new T.Mesh(waterGeometry,courseWater.material);water.name=name;water.receiveShadow=true;scene.add(water);
+  }
+}
 function terrain(){
   const grid=6,margin=235,nx=Math.ceil((box.max.x-box.min.x+2*margin)/grid)+1,nz=Math.ceil((box.max.z-box.min.z+2*margin)/grid)+1;
   const verts=[],colors=[],uv=[],soil=[],indices=[],base=new T.Color(),tea=new T.Color(0xcbd3b0),sand=new T.Color(0xe5d6bb);
-  const waterVerts=[],profiles=[],waterIndices=[],cutWeights=[],seaWeights=[],data=new Float32Array(nx*nz);
+  const waterVerts=[],profiles=[],cutWeights=[],seaWeights=[],data=new Float32Array(nx*nz);
   nearTerrain={grid,x0:box.min.x-margin,z0:box.min.z-margin,nx,nz,data};
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
     const x=box.min.x-margin+i*grid,z=box.min.z-margin+j*grid,n=nearest(x,z),y=surface(x,z,n);
@@ -315,32 +344,7 @@ function terrain(){
     base.multiplyScalar(.96+.03*Math.sin(x*.67+z*.22));verts.push(x,y,z);colors.push(base.r,base.g,base.b);
     if(j&&i){const k=j*nx+i;indices.push(k-nx-1,k-1,k-nx,k-1,k,k-nx);}
   }
-  // Clip at the intersection with each rendered land triangle. This gives the
-  // renderer an actual shoreline instead of overlapping full squares of water.
-  for(let i=0;i<indices.length;i+=3){
-    const a=indices[i],b=indices[i+1],c=indices[i+2];
-    if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])<=0)continue;
-    if(Math.min(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0){waterIndices.push(a,b,c);continue;}
-    const ring=[];let p=c;
-    for(const q of [a,b,c]){
-      const dp=profiles[3*p+2],dq=profiles[3*q+2];
-      if((dp>0)!==(dq>0)){
-        const t=dp/(dp-dq);ring.push(waterVerts.length/3);
-        for(let k=0;k<3;k++)waterVerts.push(waterVerts[3*p+k]+t*(waterVerts[3*q+k]-waterVerts[3*p+k]));
-        for(let k=0;k<2;k++)profiles.push(profiles[3*p+k]+t*(profiles[3*q+k]-profiles[3*p+k]));
-        profiles.push(0);
-      }
-      if(dq>0)ring.push(q);p=q;
-    }
-    for(let k=2;k<ring.length;k++)waterIndices.push(ring[0],ring[k-1],ring[k]);
-  }
-  if(waterIndices.length){
-    const waterGeometry=new T.BufferGeometry();
-    waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
-    waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
-    waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
-    const water=new T.Mesh(waterGeometry,courseWater.material);water.name='Course waterline';water.receiveShadow=true;scene.add(water);
-  }
+  addCourseWater(waterVerts,profiles,indices,'Course waterline');
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();
   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('soil',new T.Float32BufferAttribute(soil,1));g.setAttribute('cut',new T.Float32BufferAttribute(cutWeights,1));g.setAttribute('marine',new T.Float32BufferAttribute(seaWeights,1));
   const land=new T.MeshLambertMaterial({vertexColors:true,map:meadow});
