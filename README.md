@@ -28,6 +28,8 @@ python -m http.server 8000 --bind 127.0.0.1 --directory dist
 
 Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
 
+Trong Xuyên Việt, chọn bộ lọc **Mô hình 3D riêng** trên bản đồ. Khi tới gần, nhấn **Ngắm địa danh 3D** để xoay, chỉnh khoảng cách hoặc mở ảnh đối chiếu. [Tư liệu cho 12 mô hình](dist/landmark-references.txt).
+
 ## Đóng góp và báo lỗi
 
 - [Hướng dẫn đóng góp](CONTRIBUTING.md)

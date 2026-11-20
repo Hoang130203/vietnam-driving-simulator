@@ -360,11 +360,13 @@ function pause(){
 $('launch').onclick=begin;$('pause').onclick=pause;
 $('tourView').onclick=()=>{
  const monument=gfx.nearLandmark(car.x,car.z);if(mode!=='drive'||!monument)return;
- mode='tour';keySet.clear();car.sightView={...monument,angle:monument.data.yaw+.3,elevation:.32};
+ mode='tour';keySet.clear();car.sightView={...monument,angle:monument.data.yaw+.23,elevation:.27,zoom:1};
+ $('tourZoom').value='1';$('tourReference').href=monument.data.photo;
  $('tourTitle').textContent=monument.data.name;$('tourCamera').hidden=false;
  for(const id of ['hud','touch','camera','pause'])$(id).hidden=true;
  $('backToCar').focus({preventScroll:true});
 };
+$('tourZoom').oninput=e=>{if(car.sightView)car.sightView.zoom=Number(e.target.value);};
 let tourPointer=null;
 function closeTour(){
  if(mode!=='tour')return;
@@ -532,8 +534,9 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
    $('openMap').disabled=false;$('travel').disabled=false;
    const valid=saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
-   const stage=mountainPlaces.find(p=>p.id===new URLSearchParams(location.search).get('pass'));
-   if(stage)await startAt(tourPlace(stage));else await startAt(valid?[saved.label||'Hành trình đang lái',saved.lon,saved.lat]:featured[0],valid?saved:null);
+   const params=new URLSearchParams(location.search),stage=mountainPlaces.find(p=>p.id===params.get('pass'));
+   const landmark=models.find(p=>p.id===params.get('landmark'));
+   if(landmark||stage)await startAt(tourPlace(landmark||stage));else await startAt(valid?[saved.label||'Hành trình đang lái',saved.lon,saved.lat]:featured[0],valid?saved:null);
    requestAnimationFrame(frame);
  }catch(e){mode='error';$('loadStatus').textContent=e.message;$('launch').disabled=false;$('launch').textContent='Thử tải lại';}
 })();

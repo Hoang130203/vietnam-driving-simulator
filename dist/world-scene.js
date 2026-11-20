@@ -918,8 +918,11 @@
       if(car.flood){eye.y=Math.max(eye.y,car.flood.level+2.2);look.set(x,car.flood.level-.25,z);}
       camera.position.copy(eye);camera.lookAt(look);
       if(car.sightView){
-        const v=car.sightView,radius=Math.max(24,v.data.depth*.9,v.data.width*.83)*(camera.aspect<.85?1.48:1);
-        const focus=relief.ground(v.x,v.z)+Math.max(4,Math.min(13,v.data.depth*.19));
+        const v=car.sightView,angle=v.angle-v.data.yaw;
+        const span=Math.abs(Math.cos(angle))*v.data.width+Math.abs(Math.sin(angle))*v.data.depth;
+        const front=Math.abs(Math.sin(angle))*v.data.width+Math.abs(Math.cos(angle))*v.data.depth;
+        const radius=(Math.max(span/Math.max(.35,camera.aspect),v.height)*1.10+front*.40)*v.zoom;
+        const focus=relief.ground(v.x,v.z)+v.height*.46;
         look.set(v.x-originX,focus,v.z-originZ);
         camera.position.set(look.x+Math.sin(v.angle)*radius*Math.cos(v.elevation),focus+radius*Math.sin(v.elevation),
           look.z+Math.cos(v.angle)*radius*Math.cos(v.elevation));camera.lookAt(look);

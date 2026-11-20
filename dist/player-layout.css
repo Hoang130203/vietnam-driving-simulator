@@ -109,3 +109,7 @@
 .scoreBoard form{flex-wrap:wrap}
 .scoreBoard input{display:block;font:inherit;padding:8px;width:12em;max-width:100%;border-radius:4px}
 .scoreBoard .reloadBoard{margin-top:12px}
+#tourCamera label{font-size:12px;color:#d8e6dc}
+#tourZoom{display:block;width:88px;accent-color:var(--lime);cursor:pointer}
+#tourReference{color:var(--lime);text-underline-offset:2px}
+@media(max-width:550px){#tourCamera{width:94vw;gap:8px;padding:8px;flex-wrap:wrap}#tourCamera>div{flex:1 1 40%}#tourZoom{width:70px}}
