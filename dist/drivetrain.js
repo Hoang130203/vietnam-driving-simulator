@@ -98,7 +98,9 @@ window.DriveBody={
    if(input.reverse&&c.reverseDelay>.28&&!input.gas&&forward>-5)drive=-4.4;
    if(forward>=limit&&drive>0)drive=0;
    const drag=(c.offroad?1.65:.48)+(c.offroad?.013:.0031)*forward*forward+(c.brake?17:0);
-   const next=forward+drive*dt-Math.sign(forward)*Math.min(Math.abs(forward),drag*dt);
+   const grade=input.grade||0,gravity=9.81*grade/Math.hypot(1,grade);
+   const rolling=forward+(drive-gravity)*dt;
+   const next=rolling-Math.sign(rolling)*Math.min(Math.abs(rolling),drag*dt);
    const wheel=c.steer*.52/(1+Math.abs(next)*.056);
    const yawRate=Math.max(-1.8,Math.min(1.8,next*Math.tan(wheel)/2.68));
    const settle=1-Math.exp(-dt*5);

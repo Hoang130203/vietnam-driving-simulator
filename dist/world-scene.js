@@ -61,8 +61,8 @@
     }
     const meadow=surfaces.scanned('meadow',0xc8d0a6,.56);
     const upland=surfaces.scanned('grass',0xadcd9c,.67);
-    const landWidth=2200;
-    const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth),meadow);
+    const landWidth=2048;
+    const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth,32,32),meadow);
     const landOrigin=new T.Vector2();
     // Low-frequency variation is fixed in geographic space. Close-up grain stays sharp.
     for(const mat of [meadow,upland]){
@@ -82,7 +82,7 @@
     const gable=new T.ExtrudeGeometry(roofSection,{depth:1,bevelEnabled:false});gable.translate(0,0,-.5);
     const wireMaterial=new T.LineBasicMaterial({color:0x50554d,transparent:true,opacity:.64});
     const temp=new T.Object3D(),tone=new T.Color();
-    const roadsideImpact=createRoadsideImpact(T,scene);
+    const roadsideImpact=createRoadsideImpact(T,scene,relief.ground);
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
     const landmarks=window.VietnamLandmarks?.create(T,scene);
     const district=createTourDistrict(T,scene,material.wall);
@@ -127,8 +127,10 @@
       roadGroup.traverse(obj=>{if(obj.isInstancedMesh)obj.dispose();else if(obj.geometry)obj.geometry.dispose();});
     }
     function setRoads(edges,cx,cz,water=[],graph=null){
-      landmarks?.setOrigin(graph,cx,cz);
-      district.build(graph,cx,cz,landmarks);
+      relief.setOrigin(graph,cx,cz);
+      const localGround=(x,z)=>relief.ground(cx+x,cz+z);
+      landmarks?.setOrigin(graph,cx,cz,relief.ground);
+      district.build(graph,cx,cz,landmarks,relief.ground);
       const vistas=[];
       if(graph)for(const site of VietnamLandmarks.entries){
         const end=graph.point(site.lon,site.lat);if(Math.hypot(end.x-cx,end.z-cz)>1000)continue;
@@ -142,10 +144,13 @@
         });
       }
       discardRoads();roadGroup=new T.Group();scene.add(roadGroup);originX=cx;originZ=cz;
-      relief.setOrigin(graph,cx,cz);landOrigin.set(cx,cz);
+      const gx=Math.round(cx/64)*64,gz=Math.round(cz/64)*64,positions=land.geometry.attributes.position;
+      landOrigin.set(gx,gz);land.position.set(gx-cx,-.17,gz-cz);
+      for(let i=0;i<positions.count;i++)positions.setZ(i,relief.ground(gx+positions.getX(i),gz-positions.getY(i)));
+      positions.needsUpdate=true;land.geometry.computeVertexNormals();land.geometry.computeBoundingSphere();
       // Local plane UV runs towards -Z. Synchronize the three PBR maps at a rebase.
       for(const [mat,tile] of [[meadow,3.1],[upland,14.2]]){
-        surfaces.transform(mat,landWidth/tile,landWidth/tile,(cx/tile)%1,(-cz/tile)%1);
+        surfaces.transform(mat,landWidth/tile,landWidth/tile,(gx/tile)%1,(-gz/tile)%1);
       }
       const segments=[],cells=new Map(),roadData=[],landData=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
       obstacleCells=new Map();
@@ -253,10 +258,15 @@
         }
         return null;
       };
+      let buildingBase=null;
       function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null,owner=null){
         const key=mat+':'+geo.id;
         if(!batches.has(key))batches.set(key,{mat,geo,poses:[],colors:[],moving:[]});
-        const b=batches.get(key);temp.position.set(x,y,z);temp.rotation.set(0,yaw,0);temp.scale.set(sx,sy,sz);temp.updateMatrix();
+        const b=batches.get(key);temp.position.set(x,y+(buildingBase??localGround(x,z)),z);temp.rotation.set(0,yaw,0,'YXZ');
+        if(sz>2&&sy<.16&&buildingBase===null){
+          temp.rotation.x=-Math.atan(relief.grade(cx+x,cz+z,Math.PI-yaw));
+          temp.rotation.z=Math.atan(relief.grade(cx+x,cz+z,Math.PI/2-yaw));
+        }temp.scale.set(sx,sy,sz);temp.updateMatrix();
         if(owner)b.moving.push([b.poses.length,owner]);
         b.poses.push(temp.matrix.clone());b.colors.push(color);
       }
@@ -382,6 +392,7 @@
               registerObstacle({id:c.key,kind:'building',x:hx,z:hz,fx:s.fx,fz:s.fz,w:width/2,d:depth/2,height:h});
               // Local +Z faces the road, with the façade just outside the wall.
               const sx=-s.nx*sign,sz=-s.nz*sign,rot=Math.atan2(sx,sz);
+              buildingBase=localGround(hx,hz);
               instance('wall',unitBox,hx,h*.5,hz,width,h,depth,rot,[0xe9d4b5,0xc7d6bb,0xf3dfb0][type%3]);
               instance('front'+type,unitPlane,hx+sx*(depth/2+.025),h/2,hz+sz*(depth/2+.025),width,h,1,rot);
               for(const side of [-1,1]){
@@ -399,6 +410,7 @@
               instance('awning',unitBox,hx+sx*porch,2.65,hz+sz*porch,width+.4,.13,1.8,rot,[0xa2a692,0xbc8062,0x809b93][type%3]);
               instance('concrete',unitPole,hx+sx*porch+s.fx*width*.45,1.32,hz+sz*porch+s.fz*width*.45,.09,2.62,.09);
               if(type%3===0&&!pitched)instance('steel',unitPole,hx,h+.65,hz,1.2,1.0,1.2);
+              buildingBase=null;
             }else{
               const [lon,lat]=graph?graph.geo(hx+cx,hz+cz):[105,21];
               const uplands=lat>21.3&&lon<106.4||lat>11.6&&lat<15&&lon>107&&lon<108.6;
@@ -409,17 +421,49 @@
       }
       function surface(data,mat,y,freq){
         if(!data.length)return;
-        const verts=new Float32Array(data.length*1.5),uv=new Float32Array(data.length),normals=new Float32Array(verts.length);
-        for(let i=0,j=0;i<data.length;i+=2,j+=3){
-          verts[j]=data[i];verts[j+1]=y;verts[j+2]=data[i+1];normals[j+1]=1;
-          uv[i]=data[i]*freq+(cx*freq)%1;uv[i+1]=data[i+1]*freq+(cz*freq)%1;
+        const verts=[],uv=[],step=relief.step;
+        function vertex(x,z){
+          verts.push(x,localGround(x,z)+y,z);
+          uv.push(x*freq+(cx*freq)%1,z*freq+(cz*freq)%1);
         }
-        const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(verts,3));g.setAttribute('normal',new T.BufferAttribute(normals,3));g.setAttribute('uv',new T.BufferAttribute(uv,2));
+        // Split at terrain edges so a long road, its paint and the ground coincide
+        // even when all three meshes have different source triangulations.
+        const offset=[cx,cz,cx+cz];
+        function split(poly,axis){
+          if(axis===3){
+            for(let j=1;j<poly.length-1;j++)for(const p of [poly[0],poly[j],poly[j+1]])vertex(p[0],p[1]);
+            return;
+          }
+          const coord=p=>axis===2?p[0]+p[1]:p[axis];
+          let low=Infinity,high=-Infinity;
+          for(const p of poly){const v=coord(p);low=Math.min(low,v);high=Math.max(high,v);}
+          const cut=(Math.floor((low+offset[axis]+.00001)/step)+1)*step-offset[axis];
+          if(cut>=high-.00001){split(poly,axis+1);return;}
+          const left=[],right=[];let prev=poly.at(-1),a=coord(prev)-cut;
+          for(const p of poly){
+            const b=coord(p)-cut;
+            if(a*b<0){
+              const f=a/(a-b),mid=[prev[0]+(p[0]-prev[0])*f,prev[1]+(p[1]-prev[1])*f];
+              left.push(mid);right.push(mid);
+            }
+            if(b<=0)left.push(p);if(b>=0)right.push(p);prev=p;a=b;
+          }
+          split(left,axis+1);split(right,axis);
+        }
+        const same=(a,b,c,o)=>Math.floor((Math.min(a,b,c)+o)/step)===Math.floor((Math.max(a,b,c)+o)/step);
+        for(let i=0;i<data.length;i+=6){
+          const ax=data[i],az=data[i+1],bx=data[i+2],bz=data[i+3],dx=data[i+4],dz=data[i+5];
+          if(same(ax,bx,dx,cx)&&same(az,bz,dz,cz)&&same(ax+az,bx+bz,dx+dz,cx+cz)){
+            vertex(ax,az);vertex(bx,bz);vertex(dx,dz);
+          }else split([[ax,az],[bx,bz],[dx,dz]],0);
+        }
+        const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.computeVertexNormals();
         const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;roadGroup.add(mesh);
       }
       material.white.side=material.yellow.side=T.DoubleSide;
       surface(waterData,waterSurface.material,-.085,.074);surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       if(wires.length){
+        for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
         const lines=new T.BufferGeometry();lines.setAttribute('position',new T.Float32BufferAttribute(wires,3));
         roadGroup.add(new T.LineSegments(lines,wireMaterial));
       }
@@ -547,7 +591,9 @@
       width=w;height=h;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();
     }
     function pose(item,car,dt,near){
-      item.root.position.set(car.x-originX,.011,car.z-originZ);item.root.rotation.y=Math.PI-car.yaw;
+      const pitch=Math.atan(relief.grade(car.x,car.z,car.yaw)),bank=Math.atan(relief.grade(car.x,car.z,car.yaw+Math.PI/2));
+      item.root.position.set(car.x-originX,relief.ground(car.x,car.z)+.011,car.z-originZ);
+      item.root.rotation.set(-pitch,Math.PI-car.yaw,-bank,'YXZ');
       if(near)item.request();
       const detailed=near&&!!item.detail;item.low.visible=!detailed;
       if(item.detail)item.detail.visible=detailed;
@@ -572,8 +618,9 @@
       }
       pose(player,car,dt,true);player.outside.visible=!inside;
       player.outside.rotation.set(-(car.pitch||0),0,-(car.roll||0));
-      playerRig.position.set(x,.011,z);playerRig.rotation.y=-car.yaw;
-      mirrorRotation.setFromAxisAngle(up,-car.yaw);
+      car.y=relief.ground(car.x,car.z);playerRig.position.set(x,car.y+.011,z);
+      playerRig.rotation.set(-player.root.rotation.x,-car.yaw,-player.root.rotation.z,'YXZ');
+      mirrorRotation.copy(playerRig.quaternion);
       cabinCourse.finish=Math.ceil(totalDriven);cabinCourse.name=car.roadName||'Việt Nam';
       if(cabin)cabin.update(inside,Math.abs(car.speed||0)*3.6,car.steer||0,totalDriven,cabinCourse);
       const closest=(traffic||[]).map(a=>({a,d:(a.x-car.x)**2+(a.z-car.z)**2})).filter(v=>v.d<360*360).sort((a,b)=>a.d-b.d);
@@ -595,7 +642,7 @@
         if(!pools.has(item.kind))pools.set(item.kind,[]);pools.get(item.kind).push(item);
       }
       const sin=Math.sin(car.yaw),cos=Math.cos(car.yaw),speed=Math.abs(car.speed||0);
-      sun.target.position.set(Math.round(x+sin*17),0,Math.round(z-cos*17));sun.position.copy(sun.target.position).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
+      sun.target.position.set(Math.round(x+sin*17),car.y,Math.round(z-cos*17));sun.position.copy(sun.target.position).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       const now=performance.now();if(now-shadowStamp>(small?115:66)){renderer.shadowMap.needsUpdate=true;shadowStamp=now;}
       land.material=car.region==='highlands'?upland:meadow;relief.update(car.x,car.z);
       if(car.showroom&&!inside){
@@ -613,14 +660,14 @@
         const stop=landmarks.nearest(car.x,car.z);
         if(stop&&stop.distance>3){
           const dx=(stop.x-car.x)/stop.distance,dz=(stop.z-car.z)/stop.distance;
-          eye.set(x-dx*7+dz*1.5,2.15,z-dz*7-dx*1.5);
-          look.set(x+dx*15,2.7,z+dz*15);
+          eye.set(x-dx*7+dz*1.5,car.y+2.15,z-dz*7-dx*1.5);
+          look.set(x+dx*15,car.y+2.7,z+dz*15);
         }
       }
       camera.position.copy(eye);camera.lookAt(look);
       if(car.sightView){
         const v=car.sightView,radius=Math.max(24,v.data.depth*.9,v.data.width*.83)*(camera.aspect<.85?1.48:1);
-        const focus=Math.max(4,Math.min(13,v.data.depth*.19));
+        const focus=relief.ground(v.x,v.z)+Math.max(4,Math.min(13,v.data.depth*.19));
         look.set(v.x-originX,focus,v.z-originZ);
         camera.position.set(look.x+Math.sin(v.angle)*radius*Math.cos(v.elevation),focus+radius*Math.sin(v.elevation),
           look.z+Math.cos(v.angle)*radius*Math.cos(v.elevation));camera.lookAt(look);
@@ -630,7 +677,7 @@
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
-      waterSurface.reflect(renderer,scene,camera,-.085,now,nearbyWater(x,z));
+      waterSurface.reflect(renderer,scene,camera,car.y-.085,now,nearbyWater(x,z));
       renderer.render(scene,camera);
       const elapsed=now-lastPaint;
       slowFrames=lastPaint&&elapsed>48&&elapsed<500?slowFrames+1:Math.max(0,slowFrames-1);
@@ -639,6 +686,6 @@
       }
       lastPaint=now;
     }
-    return {setRoads,render,resize,contact,loadDistrict:district.load,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:driveFx.impact,scrape:driveFx.scrape,resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    return {terrainReady:relief.ready,grade:relief.grade,ground:relief.ground,setRoads,render,resize,contact,loadDistrict:district.load,nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,relief.ground(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,relief.ground(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();

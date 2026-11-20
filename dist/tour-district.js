@@ -69,11 +69,12 @@ function createTourDistrict(T,scene,plaster){
     }
     return hit;
   }
-  function build(graph,cx,cz,landmarks){
+  function build(graph,cx,cz,landmarks,ground=()=>0){
     for(const mesh of [...group.children]){group.remove(mesh);mesh.geometry.dispose();}
     cells.clear();blocks.clear();if(graph!==loadedGraph)return;
     const batches=[wall,roof].map(mat=>({mat,pos:[],uv:[],cols:[],bays:[]}));
-    function vertex(b,x,y,z,u,v,tint){b.pos.push(x-cx,y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);}
+    let baseY=0;
+    function vertex(b,x,y,z,u,v,tint){b.pos.push(x-cx,baseY+y,z-cz);b.uv.push(u,v);b.cols.push(tint.r,tint.g,tint.b);}
     function quad(b,a,c,lo,hi,tint,count,floors){
       const span=a.distanceTo(c);
       for(const [p,y,u] of [[a,lo,0],[c,lo,span],[a,hi,0],[c,lo,span],[c,hi,span],[a,hi,0]]){
@@ -89,6 +90,7 @@ function createTourDistrict(T,scene,plaster){
       for(const p of outer){minX=Math.min(minX,p.x);minZ=Math.min(minZ,p.y);maxX=Math.max(maxX,p.x);maxZ=Math.max(maxZ,p.y);}
       const x=(minX+maxX)/2,z=(minZ+maxZ)/2;
       if(Math.hypot(x-cx,z-cz)>620+Math.hypot(maxX-minX,maxZ-minZ)/2||landmarks?.reserved(x,z,1))continue;
+      baseY=ground(x,z);
       const seed=Math.abs(parseInt(id.slice(1),10)||0),warehouse=/warehouse|industrial|shed|garage|roof|barn/.test(kind);
       const h=Math.min(460,Math.max(2,tagH||levels*3.3||(warehouse?5.4:3.7+seed%3*3))),b={id,h,rings,minX,minZ,maxX,maxZ};
       const block=Math.floor(x/70)+','+Math.floor(z/70);blocks.set(block,(blocks.get(block)||0)+1);

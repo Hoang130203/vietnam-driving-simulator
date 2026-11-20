@@ -20,9 +20,19 @@ function heading(d){
 }
 function height(d){
   const [a,b]=route.bridge;
-  const bridge=Math.max(0,Math.min(1,(d-a+48)/48,(b+48-d)/48))*2.6;
-  return (route.id==='pass'?5*Math.sin(d/175)+2*Math.sin(d/69):.7*Math.sin(d/140))+bridge;
+  const ramp=Math.max(0,Math.min(1,(d-a+64)/64,(b+64-d)/64));
+  const bridge=ramp*ramp*(3-2*ramp)*2.6;
+  if(route.id!=='pass')return .7*Math.sin(d/140)+bridge;
+  // Sustained ascent, level bridge deck, summit, then a descent into the valley.
+  const stops=passProfile;
+  for(let i=1;i<stops.length;i++)if(d<=stops[i][0]){
+    const [x,y]=stops[i-1],[end,top]=stops[i],t=clamp((d-x)/(end-x),0,1);
+    return y+(top-y)*t*t*(3-2*t)+bridge;
+  }
+  return stops.at(-1)[1]+bridge;
 }
+function roadGrade(d,yaw){return (height(d+2)-height(d-2))*.25*Math.cos(yaw-heading(d));}
+const passProfile=[[0,0],[80,0],[420,24],[560,24],[1120,68],[1370,73],[2060,19],[2480,7]];
 let px=0,pz=0;
 for(let d=0;d<=route.finish+80;d+=step){
   const h=heading(d);points.push({x:px,z:pz,y:height(d),h});
@@ -61,13 +71,13 @@ sun.shadow.normalBias=.025;sun.shadow.bias=-.00022;
 const camera=new T.PerspectiveCamera(62,1,.08,3300);
 const geom={box:new T.BoxGeometry(1,1,1),leaf:new T.PlaneGeometry(1,1),roof:new T.ConeGeometry(1,1,4),pole:new T.CylinderGeometry(.5,.5,1,8)};
 const batches=new Map(),temp=new T.Object3D();
-function scatter(kind,color,x,y,z,w,h,l,angle=0){
+function scatter(kind,color,x,y,z,w,h,l,angle=0,pitch=0){
   const key=kind+color;let batch=batches.get(key);
   if(!batch){batch={kind,color,matrices:[]};batches.set(key,batch);}
-  temp.position.set(x,y,z);temp.rotation.set(0,angle,0);temp.scale.set(w,h,l);temp.updateMatrix();batch.matrices.push(temp.matrix.clone());
+  temp.position.set(x,y,z);temp.rotation.set(pitch,angle,0,'YXZ');temp.scale.set(w,h,l);temp.updateMatrix();batch.matrices.push(temp.matrix.clone());
 }
 function beside(d,l,kind,color,w,h,depth,base=0,angle=0){
-  const p=at(d,l);scatter(kind,color,p.x,p.y+base+h/2,p.z,w,h,depth,-p.h+angle);
+  const p=at(d,l);scatter(kind,color,p.x,p.y+base+h/2,p.z,w,h,depth,-p.h+angle,h<.65&&angle===0?Math.atan(roadGrade(d,p.h)):0);
 }
 let seed=route.id==='pass'?732:351;
 function random(){seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;}
@@ -112,6 +122,7 @@ function surface(x,z,n){
   const stream=river?smooth(12,23,-n.side)*(1-smooth(64,81,-n.side))*(1-smooth(bridgeEnd,bridgeEnd+76,d)):0;
   return T.MathUtils.lerp(y,waterLevel-2,Math.max(channel,stream));
 }
+function besideWater(d){return river||Math.abs(d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.8;}
 function ground(x,z){return surface(x,z,nearest(x,z));}
 const box=new T.Box3().setFromPoints(points.map(p=>new T.Vector3(p.x,0,p.z)));
 function groundMap(path){
@@ -129,10 +140,11 @@ function terrain(){
     const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
     const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
     const angle=heading+(crossChannel?Math.PI/2:0),current=river?.6:.93;
-    waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(waterLevel-y)*2.6);
+    const level=besideWater(n.d)?waterLevel:-1e4;
+    waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(level-y)*2.6);
     const patch=.45+.21*Math.sin(x/33+z/75)+.22*Math.cos(x/85-z/24);
-    base.set(river?0xa4b89b:0x94aca0).lerp(tea,patch).lerp(sand,1-smooth(waterLevel,waterLevel+1.8,y));
-    uv.push(x/3.6,z/3.6);soil.push(Math.max(1-smooth(6,11,n.dist),1-smooth(waterLevel+.5,waterLevel+2.3,y)));
+    base.set(river?0xa4b89b:0x94aca0).lerp(tea,patch).lerp(sand,1-smooth(level,level+1.8,y));
+    uv.push(x/3.6,z/3.6);soil.push(Math.max(1-smooth(6,11,n.dist),1-smooth(level+.5,level+2.3,y)));
     base.multiplyScalar(.96+.03*Math.sin(x*.67+z*.22));verts.push(x,y,z);colors.push(base.r,base.g,base.b);
     if(j&&i){const k=j*nx+i;indices.push(k-nx-1,k-1,k-nx,k-1,k,k-nx);}
   }
@@ -166,7 +178,7 @@ for(const kind of ['tree','palm']){
 }
 function tree(d,l){
  const p=at(d,l),n=nearest(p.x,p.z),y=surface(p.x,p.z,n);
- if(n.dist<10||y<waterLevel+.6||Math.abs(n.d-route.junction)<22)return;
+ if(n.dist<10||besideWater(n.d)&&y<waterLevel+.6||Math.abs(n.d-route.junction)<22)return;
  const palm=river&&random()<.42,kind=palm?'palm':'tree';
  const h=(palm?8:6.8)+random()*(palm?7:5.8),w=h*(palm?.588:.923)*(.9+random()*.2);
  const angle=random()*Math.PI;
@@ -181,7 +193,7 @@ function teaRows(d0,end,side){
     const l=side*(14+row*2.2);let prev=-1;
     for(let d=d0;d<=end;d+=3){
       const p=at(d,l),n=nearest(p.x,p.z),y=surface(p.x,p.z,n);
-      if(n.dist<12||y<waterLevel+2){prev=-1;continue;}
+      if(n.dist<12||besideWater(n.d)&&y<waterLevel+2){prev=-1;continue;}
       const k=verts.length/3;
       for(const [delta,raise,tone] of [[-.78,.08,0x304a32],[-.48,.66,0x597d3b],[.42,.84,0x779642],[.78,.09,0x436335]]){
         const q=at(d,l+delta);verts.push(q.x,y+raise,q.z);col.set(tone).multiplyScalar(.93+.12*Math.sin(d*1.34+row));colors.push(col.r,col.g,col.b);
@@ -341,7 +353,7 @@ function update(dt){
  if(s.hand&&gas&&s.gear>0)fault('handStart','Đạp ga khi còn phanh tay',5);
  if(s.mode!=='drive')return;
  const accel=gas&&s.gear>0&&s.v*3.6<gearCaps[s.gear]?2.7:0;
- s.v=s.hand?0:clamp(s.v+dt*(accel-.22-s.v*.014-(brake?5.3:0)),0,22);
+ s.v=s.hand?0:clamp(s.v+dt*(accel-9.81*roadGrade(s.d,s.h)-.22-s.v*.014-(brake?5.3:0)),0,22);
  const turnLimit=.36/(1+s.v*.13);
  s.h+=s.v/2.65*Math.tan(s.steer*turnLimit)*dt;
  s.x+=Math.sin(s.h)*s.v*dt;s.z-=Math.cos(s.h)*s.v*dt;
@@ -434,7 +446,7 @@ function render(now){
  if(arcade){const steps=Math.max(1,Math.ceil(dt*90));for(let i=0;i<steps;i++)raceUpdate(dt/steps);}else update(dt);
  const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
  if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
- rig.position.set(s.x,ground.y,s.z);rig.rotation.y=-s.h;yawQ.setFromAxisAngle(axisY,-s.h);
+ rig.position.set(s.x,ground.y,s.z);rig.rotation.set(Math.atan(roadGrade(s.d,s.h)),-s.h,0,'YXZ');yawQ.copy(rig.quaternion);
  hills.position.set(s.x,0,s.z);
  const focus=at(s.d+20);sun.target.position.set(Math.round(focus.x),Math.round(focus.y),Math.round(focus.z));sun.position.copy(sun.target.position);sun.position.x-=38;sun.position.y+=45;sun.position.z+=22;
  if(now-lastShadow>(s.mode==='drive'?42:300)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
@@ -442,7 +454,7 @@ function render(now){
  eye.set(inside?-.31:0,inside?1.10:3.4,inside?.53:7.6).applyQuaternion(yawQ).add(rig.position);
  look.set(inside?-.31:0,inside?.02:.6,inside?-12:-6).applyQuaternion(yawQ).add(rig.position);camera.position.copy(eye);camera.lookAt(look);
  if(arcade)raceCamera(dt,now);
- for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.y=-p.h;}
+ for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.set(Math.atan(roadGrade(c.d,p.h)),-p.h,0,'YXZ');}
  courseWater.update(now*.001);
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
  courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));

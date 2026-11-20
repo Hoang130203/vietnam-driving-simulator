@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id),clamp=(x,min,max)=>Math.max(min,Math.min(max,x));
 const keySet=createDriveInput(),held=(...names)=>names.some(n=>keySet.has(n));
-const featured=[['Hà Nội',105.8521,21.0277],['TP. Hồ Chí Minh',106.6994,10.7743],['Đà Nẵng',108.2204,16.0677],['Hải Phòng',106.6821,20.8587],['Huế',107.5887,16.4645],['Đà Lạt',108.4373,11.9418],['Cần Thơ',105.7831,10.0324],['Cà Mau',105.1507,9.1769],['Hà Giang',104.9844,22.8234],['Phú Quốc',103.959,10.2135]];
+const featured=[['Hà Nội',105.8521,21.0277],['TP. Hồ Chí Minh',106.6994,10.7743],['Đà Nẵng',108.2204,16.0677],['Hải Phòng',106.6821,20.8587],['Huế',107.5887,16.4645],['Đà Lạt',108.4373,11.9418],['Cần Thơ',105.7831,10.0324],['Cà Mau',105.1507,9.1769],['Hà Giang',104.9844,22.8234],['Phú Quốc',103.959,10.2135],['Đèo Hải Vân',108.1302,16.1877]];
 const nameOf=e=>e.name||({motorway:'Đường cao tốc',trunk:'Đường trục chính',primary:'Đường chính',secondary:'Đường liên huyện',tertiary:'Đường địa phương',residential:'Đường dân cư',service:'Đường dịch vụ'}[e.kind]||'Đường địa phương');
 const fmt=d=>(d/1000).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
 let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],nextNpc=1,mode='loading',inside=false,source=featured[0],saved;
@@ -68,7 +68,7 @@ async function startAt(place,restore=null){
    duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();gfx.resetFx();
    if(Number.isFinite(restore?.yaw)){car.x=start.x;car.z=start.z;car.yaw=restore.yaw;trackRoad();}
    loadX=car.x;loadZ=car.z;streamRetry=0;
-   await Promise.all([streamWater(graph,false),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
+   await Promise.all([gfx.terrainReady,streamWater(graph,false),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
    refreshView();seedTraffic();mode='grid';
    $('challenge').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Tiếp tục lái tự do':'Lái tự do';$('loadStatus').textContent=nameOf(player.edge);
  }catch(e){if(token===loadToken){$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
@@ -210,7 +210,7 @@ function tick(dt){
  nitro=clamp(nitro+(boost?-27:held('shift')?0:6)*dt,0,100);
  const tune={gt:[6.4,43],rally:[7.7,40],supercar:[8.4,48]}[car.model];
  const x=car.x,z=car.z;
- DriveBody.step(car,{gas,reverse,brake,boost,steer:Number(held('d','arrowright'))-Number(held('a','arrowleft')),power:tune[0],top:tune[1]},dt);
+ DriveBody.step(car,{grade:gfx.grade(car.x,car.z,car.yaw),gas,reverse,brake,boost,steer:Number(held('d','arrowright'))-Number(held('a','arrowleft')),power:tune[0],top:tune[1]},dt);
  for(const axle of [1.2,-1.2]){
    const cx=car.x+Math.sin(car.yaw)*axle,cz=car.z-Math.cos(car.yaw)*axle,hit=gfx.contact(cx,cz,.88);
    if(!hit)continue;
@@ -243,7 +243,8 @@ function updateHud(){
    if(distance<5000&&(!landmark||landmark.distance>distance))landmark={...p,distance,data:site};}
  $('landmark').hidden=!landmark;
  if(landmark)$('landmark').textContent=landmark.data.name+' · '+Math.round(landmark.distance)+' m';
- $('street').textContent=nameOf(player.edge);$('speed').textContent=Math.round(Math.abs(car.speed)*3.6);$('trip').textContent=fmt(distance)+' · '+passes+' lượt vượt';$('hp').value=hp;$('nitro').value=nitro;
+ const grade=Math.round(100*gfx.grade(car.x,car.z,car.yaw));
+ $('street').textContent=nameOf(player.edge)+(Math.abs(grade)>=2?' · '+(grade>0?'↑ ':'↓ ')+Math.abs(grade)+'%':'');$('speed').textContent=Math.round(Math.abs(car.speed)*3.6);$('trip').textContent=fmt(distance)+' · '+passes+' lượt vượt';$('hp').value=hp;$('nitro').value=nitro;
  const fork=branchAhead(),plan=duel&&fork?duel.nextAt(fork.node):null;
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';

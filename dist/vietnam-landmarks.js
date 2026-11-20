@@ -400,14 +400,14 @@ window.VietnamLandmarks=(()=>{
   }
   function create(T,scene){
     const cached=new Map();let active=[];
-    function setOrigin(graph,cx,cz){
+    function setOrigin(graph,cx,cz,ground=()=>0){
       for(const {mesh} of active)mesh.visible=false;
       active=[];
       if(!graph)return;
       for(const data of entries){
         const {x,z}=graph.point(data.lon,data.lat);if(Math.hypot(x-cx,z-cz)>1050)continue;
         if(!cached.has(data.id)){const mesh=model(T,data.id);scene.add(mesh);cached.set(data.id,mesh);}
-        const mesh=cached.get(data.id);mesh.position.set(x-cx,0,z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
+        const mesh=cached.get(data.id);mesh.position.set(x-cx,ground(x,z),z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
         if(data.scale)mesh.scale.fromArray(data.scale);
         active.push({data,x,z,mesh,c:Math.cos(data.yaw),s:Math.sin(data.yaw)});
       }

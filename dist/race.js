@@ -192,7 +192,7 @@ function raceUpdate(dt){
  drafting=s.v>12&&rivals.some(r=>r.d>s.d+4&&r.d<s.d+26&&Math.abs(s.offset-r.offset)<1.5);
  boost=clamp(boost+(nitro?-27:held('shift')?0:drafting?18:7)*dt,0,100);
  const steer=Number(held('d','arrowright'))-Number(held('a','arrowleft'));
- DriveBody.step(cupBody,{gas,brake:held(' '),reverse:held('s','arrowdown'),steer,boost:nitro,power:setup.power+(drafting?1.6:0),top:setup.top},dt);
+ DriveBody.step(cupBody,{grade:roadGrade(s.d,cupBody.yaw),gas,brake:held(' '),reverse:held('s','arrowdown'),steer,boost:nitro,power:setup.power+(drafting?1.6:0),top:setup.top},dt);
  syncCup();
  const angle=at(s.d).h,edge=Math.abs(s.offset)-5.35;
  if(edge>0){
@@ -246,7 +246,7 @@ function raceCamera(dt,now){
    updateBodywork(T,c.model,c.isPlayer?cupBody.dent:c.driver.dent,c.isPlayer?cupBody.yaw:at(c.driver.d).h+(c.driver.recoil?.angle||0));
    c.model.rotation.z=c.isPlayer?-cupBody.roll:0;
    const station=c.isPlayer?state.d:c.driver.d;
-   c.model.rotation.x=Math.atan(height(station+1)-height(station))-(c.isPlayer?cupBody.pitch:0);
+   c.model.rotation.x=c.isPlayer?-cupBody.pitch:Math.atan(roadGrade(station,at(station).h));
  }
  if(state.mode==='grid'){
    const portrait=camera.aspect<.85;

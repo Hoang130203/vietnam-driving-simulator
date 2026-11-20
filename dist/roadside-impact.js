@@ -1,7 +1,7 @@
 'use strict';
 
 // The geometry stays batched. Only the instance slots touched by a collision move.
-function createRoadsideImpact(T,scene){
+function createRoadsideImpact(T,scene,ground=()=>0){
   const objects=new Map(),swings=new Map(),leaves=[],scuffs=[];
   const pivot=new T.Matrix4(),shift=new T.Matrix4(),matrix=new T.Matrix4();
   const axis=new T.Vector3(),dummy=new T.Object3D(),tint=new T.Color();
@@ -45,8 +45,8 @@ function createRoadsideImpact(T,scene){
     if(!o)return;
     if(angle){
       axis.set(nz,0,-nx);pivot.makeRotationAxis(axis,angle);
-      pivot.premultiply(shift.makeTranslation(o.x,0,o.z));
-      pivot.multiply(shift.makeTranslation(-o.x,0,-o.z));
+      pivot.premultiply(shift.makeTranslation(o.x,ground(ox+o.x,oz+o.z),o.z));
+      pivot.multiply(shift.makeTranslation(-o.x,-ground(ox+o.x,oz+o.z),-o.z));
     }
     for(const part of o.parts){
       const attr=part.mesh.instanceMatrix;
@@ -63,7 +63,7 @@ function createRoadsideImpact(T,scene){
       mesh.name='Tróc lớp trát';mesh.rotation.y=Math.atan2(hit.nx,hit.nz);
       mesh.scale.set(.4+s*1.7,.22+s*.68,1);scene.add(mesh);
       scuffs.push({mesh,x:x+hit.nx*.045,z:z+hit.nz*.045,ttl:6+s*8});
-      mesh.position.set(x+hit.nx*.045-ox,.65,z+hit.nz*.045-oz);
+      mesh.position.set(x+hit.nx*.045-ox,ground(x,z)+.65,z+hit.nz*.045-oz);
       return;
     }
     if(!o||(o.kind!=='pole'&&o.kind!=='tree'))return;
@@ -90,7 +90,7 @@ function createRoadsideImpact(T,scene){
     for(let i=scuffs.length-1;i>=0;i--){
       const s=scuffs[i];s.ttl-=dt;
       if(s.ttl<=0){scene.remove(s.mesh);s.mesh.material.dispose();scuffs.splice(i,1);continue;}
-      s.mesh.position.set(s.x-ox,.65,s.z-oz);s.mesh.material.opacity=Math.min(.86,s.ttl*.8);
+      s.mesh.position.set(s.x-ox,ground(s.x,s.z)+.65,s.z-oz);s.mesh.material.opacity=Math.min(.86,s.ttl*.8);
     }
     for(let i=leaves.length-1;i>=0;i--){
       const p=leaves[i];p.age+=dt;
@@ -104,7 +104,7 @@ function createRoadsideImpact(T,scene){
     foliage.visible=leaves.length>0;foliage.count=leaves.length;
     if(!foliage.visible)return;
     leaves.forEach((p,i)=>{
-      dummy.position.set(p.x-ox,Math.max(.06,p.y),p.z-oz);dummy.rotation.set(p.age*4+p.phase,p.phase+p.age*2.2,Math.sin(p.age*5+p.phase));
+      dummy.position.set(p.x-ox,ground(p.x,p.z)+Math.max(.06,p.y),p.z-oz);dummy.rotation.set(p.age*4+p.phase,p.phase+p.age*2.2,Math.sin(p.age*5+p.phase));
       dummy.scale.setScalar(p.size);dummy.updateMatrix();foliage.setMatrixAt(i,dummy.matrix);foliage.setColorAt(i,tint.setHex(p.tint));
     });
     foliage.instanceMatrix.needsUpdate=true;foliage.instanceColor.needsUpdate=true;
