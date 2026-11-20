@@ -6,15 +6,15 @@ Tay Lái Việt là trình mô phỏng lái xe 3D trên trình duyệt. Bạn c�
 
 | Chế độ | Nội dung |
 | --- | --- |
-| Xuyên Việt | Chọn điểm xuất phát, lái tự do hoặc đua trên mạng đường dựng từ OpenStreetMap. |
-| Cúp Bánh Mì | Đua trên hai cung đường kín Ven sông và Đèo trà. |
+| Xuyên Việt | Lái theo mạng đường OpenStreetMap và thời tiết địa phương. Khi tạm dừng, có thể gửi quãng đường của lượt lái lên bảng xếp hạng. |
+| Cúp Bánh Mì | Đua tuyến Ven sông, Đèo trà và các chặng đèo Việt Nam. Mỗi chặng có bảng thành tích riêng theo thời gian, gồm cả giây phạt. |
 | Sân tập và thi thử | Ôn câu hỏi, làm đề lý thuyết, tập sa hình, tập đường trường và lái trên phố. |
 
 Các bài tập và điểm số phục vụ luyện tập. Khi chuẩn bị thi thật, hãy đối chiếu với tài liệu của cơ quan sát hạch.
 
 ## Chạy trên máy
 
-Cần Git, Python 3 và trình duyệt hỗ trợ WebGL cho các chế độ 3D. Trang được phục vụ trực tiếp từ `dist/`.
+Cần Git, Python 3 và trình duyệt hỗ trợ WebGL cho các chế độ 3D. Lệnh bên dưới phục vụ trò chơi từ `dist/`. Để gửi điểm hoặc xem bảng xếp hạng chung, mở bản web ở đầu trang.
 
 ```sh
 git clone https://github.com/tang-vu/vietnam-driving-simulator.git

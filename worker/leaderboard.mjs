@@ -1,0 +1,153 @@
+import courseLengths from "./course-lengths.js";
+
+const tour = "xuyen-viet";
+const hour = 3600_000;
+const maxAge = 7 * 24 * hour;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const knownRoute = route => route === tour || Object.hasOwn(courseLengths, route);
+const json = (data, status = 200, headers = {}) => Response.json(data, {
+  status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers },
+});
+const fail = (message, status) => json({error:message}, status);
+
+async function digest(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
+}
+
+async function identity(request, create) {
+  const signedIn = request.headers.get("oai-authenticated-user-id");
+  if (signedIn) return { player: await digest("site:" + signedIn) };
+  const current = request.headers.get("Cookie")?.match(/(?:^|;\s*)__Host-taylai-racer=([^;]+)/)?.[1];
+  if (current && uuid.test(current)) return {player:await digest("guest:" + current)};
+  if (!create) return {};
+  const token = crypto.randomUUID();
+  return {
+    player:await digest("guest:" + token),
+    cookie:"__Host-taylai-racer=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=31536000",
+  };
+}
+
+async function readBody(request) {
+  if (!request.body || Number(request.headers.get("content-length")) > 1024) return null;
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0, text = "";
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    size += chunk.value.length;
+    if (size > 1024) { await reader.cancel(); return null; }
+    text += decoder.decode(chunk.value, {stream:true});
+  }
+  try { const result = JSON.parse(text + decoder.decode()); return result && typeof result === "object" && !Array.isArray(result) ? result : null; }
+  catch { return null; }
+}
+
+async function standings(db, route, player) {
+  const leaders = db.prepare("SELECT name,score FROM race_records WHERE route=? ORDER BY score,achieved,player LIMIT 10").bind(route);
+  const rankQuery = db.prepare(`SELECT name,score,
+    1+(SELECT COUNT(*) FROM race_records AS r WHERE r.route=me.route AND r.score<me.score) AS rank
+    FROM race_records AS me WHERE route=? AND player=?`).bind(route,player || "");
+  const [list, self] = await db.batch([leaders,rankQuery]);
+  const format = row => route === tour ? {name:row.name,distanceM:-row.score} : {name:row.name,timeMs:row.score};
+  const result = {entries:list.results.map(format),limit:10};
+  const me = self.results[0];
+  if (me) Object.assign(result, {rank:me.rank,personal:format(me)});
+  return result;
+}
+
+async function start(request, db, body, now) {
+  if (!knownRoute(body.route)) return fail("Chặng không hợp lệ.", 400);
+  const {player,cookie} = await identity(request,true);
+  const address = request.headers.get("cf-connecting-ip");
+  const network = address ? await digest("network:" + Math.floor(now / (24 * hour)) + ":" + address) : player;
+  const runId = crypto.randomUUID();
+  const [, inserted] = await db.batch([
+    db.prepare("DELETE FROM race_runs WHERE id IN (SELECT id FROM race_runs WHERE started<? ORDER BY started LIMIT 50)").bind(now-maxAge),
+    db.prepare(`INSERT INTO race_runs(id,player,network,route,started)
+      SELECT ?,?,?,?,? WHERE
+      (SELECT COUNT(*) FROM race_runs WHERE player=? AND started>?)<90 AND
+      (SELECT COUNT(*) FROM race_runs WHERE network=? AND started>?)<600`)
+      .bind(runId,player,network,body.route,now,player,now-hour,network,now-hour),
+  ]);
+  if (!inserted.meta.changes) return json({error:"Bạn đã mở nhiều lượt chơi. Hãy thử lại sau."},429,{"Retry-After":"60"});
+  return json({runId},201,cookie ? {"Set-Cookie":cookie} : {});
+}
+
+async function finish(request, db, body, now) {
+  if (typeof body.runId !== "string" || !uuid.test(body.runId)) return fail("Mã lượt chơi không hợp lệ.",400);
+  const {player} = await identity(request,false);
+  if (!player) return fail("Hãy bắt đầu một lượt chơi mới.",401);
+  const run = await db.prepare("SELECT route,started,score,name,updated FROM race_runs WHERE id=? AND player=?").bind(body.runId,player).first();
+  if (!run || run.started < now-maxAge) return fail("Lượt chơi không còn hiệu lực.",410);
+  const name = typeof body.name === "string" ? body.name.normalize("NFC").trim() : "";
+  if (Array.from(name).length < 1 || Array.from(name).length > 24 || /[\p{C}<>]/u.test(name)) return fail("Biệt danh cần từ 1 đến 24 ký tự.",400);
+  const distance = run.route === tour;
+  const value = distance ? body.distanceM : body.timeMs;
+  if (!Number.isSafeInteger(value) || value < 1) return fail("Thành tích không hợp lệ.",400);
+  const score = distance ? -value : value;
+  if (run.score !== null && (!distance || score >= run.score)) {
+    if (!distance && (run.score !== score || run.name !== name)) return fail("Lượt đua này đã ghi kết quả.",409);
+    return json(await standings(db,run.route,player));
+  }
+  const elapsed = now-run.started;
+  // Generous upper speed bound covers nitro, game-frame jitter and launch-request latency.
+  const maxMetres = (elapsed/1000 + 4)*100;
+  if (distance ? value>maxMetres : (courseLengths[run.route]>maxMetres || value<courseLengths[run.route]*10 || value>maxAge)) {
+    return fail("Thành tích chưa phù hợp với chặng và thời gian chơi.",422);
+  }
+  if (distance && run.updated !== null && now-run.updated < 3000) return json({error:"Chờ vài giây trước khi cập nhật."},429,{"Retry-After":"3"});
+  await db.batch([
+    db.prepare(`UPDATE race_runs SET score=?,name=?,updated=? WHERE id=? AND player=?
+      AND (score IS NULL OR (route=? AND score>? AND updated<=?))`).bind(score,name,now,body.runId,player,tour,score,now-3000),
+    db.prepare(`INSERT INTO race_records(route,player,score,name,achieved)
+      SELECT route,player,score,name,updated FROM race_runs WHERE id=? AND player=? AND score IS NOT NULL
+      ON CONFLICT(route,player) DO UPDATE SET score=excluded.score,name=excluded.name,achieved=excluded.achieved
+      WHERE excluded.score<race_records.score`).bind(body.runId,player),
+  ]);
+  return json(await standings(db,run.route,player));
+}
+
+async function serveGameAsset(request, env, url) {
+  if (url.pathname === "/") url.pathname = "/index.html";
+  const response = await env.ASSETS.fetch(new Request(url,request));
+  const range = request.headers.get("Range");
+  if (request.method !== "GET" || !range || response.status !== 200 ||
+      (request.headers.has("If-Range") && ![response.headers.get("etag"),response.headers.get("last-modified")].includes(request.headers.get("If-Range")))) return response;
+  const parts = /^bytes=(\d*)-(\d*)$/i.exec(range);
+  if (!parts || (!parts[1] && !parts[2])) return response;
+  // Wrangler local asset bindings can return the entire resource for a Range GET.
+  // Game files are bounded static assets (the largest model is under 3 MB).
+  const bytes = await response.arrayBuffer(), size = bytes.byteLength;
+  const start = parts[1] ? Number(parts[1]) : Math.max(0,size-Number(parts[2]));
+  const end = parts[1] && parts[2] ? Math.min(size-1,Number(parts[2])) : size-1;
+  if (start>end || start>=size) return new Response(null,{status:416,headers:{"Content-Range":"bytes */"+size}});
+  const headers = new Headers(response.headers);
+  headers.set("Accept-Ranges","bytes");
+  headers.set("Content-Range","bytes "+start+"-"+end+"/"+size);
+  headers.set("Content-Length",String(end-start+1));
+  headers.delete("Content-Encoding");
+  return new Response(bytes.slice(start,end+1),{status:206,headers});
+}
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const base = "/api/leaderboard";
+    if (url.pathname !== base && !url.pathname.startsWith(base + "/")) return serveGameAsset(request,env,url);
+    if (url.pathname === base && request.method === "GET") {
+      const route = url.searchParams.get("route");
+      if (!knownRoute(route)) return fail("Chặng không hợp lệ.",400);
+      const {player} = await identity(request,false);
+      return json(await standings(env.DB,route,player));
+    }
+    const action = url.pathname.slice(base.length);
+    if (!["/start","/finish"].includes(action)) return fail("Không tìm thấy.",404);
+    if (request.method !== "POST") return fail("Phương thức không hợp lệ.",405);
+    if (request.headers.get("Origin") !== url.origin) return fail("Nguồn yêu cầu không hợp lệ.",403);
+    if (request.headers.get("Content-Type")?.split(";")[0].trim() !== "application/json") return fail("Cần dữ liệu JSON.",415);
+    const body = await readBody(request);
+    if (!body) return fail("Nội dung không hợp lệ.",400);
+    return action === "/start" ? start(request,env.DB,body,Date.now()) : finish(request,env.DB,body,Date.now());
+  },
+};

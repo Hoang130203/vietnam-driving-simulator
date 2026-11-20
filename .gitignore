@@ -1,3 +1,7 @@
 [Aa][Gg][Ee][Nn][Tt]*.[Mm][Dd]
 [Cc][Ll][Aa][Uu][Dd][Ee]*.[Mm][Dd]
 [Gg][Ee][Mm][Ii][Nn][Ii]*.[Mm][Dd]
+/dist/client/
+/dist/server/
+/dist/.openai/
+/.wrangler/
