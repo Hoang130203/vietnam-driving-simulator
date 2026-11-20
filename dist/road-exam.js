@@ -472,6 +472,17 @@ if(!route.stage){
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
   const road=new T.Mesh(g,new T.MeshLambertMaterial({color:0x97968d,map:asphalt,side:T.DoubleSide}));
   road.name='Side road';road.receiveShadow=true;scene.add(road);
+  // A loading shed gives the short local road a destination and a turnaround.
+  const end=branchPosition(branchLength),next=branchPosition(branchLength+1);
+  const yard={...end,h:Math.atan2(next.x-end.x,end.z-next.z)};
+  const shed={...localPoint(yard,0,3.4),h:yard.h},pad=footing(shed,7.4,6.6);
+  const floor=pad.high+.04,bottom=pad.low-.24;
+  scatter('box',0x837b69,shed.x,(floor+bottom)/2,shed.z,7.4,floor-bottom,6.6,-yard.h);
+  scatter('box',0xb3a68b,shed.x,floor+1.8,shed.z,7.2,3.6,6.4,-yard.h);
+  scatter('houseRoof',0x836655,shed.x,floor+4.3,shed.z,7.9,1.4,7.1,-yard.h);
+  const shutter=localPoint(shed,0,-3.24);
+  scatter('box',0x627779,shutter.x,floor+1.43,shutter.z,4.3,2.86,.12,-yard.h);
+  for(let i=1;i<=8;i++)scatter('box',0x768887,shutter.x,floor+i*.31,shutter.z,4.32,.032,.15,-yard.h);
 }
 function board(d,l,text,bg='#235642',w=5,mount=3){
   const p=at(d,l),c=document.createElement('canvas');c.width=768;c.height=192;const g=c.getContext('2d');
