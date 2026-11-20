@@ -56,7 +56,7 @@ function createSightLandscapes(T){
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   const waterTexture=new T.CanvasTexture(water);
   const uniforms={sightImage:{value:texture},sightWater:{value:waterTexture},sightBounds:{value:new T.Vector4(0,0,1,1)},sightEnabled:{value:0}};
-  const coarse=sightRasterPages('sight-landscapes/',grid,['.webp','.png','-water.png']);
+  const coarse=sightRasterPages('sight-landscapes/',grid,['.webp','.surface.webp','-water.png']);
   const fine=sightRasterPages('sight-imagery/',grid*4,['.webp']);
   let active=null,activeFine=null,pixels=null,revision=0;
   async function load(graph,x,z){

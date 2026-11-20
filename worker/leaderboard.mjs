@@ -1,6 +1,7 @@
 import pagePaths from "./page-paths.js";
 import courseLengths from "./course-lengths.js";
 import guidedLengths from "./guided-lengths.js";
+import "../dist/road-tile-codec.js";
 
 const tour = "xuyen-viet";
 const tourVehicles = new Set(["supercar","gt","rally","family-sedan","suv"]);
@@ -148,6 +149,34 @@ async function finish(request, db, body, now) {
   return json(await standings(db,run.route,player));
 }
 
+// Existing clients read gzip-compressed JSON at the original tile URL. New
+// clients request the smaller binary representation with ?format=packed.
+async function legacyRoadTile(request, env, url) {
+  const input = new Headers(request.headers);
+  for (const key of ["Range","If-Range","If-Match","If-None-Match","If-Modified-Since"]) input.delete(key);
+  const source = await env.ASSETS.fetch(new Request(url, {headers:input}));
+  if (source.status !== 200) return source;
+  const headers = new Headers(source.headers);
+  headers.delete("Content-Length");
+  headers.delete("Content-Encoding");
+  headers.set("Content-Type","application/gzip");
+  const original = headers.get("ETag");
+  if (original) headers.set("ETag",original.replace(/"$/,'.json"'));
+  const match = request.headers.get("If-None-Match");
+  if (match === "*" || (match && match.split(",").some(tag=>tag.trim()===headers.get("ETag")))) {
+    await source.body?.cancel();
+    return new Response(null,{status:304,headers});
+  }
+  if (request.method === "HEAD") {
+    await source.body?.cancel();
+    return new Response(null,{headers});
+  }
+  const raw = await RoadTileCodec.content(source);
+  const content = RoadTileCodec.packed(raw) ? JSON.stringify(RoadTileCodec.decode(raw)) : raw;
+  const body = new Blob([content]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Response(body,{headers});
+}
+
 async function serveGameAsset(request, env, url) {
   const pathname = url.pathname;
   if (request.method === "GET" || request.method === "HEAD") {
@@ -165,7 +194,12 @@ async function serveGameAsset(request, env, url) {
     const stem = pathname === "/" ? "index" : pathname.slice(1);
     url.pathname = "/page-content/" + stem + ".bin";
   }
-  let response = await env.ASSETS.fetch(new Request(url,request));
+  if (/^\/sight-landscapes\/N\d{2}E\d{3}-\d+\.png$/.test(pathname)) {
+    url.pathname = pathname.replace(/\.png$/,".surface.webp");
+  }
+  const legacyTile = (request.method === "GET" || request.method === "HEAD")
+    && /^\/vn-roads\/\d+_\d+(?:_\d+_\d+)?\.gz$/.test(pathname) && url.searchParams.get("format") !== "packed";
+  let response = legacyTile ? await legacyRoadTile(request, env, url) : await env.ASSETS.fetch(new Request(url,request));
   if (isPage && response.ok) {
     const headers = new Headers(response.headers);
     headers.set("Content-Type", "text/html; charset=utf-8");

@@ -24,6 +24,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import tifffile
+from pack_sight_surfaces import pack_page
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +133,7 @@ def build(degree, cells, workers):
         stem = OUT/f'{tag}-{start//32}'
         colour.save(stem.with_suffix('.webp'), quality=85, method=5)
         surface.save(stem.with_suffix('.png'), optimize=True)
+        pack_page(stem.with_suffix('.png'))
     print(tag, len(cells), flush=True)
     return tag, [[x%GRID, y%GRID] for x,y in cells]
 

@@ -2,9 +2,7 @@
 async function fetchMapTile(url){
  const response=await fetch(url);
  if(!response.ok)throw Error('Không tải được vùng bản đồ.');
- const bytes=new Uint8Array(await response.arrayBuffer());
- if(bytes[0]!==31)return JSON.parse(new TextDecoder().decode(bytes));
- return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
+ return RoadTileCodec.decode(await RoadTileCodec.content(response));
 }
 // Keep only the tiles around the current drive. OSM node IDs, rather than coordinates,
 // connect edges so an overpass does not accidentally become a turn.
@@ -35,7 +33,7 @@ class VietnamRoads {
    if(!this.cache.has(key)){
      const pending=(async()=>{
        const base=this.remote&&!this.local.has(key)?this.remote:'vn-roads/';
-       const [rows,details]=await Promise.all([fetchMapTile(base+key+'.gz'),this.trafficTiles.has(key)
+       const [rows,details]=await Promise.all([fetchMapTile(RoadTileCodec.tileURL(base,key)),this.trafficTiles.has(key)
          ?fetchMapTile('vn-traffic/'+key+'.gz').catch(()=>null):undefined]);
        if(details===null)this.cache.delete(key);
        return {rows,details};

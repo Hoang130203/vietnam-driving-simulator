@@ -1,5 +1,5 @@
 'use strict';
-importScripts('route-network-core.js');
+importScripts('road-tile-codec.js','route-network-core.js');
 
 class RouteError extends Error {
   constructor(code,message){super(message);this.code=code;}
@@ -8,10 +8,8 @@ class RouteError extends Error {
 async function readAsset(url,binary=false){
   const response=await fetch(url);
   if(!response.ok)throw new RouteError('network','Chưa tải được dữ liệu đường. Hãy thử lại.');
-  const bytes=new Uint8Array(await response.arrayBuffer());
-  const stream=bytes[0]===31 && bytes[1]===139 ? new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')) : bytes;
-  const decoded=new Response(stream);
-  return binary ? new Int32Array(await decoded.arrayBuffer()) : decoded.json();
+  const bytes=await RoadTileCodec.content(response);
+  return binary ? new Int32Array(bytes.buffer) : RoadTileCodec.decode(bytes);
 }
 
 function cached(map,key,limit,load){
@@ -99,7 +97,7 @@ async function plan({index,start,finish},progress){
   }
   const activeTraffic=new Set(traffic),local=new Set(index.localTiles||[]);
   const raw=new Map(),graphs=new Map();
-  const rows=key=>cached(raw,key,3,()=>readAsset((index.tileBase&&!local.has(key)?index.tileBase:'vn-roads/')+key+'.gz'));
+  const rows=key=>cached(raw,key,3,()=>readAsset(RoadTileCodec.tileURL(index.tileBase&&!local.has(key)?index.tileBase:'vn-roads/',key)));
   const tile=key=>cached(graphs,key,3,async()=>{
     const [data,details]=await Promise.all([rows(key),activeTraffic.has(key)?readAsset('vn-traffic/'+key+'.gz'):{}]);
     raw.delete(key);
