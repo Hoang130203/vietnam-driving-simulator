@@ -96,6 +96,7 @@ async function startAt(place,restore=null,guided=null){
    $('journeyTitle').textContent=guided.title;
    $('journeyTitle').classList.toggle('longTitle',guided.title.length>25);
  }
+ $('runNotice').firstChild.textContent=guided&&!guided.id?'Lộ trình tự chọn được lưu trên trình duyệt này. ':'Khi xuất phát, máy chủ ghi lượt lái và dùng cookie cho khách. ';
  document.querySelector('.openingMode span').textContent=guided?(guided.id?'Tuyến xếp hạng':'Lộ trình tự chọn'):'Lái tự do';
  $('departureCoords').textContent=place[2].toFixed(4)+'° N  /  '+place[1].toFixed(4)+'° E';
  $('departureMap').getContext('2d').clearRect(0,0,$('departureMap').width,$('departureMap').height);

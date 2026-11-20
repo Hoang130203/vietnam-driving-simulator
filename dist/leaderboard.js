@@ -5,7 +5,7 @@ function formatRaceTime(ms){
 function createLeaderboard(routeId,title,serverTimed=false){
   const world=routeId==='xuyen-viet',dialog=document.createElement('dialog');
   dialog.className='scoreBoard';dialog.setAttribute('aria-labelledby','boardTitle-'+routeId);
-  dialog.innerHTML='<div class="boardHead"><h2>Bảng xếp hạng online</h2><button type="button" aria-label="Đóng bảng xếp hạng">✕</button></div><p class="boardMode"></p><p role="status"></p><ol></ol><form hidden><label>Biệt danh <input name="alias" required minlength="1" maxlength="24" autocomplete="off"></label><button class="hot">Gửi thành tích</button></form><button class="reloadBoard">Tải lại bảng</button>';
+  dialog.innerHTML='<div class="boardHead"><h2>Bảng xếp hạng online</h2><button type="button" aria-label="Đóng bảng xếp hạng">✕</button></div><p class="boardMode"></p><p role="status"></p><ol></ol><form hidden><p class="submitNotice">Khi bạn gửi, biệt danh và thành tích có thể xuất hiện trên bảng xếp hạng công khai. <a href="privacy.html" target="_blank" rel="noopener">Quyền riêng tư</a></p><label>Biệt danh <input name="alias" required minlength="1" maxlength="24" autocomplete="off"></label><button class="hot">Gửi thành tích</button></form><button class="reloadBoard">Tải lại bảng</button>';
   dialog.querySelector('h2').id='boardTitle-'+routeId;document.body.append(dialog);
   dialog.querySelector('.boardMode').textContent=title+' · '+(world?'Quãng đường trong một lượt':serverTimed?'Thời gian hoàn thành tuyến':'Thời gian gồm giây phạt');
   const status=dialog.querySelector('[role=status]'),list=dialog.querySelector('ol'),form=dialog.querySelector('form');
