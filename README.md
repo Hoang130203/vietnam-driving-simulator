@@ -4,7 +4,7 @@
 
 ViVu3D là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
 
-Mục **Cung đường nổi tiếng** có sáu chặng đèo dài 3,2 km. Chọn đèo để xem bản đồ địa hình, biên dạng dốc và chọn ánh sáng nắng sớm, chiều muộn hoặc theo giờ địa phương. **Lái tự do** hiện vệt đường và quãng còn lại trên bản đồ. **Đua chặng này** đưa xe tới vạch xuất phát ở Cúp Bánh Mì. [Khám phá sáu cung đèo](https://vivu3d.com/cung-duong.html).
+Mục **Cung đường nổi tiếng** có sáu chặng đèo dài 3,2 km. Chọn đèo để xem bản đồ địa hình, biên dạng dốc và chọn ánh sáng nắng sớm, chiều muộn hoặc theo giờ địa phương. **Lái tự do** hiện vệt đường và quãng còn lại trên bản đồ. **Đua chặng này** đưa xe tới vạch xuất phát ở Cúp Bánh Mì. [Khám phá sáu cung đèo](https://vivu3d.com/cung-duong).
 
 Ở màn **Xuyên Việt**, chọn Hà Nội (Hồ Gươm), Tam Chúc, Huế (Ngọ Môn), Kon Tum (nhà rông Kon Klor), TP.HCM (chợ Bến Thành) hoặc Cần Thơ (chợ nổi Cái Răng) để xem cảnh rồi bấm **Cầm lái**. Khi mở trang chính, game tiếp tục hành trình đã lưu. Nếu chưa có hành trình, điểm giới thiệu thay đổi theo ngày.
 

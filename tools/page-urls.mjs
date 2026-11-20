@@ -27,6 +27,14 @@ export async function preparePageUrls(client) {
     if (hosted !== source) await writeFile(file, hosted);
   }
 
+  // Sites can serve assets before invoking the Worker. Give the asset router
+  // the same permanent redirects for bookmarked HTML and trailing-slash URLs.
+  const redirects = pages.map(name => "/" + name + " " + byFilename.get(name) + " 301");
+  for (const url of paths) {
+    if (url !== "/") redirects.push(url + "/ " + url + " 301");
+  }
+  await writeFile(path.join(client, "_redirects"), redirects.join("\n") + "\n");
+
   const urls = ["/", ...paths.filter(url => url !== "/")];
   const entriesXml = urls.map(url => "  <url><loc>" + origin + url + "</loc></url>");
   await writeFile(path.join(client, "sitemap.xml"), [
