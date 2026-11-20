@@ -30,6 +30,8 @@ Các chế độ lái 3D mặc định dùng đồ họa **Tự động**. Game 
 
 Ở Xuyên Việt, dùng **W/S** để ga, phanh và lùi, **A/D** để đánh lái, **Shift** để dùng nitro và **U** để đặt xe về đường. Ở ngã rẽ, bảng chỉ hướng ghi tên đường hoặc địa danh có lối ô tô tới. Nhấn **M** hoặc chạm bản đồ nhỏ để xem đường quanh xe, kéo để xem xung quanh và dùng **+ / −** để đổi tỷ lệ. Nhấn **M** hoặc **Esc** để lái tiếp. Trên điện thoại, dùng các nút cảm ứng của chế độ đang chơi.
 
+Chọn **Lái đến Tam Chúc** trên màn hình Xuyên Việt để đi tuyến 5,4 km từ Ba Sao tới ven hồ. Đi theo vệt xanh trên bản đồ và chỉ dẫn trước giao lộ. Khi rẽ nhầm, nét đứt chỉ đường trở về đoạn đã đi. Tới hồ, chọn **Ngắm Tam Chúc** hoặc gửi biệt danh vào bảng hạng riêng. Bảng lấy thời gian từ lúc xuất phát tới lúc về đích theo đồng hồ máy chủ, gồm cả lúc tạm dừng. Mỗi người giữ một kỷ lục tốt nhất. [Mở tuyến Ba Sao → Tam Chúc](https://vivu3d.com/?drive=ba-sao-tam-chuc).
+
 Trong Xuyên Việt, mở **Danh lam 3D** ở mục điểm xuất phát để chọn địa danh qua hình xem trước. Khi tới gần, nhấn **Ngắm địa danh 3D** để xoay, chỉnh khoảng cách hoặc mở ảnh đối chiếu. Trong **Quần thể Tam Chúc**, chọn góc toàn cảnh hoặc một trong tám công trình để ngắm từ gần. Nút **Trở lại xe** đưa góc nhìn về nơi đã dừng. [Ảnh và tư liệu đối chiếu](dist/landmark-references.txt).
 
 Trong bản đồ điểm xuất phát, gõ tên đường, số nhà hoặc địa danh, có dấu hoặc không dấu. Thêm tên tỉnh hoặc quận để phân biệt những nơi trùng tên. Thử **48 Hàng Ngang, Hà Nội**, **QL21** hoặc **cây xăng gần đây**. Khi chọn kết quả, bản đồ đánh dấu vị trí để bạn bắt đầu lái. [Tìm Ba Sao trên trang game](https://vivu3d.com/?search=Ba%20Sao) · [Nguồn dữ liệu tìm kiếm](dist/vn-search/CREDITS.txt).

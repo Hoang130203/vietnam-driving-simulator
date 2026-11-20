@@ -28,7 +28,7 @@
 }
 .opening #launch {background:var(--lime); color:#16271b; border:1px solid var(--lime)}
 .opening #launch:disabled {background:#d9dfd0; border-color:#d9dfd0; cursor:wait}
-.opening #openSetup {background:#132223a8; border:1px solid #ffffff70; color:white}
+.opening #startGuided, .opening #openSetup {background:#132223a8; border:1px solid #ffffff70; color:white}
 .openingActions button:focus-visible {outline:3px solid white; outline-offset:4px}
 #loadStatus {margin:.7em 0 0; color:white; background:#182926db; padding:.5em .8em; border-radius:4px}
 #loadStatus:empty {display:none}
@@ -61,3 +61,10 @@
 .journey[data-lakeside] .routeInfo #trip,
 .journey[data-lakeside] .telemetry label,
 .journey[data-awaiting-motion] .navigationDock {display:none}
+
+#guidedInfo {font-weight:700; color:#ddffa3}
+#guidedArrival button {display:block; width:100%; margin-top:8px}
+@media(max-width:650px) {
+  .arcade .openingActions {flex-wrap:wrap}
+  .arcade .openingActions #startGuided {flex:1.3}
+}
