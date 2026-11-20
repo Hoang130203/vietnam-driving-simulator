@@ -432,3 +432,7 @@ Cầu Vàng Bà Nà, Lăng Chủ tịch Hồ Chí Minh và Nhà thờ Đức Bà
 https://danangfantasticity.com/en/cau-vang-thuong-hieu-moi-cua-du-lich-da-nang
 https://btllang.mod.gov.vn/tin-tuc/tin-tu-bo-tu-lenh-lang/4161-qua-trinh-xay-dung-lang-chu-tich-ho-chi-minh-cong-trinh-dac-biet-co-y-nghia-chinh-tri-van-hoa.html
 https://tgpsaigon.net/bai-viet/vuong-cung-thanh-duong-duc-ba-sai-gon-37259
+
+Mở rộng cụm địa danh Huế (13 công trình mới) — Điện Thái Hòa, Hiển Lâm Các & Cửu Đỉnh, Cửa Hiển Nhơn, Lăng Minh Mạng, Lăng Tự Đức, Trường THPT Chuyên Quốc Học Huế, Nhà thờ chính tòa Phủ Cam, Nhà thờ Dòng Chúa Cứu Thế Huế, Chợ Đông Ba, Hổ Quyền, Chùa Từ Hiếu, Chùa Báo Quốc và Tàng Thư Lâu. Tọa độ OpenStreetMap (ODbL 1.0); mô hình 3D dựng thủ tục bằng Three.js.
+https://www.openstreetmap.org/copyright
+https://hueworldheritage.org.vn/
