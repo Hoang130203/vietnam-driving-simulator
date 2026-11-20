@@ -1,5 +1,23 @@
 <!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#141b1b"><title>Xuyên Việt · ViVu3D</title><link rel="stylesheet" href="race.css"><link rel="stylesheet" href="world.css"><script>if(/^#(?:practice\/|exam\/|home$)/.test(location.hash))location.replace('hall.html'+location.hash);else if(new URLSearchParams(location.search).has('route'))location.replace('cup.html'+location.search)</script><link rel="stylesheet" href="cockpit-layout.css"><link rel="stylesheet" href="player-layout.css"><link rel="stylesheet" href="journey-opening.css"><link rel="stylesheet" href="cockpit-ui.css"><link rel="stylesheet" href="cockpit-settings.css"><link rel="stylesheet" href="atlas-finder.css"><link rel="stylesheet" href="driving-map.css"></head>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#141b1b">
+  <title>ViVu3D – Mô phỏng lái xe 3D trên bản đồ Việt Nam</title>
+  <meta name="description" content="Lái ô tô trên bản đồ Việt Nam ngay trong trình duyệt. Khám phá địa danh 3D, chinh phục sáu cung đèo, đua Cúp Bánh Mì hoặc luyện sát hạch ô tô hạng B.">
+  <link rel="canonical" href="https://vivu3d.com/">
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="vi_VN">
+  <meta property="og:site_name" content="ViVu3D">
+  <meta property="og:title" content="ViVu3D – Mô phỏng lái xe 3D trên bản đồ Việt Nam">
+  <meta property="og:description" content="Lái ô tô trên bản đồ Việt Nam ngay trong trình duyệt. Khám phá địa danh 3D, chinh phục sáu cung đèo, đua Cúp Bánh Mì hoặc luyện sát hạch ô tô hạng B.">
+  <meta property="og:url" content="https://vivu3d.com/">
+  <meta property="og:image" content="https://vivu3d.com/social-preview.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Xe đỏ trên đường đèo trong trò chơi ViVu3D">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"ViVu3D","url":"https://vivu3d.com/","inLanguage":"vi"}</script>
+<link rel="stylesheet" href="race.css"><link rel="stylesheet" href="world.css"><script>if(/^#(?:practice\/|exam\/|home$)/.test(location.hash))location.replace('hall.html'+location.hash);else if(new URLSearchParams(location.search).has('route'))location.replace('cup.html'+location.search)</script><link rel="stylesheet" href="cockpit-layout.css"><link rel="stylesheet" href="player-layout.css"><link rel="stylesheet" href="journey-opening.css"><link rel="stylesheet" href="cockpit-ui.css"><link rel="stylesheet" href="cockpit-settings.css"><link rel="stylesheet" href="atlas-finder.css"><link rel="stylesheet" href="driving-map.css"></head>
 <body class="arcade journey" data-phase="grid"><canvas id="world" aria-label="Mạng đường Việt Nam 3D"></canvas>
 <div id="openingStill" hidden aria-hidden="true"></div>
 <header><a class="brand" href="./">ViVu<b>3D</b></a><nav aria-label="Chế độ chơi"><a href="./" aria-current="page">Xuyên Việt</a><a href="cup.html">Đua Cúp</a><a href="hall.html">Sân tập</a></nav><div class="tools"><button id="camera" hidden>Góc nhìn</button><button id="sound">Tắt âm</button><button id="pause" hidden>Tạm dừng</button></div></header>
@@ -8,7 +26,7 @@
   <div class="openingCopy">
     <p class="openingMode">Xuyên Việt <span>Lái tự do</span></p>
     <h1 id="journeyTitle">Xuyên Việt</h1>
-    <p id="journeyCaption"></p>
+    <p id="journeyCaption">Lái xe trên bản đồ Việt Nam, từ phố cổ Hà Nội đến những cung đèo và miền sông nước.</p>
     <div class="openingActions">
       <button id="launch" aria-describedby="runNotice" disabled>Đang tải đường…</button>
       <button id="startGuided" aria-haspopup="dialog" disabled>Lộ trình</button>

@@ -8,11 +8,19 @@
     streets:{title:'Tập lái trên phố',file:'streets.html'},
     library:{title:'Ngân hàng 600 câu',file:'library.html'}
   };
+  const hallTitle = document.title;
+  // Native links support search, new tabs and direct access to each practice page.
+  $('hall').addEventListener('click', event => {
+    const link = event.target.closest('a[data-practice]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    location.hash = 'practice/' + link.dataset.practice;
+  });
   const order=['theory','yard','road'];
   const lessons=['Xuất phát','Dừng nhường người đi bộ','Dừng và khởi hành trên dốc','Vệt bánh xe và cua vuông','Ngã tư có đèn tín hiệu','Đường vòng quanh co','Ghép xe dọc','Ghép xe ngang','Dừng ở đường sắt','Thay đổi số trên đường bằng','Kết thúc','Tình huống khẩn cấp'];
   for (const [i,title] of lessons.entries()){
     const a=document.createElement('a'),n=document.createElement('i');
-    a.href='#practice/yard/'+i;n.textContent=i===11?'!':String(i+1).padStart(2,'0');a.append(n,title);$('yardLessons').append(a);
+    a.href='yard.html?lesson='+i;a.dataset.practice='yard/'+i;n.textContent=i===11?'!':String(i+1).padStart(2,'0');a.append(n,title);$('yardLessons').append(a);
   }
   const key='taylai.exam-B.2026-11.v1';
   let session=null, active=null, lastLocation='';
@@ -51,7 +59,7 @@
     const [mode,part,lesson]=hash.slice(1).split('/');
     if(!Object.hasOwn(parts,part) || !['exam','practice'].includes(mode) || (mode==='exam'&&(!session||nextPart()!==part||!order.includes(part)))){
       active=null;lastLocation='';$('module').src='about:blank';$('hall').hidden=false;$('player').hidden=true;
-      document.body.classList.remove('playing');document.title='ViVu3D · Thi thử sát hạch hạng B';progress();return;
+      document.body.classList.remove('playing');document.title=hallTitle;progress();return;
     }
     if(mode==='exam' && session.results.at(-1)?.passed===false){nextAttempt();return;}
     lastLocation=hash;active={mode,part,received:false,id:session?.id};$('outcome').hidden=true;

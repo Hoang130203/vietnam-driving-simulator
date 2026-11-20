@@ -45,3 +45,8 @@ footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 15px;pa
   #description{max-width:65ch;margin:8px 0 16px}
 }
 @media(max-width:430px){.brand{font-size:1.7rem}header nav{font-size:.82rem}main{padding-top:18px}#passChoices a{flex:1 0 27%;text-align:center}}
+
+.passGuide { margin-top: 1rem; padding-block: .75rem; border-block: 1px solid var(--line); }
+.passGuide summary { cursor: pointer; font-weight: 650; }
+.passGuide ul { padding-left: 1.25rem; max-width: 78ch; }
+.passGuide li + li { margin-top: .4rem; }

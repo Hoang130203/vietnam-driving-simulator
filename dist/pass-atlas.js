@@ -3,9 +3,9 @@
 (() => {
   const byId=id=>document.getElementById(id);
   const stages=new Map(mountainStages.map(stage=>[stage.id,stage]));
-  for(const id of scenicPasses.keys()){
-    const a=document.createElement('a');
-    a.href='#'+id;a.textContent=stages.get(id).name.replace(/^Đèo /,'');byId('passChoices').append(a);
+  // Without scripting these links open the corresponding descriptions in the guide.
+  for (const link of byId('passChoices').querySelectorAll('a')) {
+    link.hash = link.hash.replace('#guide-', '#');
   }
   function select(){
     const key=location.hash.slice(1),id=scenicPasses.has(key)?key:scenicPasses.keys().next().value;

@@ -1,3 +1,5 @@
+import {bundleJourneyScripts} from "./bundle-journey.mjs";
+import {preparePageUrls} from "./page-urls.mjs";
 import {execFileSync,spawn} from "node:child_process";
 import {mkdir,readFile,writeFile} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
@@ -16,6 +18,8 @@ const archive = spawn("git",["archive","--format=tar","HEAD:dist"],{cwd:root,std
 const unpack = spawn(process.platform==="win32"?"tar.exe":"tar",["-xf","-","-C",client],{cwd:root,stdio:["pipe","inherit","inherit"]});
 const results = await Promise.all([once(archive,"close"),once(unpack,"close"),pipeline(archive.stdout,unpack.stdin)]);
 if(results[0][0]!==0||results[1][0]!==0) throw new Error("Could not export the game assets.");
+const pagePaths = await preparePageUrls(client);
+await bundleJourneyScripts(client);
 const stageScript = await readFile(path.join(client,"mountain-stages.js"),"utf8");
 const stages = JSON.parse(stageScript.slice(stageScript.indexOf("window.mountainStages=")+"window.mountainStages=".length).trim().replace(/;$/,""));
 const courses = {river:2240,pass:2480};
@@ -27,6 +31,7 @@ if(featured.length!==Object.keys(guided).length || featured.some(r=>!Number.isIn
 const body = await readFile(path.join(root,"worker/leaderboard.mjs"),"utf8");
 // Sites accepts a single ES module as its Worker entry point.
 await writeFile(path.join(server,"index.js"),body
+  .replace('import pagePaths from "./page-paths.js";',"const pagePaths = new Set("+JSON.stringify(pagePaths)+");")
   .replace('import courseLengths from "./course-lengths.js";',"const courseLengths = "+JSON.stringify(courses)+";")
   .replace('import guidedLengths from "./guided-lengths.js";',"const guidedLengths = "+JSON.stringify(guided)+";"));
 const wrangler = {

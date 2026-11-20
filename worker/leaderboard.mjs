@@ -1,3 +1,4 @@
+import pagePaths from "./page-paths.js";
 import courseLengths from "./course-lengths.js";
 import guidedLengths from "./guided-lengths.js";
 
@@ -148,8 +149,22 @@ async function finish(request, db, body, now) {
 }
 
 async function serveGameAsset(request, env, url) {
-  if (url.pathname === "/") url.pathname = "/index.html";
-  const response = await env.ASSETS.fetch(new Request(url,request));
+  const pathname = url.pathname;
+  if (request.method === "GET" || request.method === "HEAD") {
+    const clean = pathname === "/index.html" ? "/" : pathname.replace(/\.html$|\/$/, "");
+    const redirectPage = clean !== pathname && pagePaths.has(clean);
+    const redirectHttp = url.protocol === "http:" && url.hostname === "vivu3d.com";
+    if (redirectPage || redirectHttp) {
+      if (redirectPage) url.pathname = clean;
+      if (redirectHttp) url.protocol = "https:";
+      return Response.redirect(url.href, 301);
+    }
+  }
+  let response = await env.ASSETS.fetch(new Request(url,request));
+  if (response.status === 404 && pagePaths.has(pathname)) {
+    url.pathname = pathname === "/" ? "/index.html" : pathname + ".html";
+    response = await env.ASSETS.fetch(new Request(url,request));
+  }
   const range = request.headers.get("Range");
   if (request.method !== "GET" || !range || response.status !== 200 ||
       (request.headers.has("If-Range") && ![response.headers.get("etag"),response.headers.get("last-modified")].includes(request.headers.get("If-Range")))) return response;

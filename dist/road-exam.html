@@ -1,5 +1,22 @@
 ﻿<!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='21' font-size='21'%3E🏁%3C/text%3E%3C/svg%3E"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sát hạch đường trường · Hạng B</title><link rel="stylesheet" href="road-exam.css"><link rel="stylesheet" href="lesson-cockpit.css"></head>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Luyện sát hạch đường trường hạng B · ViVu3D</title>
+  <meta name="description" content="Lái trên tuyến Ven sông hoặc Đèo trà, xử lý hiệu lệnh tăng giảm số và theo dõi kết quả trong bài mô phỏng sát hạch đường trường hạng B.">
+  <link rel="canonical" href="https://vivu3d.com/road-exam">
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="vi_VN">
+  <meta property="og:site_name" content="ViVu3D">
+  <meta property="og:title" content="Luyện sát hạch đường trường hạng B · ViVu3D">
+  <meta property="og:description" content="Lái trên tuyến Ven sông hoặc Đèo trà, xử lý hiệu lệnh tăng giảm số và theo dõi kết quả trong bài mô phỏng sát hạch đường trường hạng B.">
+  <meta property="og:url" content="https://vivu3d.com/road-exam">
+  <meta property="og:image" content="https://vivu3d.com/social-preview.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Xe đỏ trên đường đèo trong trò chơi ViVu3D">
+  <meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="road-exam.css"><link rel="stylesheet" href="lesson-cockpit.css"></head>
 <body class="lessonRoad"><main>
 <header><div><small>THỰC HÀNH TRÊN ĐƯỜNG · HẠNG B</small><h1 id="routeName">Tuyến ven sông</h1><a data-weather href="https://open-meteo.com/" target="_blank" rel="noopener" aria-label="Thời tiết từ Open-Meteo">Đang lấy thời tiết…</a></div><label>Tuyến lái <select id="route"><option value="river">Ven sông · 2,24 km</option><option value="pass">Đèo trà · 2,48 km</option></select></label></header>
 <section class="view"><canvas id="world"></canvas><div class="tools"><button id="camera">Góc tài xế</button><button id="sound">Bật âm</button></div><div class="command"><small id="stage">HIỆU LỆNH</small><strong id="command"></strong></div><canvas id="map" width="175" height="121" aria-label="Sơ đồ tuyến đường"></canvas><div class="instruments"><b id="speed">0</b> km/h <i id="gear">N</i><span id="signals"></span></div></section>
