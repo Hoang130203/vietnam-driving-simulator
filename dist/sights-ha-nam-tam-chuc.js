@@ -114,7 +114,7 @@
 
   (window.VietnamSights??=[]).push({
     id:'thuy-dinh-tam-chuc', name:'Nhà khách Thủy Đình – Tam Chúc', city:'Kim Bảng',
-    collection:'ha-nam',province:'Ninh Bình',region:'Bắc Bộ',
+    complex:'tam-chuc',tourOrder:0,formerProvince:'Hà Nam',province:'Ninh Bình',region:'Bắc Bộ',
     lon:105.812833,lat:20.569363,start:[105.813556,20.570100],yaw:-.733,viewAngle:-.24,
     gardenRadius:370,width:89,depth:74,solids:[[0,0,44.5,25.5],[0,29,30.5,8.5],[-15.5,-66.5,2.7,41],[24.5,-66.5,2.7,41]],
     description:'Từ ĐH.05 nhìn qua hồ Tam Chúc, hai cầu đi bộ dẫn tới tòa Thủy Đình. Dưới ba tầng mái cong là Trung tâm Hội nghị quốc tế, nơi khai mạc Đại lễ Vesak năm 2019.',

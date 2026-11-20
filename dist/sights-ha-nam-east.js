@@ -163,7 +163,7 @@
   }
 
   (window.VietnamSights??=[]).push({
-    id:'nha-ba-kien',name:'Nhà Bá Kiến',city:'Lý Nhân',province:'Ninh Bình',region:'Bắc Bộ',collection:'ha-nam',
+    id:'nha-ba-kien',name:'Nhà Bá Kiến',city:'Lý Nhân',province:'Ninh Bình',region:'Bắc Bộ',formerProvince:'Hà Nam',
     lon:106.1572355,lat:20.4799196,start:[106.157234,20.479689],yaw:-.12,width:18,depth:16,
     solids:[[0,-.69,6.85,2.19]],
     description:'Ở làng Đại Hoàng xưa, mái ngói thấp che ba gian nhà gỗ lim. Sau hàng cửa bức bàn là bốn bộ khung với mười sáu cột kê trên chân đá xanh.',
@@ -172,7 +172,7 @@
     map:'https://www.google.com/maps?cid=790440860444881714',
     build(T,kit){const geometry=baKien(T,kit);const foliage=new T.Mesh(geometry,new T.MeshLambertMaterial({vertexColors:true}));foliage.castShadow=true;foliage.receiveShadow=true;kit.group.add(foliage);}
   },{
-    id:'den-tran-thuong',name:'Nghi môn ngoại đền Trần Thương',city:'Lý Nhân',province:'Ninh Bình',region:'Bắc Bộ',collection:'ha-nam',
+    id:'den-tran-thuong',name:'Nghi môn ngoại đền Trần Thương',city:'Lý Nhân',province:'Ninh Bình',region:'Bắc Bộ',formerProvince:'Hà Nam',
     lon:106.106185,lat:20.57518,start:[106.106298,20.574828],yaw:.20,width:17,depth:4.6,
     solids:[[-7.68,0,.52,.54],[-6.63,0,.37,.76],[-4.01,0,.37,.76],[-3.16,0,.58,.49],[-1.91,0,.38,1.32],[1.91,0,.38,1.32],[3.16,0,.58,.49],[4.01,0,.37,.76],[6.63,0,.37,.76],[7.68,0,.52,.54]],
     description:'Ba cửa vòm mở vào đường chính đạo của đền thờ Trần Hưng Đạo. Nhìn lên cổng giữa sẽ thấy gác chuông, các tầng mái đao và đôi rồng chầu mặt nguyệt.',

@@ -64,10 +64,12 @@
     }
     material.rail=new T.MeshStandardMaterial({color:0xaab2af,metalness:.55,roughness:.49,side:T.DoubleSide});
     material.asphalt.side=material.earth.side=T.DoubleSide;
-    material.pavers=new T.MeshStandardMaterial({color:0xb5ada4,roughness:.91});
+    material.pavers=new T.MeshStandardMaterial({color:0xb5ada4,roughness:.91,side:T.DoubleSide});
+    const gardenLawn=new T.MeshLambertMaterial({color:0x73915b,side:T.DoubleSide});
+    const woodlandFloor=new T.MeshLambertMaterial({color:0x455d3c,side:T.DoubleSide});
     material.pavers.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec2 paving;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-        '#include <begin_vertex>\n paving=(instanceMatrix*vec4(position,1.)).xz;');
+        '#include <begin_vertex>\n#ifdef USE_INSTANCING\n paving=(instanceMatrix*vec4(position,1.)).xz;\n#else\n paving=position.xz;\n#endif');
       shader.uniforms.paverOrigin={value:landOrigin};
       shader.fragmentShader='uniform vec2 paverOrigin; varying vec2 paving;\n'+shader.fragmentShader.replace('#include <color_fragment>',
         `#include <color_fragment>
@@ -190,6 +192,28 @@
         surfaces.transform(mat,landWidth/tile,landWidth/tile,(gx/tile)%1,(-gz/tile)%1);
       }
       const natural=localGround;
+      const complexCenter=graph?.point(105.7956,20.5528);
+      const innerPrecinct=complexCenter&&Math.hypot(complexCenter.x-cx,complexCenter.z-cz)<1500;
+      const cover=innerPrecinct?(window.tamChucGroundCover||[]).map(([kind,coords])=>{
+        const points=[];
+        for(let i=0;i<coords.length;i+=2){
+          const p=graph.point(105.79+coords[i]/1e6,20.54+coords[i+1]/1e6);
+          points.push(new T.Vector2(p.x-cx,p.z-cz));
+        }
+        return {kind,points,bounds:new T.Box2().setFromPoints(points)};
+      }):[];
+      const groves=cover.filter(p=>p.kind==='wood');
+      function inGrove(x,z){
+        return groves.some(({points,bounds})=>{
+          if(x<bounds.min.x||x>bounds.max.x||z<bounds.min.y||z>bounds.max.y)return false;
+          let inside=false;
+          for(let i=0,j=points.length-1;i<points.length;j=i++){
+            const a=points[i],b=points[j];
+            if((a.y>z)!==(b.y>z)&&x<(b.x-a.x)*(z-a.y)/(b.y-a.y)+a.x)inside=!inside;
+          }
+          return inside;
+        });
+      }
       const passRoad=edges.some(namedPass);
       wooded=passRoad||relief.altitude(cx,cz)>280;
       const segments=[],cells=new Map(),roadData=[],landData=[],bankData=[],railVerts=[],railIndices=[],cutVerts=[],cutUv=[],cutIndices=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
@@ -546,7 +570,8 @@
             const width=4.5+random()*2.9,depth=5+random()*3.9;
             const dist=s.w+(house?3.5+depth/2:3)+random()*(house?3:5);
             const hx=x+sign*s.nx*dist,hz=z+sign*s.nz*dist,footprint=house?Math.hypot(width,depth)/2+.8:1.7;
-            if(house&&templeGrounds.some(p=>Math.hypot(hx+cx-p.x,hz+cz-p.z)<p.radius))continue;
+            if(house&&(templeGrounds.some(p=>Math.hypot(hx+cx-p.x,hz+cz-p.z)<p.radius)||
+              innerPrecinct&&Math.hypot(hx+cx-complexCenter.x,hz+cz-complexCenter.z)<445))continue;
             if(blocked(hx,hz,footprint)||onApproach(hx+cx,hz+cz)||house&&district.mappedBlock(hx+cx,hz+cz))continue;
             const c={key:s.seed+':'+index+':'+sign,priority,s,sign,hx,hz,footprint,house,width,depth,type,random};
             candidates.push(c);
@@ -597,15 +622,16 @@
               for(let k=0;k<2;k++){const angle=r+k*Math.PI/2,off=w*(palm?.07:.12);instance(palm?'palm':'tree',unitPlane,hx+off*Math.cos(angle),height*.49,hz-off*Math.sin(angle),w,height,1,angle,null,tree);}
             }
       }
-      if(wooded){
+      if(wooded||innerPrecinct){
         // World-aligned, seeded stands keep their identity as streamed road tiles move.
         // Dense stands only grow in gaps between mapped roads, water and settlements.
-        const pitch=20,radius=460;
+        const pitch=innerPrecinct?12:20,radius=innerPrecinct?700:460;
         for(let ix=Math.floor((cx-radius)/pitch);ix<=Math.ceil((cx+radius)/pitch);ix++){
           for(let iz=Math.floor((cz-radius)/pitch);iz<=Math.ceil((cz+radius)/pitch);iz++){
             let seed=(Math.imul(ix,73856093)^Math.imul(iz,19349663))>>>0;
             const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
             const wx=(ix+rand())*pitch,wz=(iz+rand())*pitch;
+            if(!wooded&&!inGrove(wx-cx,wz-cz)&&relief.altitude(wx,wz)<63)continue;
             const openness=.46+.19*Math.sin(wx*.013+wz*.004)+.18*Math.sin(wz*.019-wx*.005);
             if(rand()>openness+.24||district.builtUp(wx,wz)||onApproach(wx,wz))continue;
             const lx=wx-cx,lz=wz-cz,dist=Math.hypot(lx,lz);
@@ -717,6 +743,37 @@
       }
       material.white.side=material.yellow.side=T.DoubleSide;
       surface(bankData,material.earth,-.065,.60);
+      if(cover.length){
+        const layer={stone:[],lawn:[],wood:[]};
+        for(const {kind,points} of cover){
+          for(const face of T.ShapeUtils.triangulateShape(points,[])){
+            for(const i of face)layer[kind].push(points[i].x,points[i].y);
+          }
+        }
+        surface(layer.stone,material.pavers,.01,1);
+        surface(layer.lawn,gardenLawn,.02,1);
+        surface(layer.wood,woodlandFloor,.025,1);
+      }
+      if(graph&&window.tamChucPaths){
+        const center=graph.point(105.7956,20.5528);
+        if(Math.hypot(center.x-cx,center.z-cz)<1500){
+          const paving=[];
+          for(const [steps,coords] of tamChucPaths){
+            let a=graph.point(105.79+coords[0]/1e6,20.54+coords[1]/1e6);
+            for(let i=2;i<coords.length;i+=2){
+              const b=graph.point(105.79+coords[i]/1e6,20.54+coords[i+1]/1e6);
+              const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
+              if(len>.1){
+                const half=steps?2.5:1.65,ox=-dz/len*half,oz=dx/len*half;
+                const ax=a.x-cx,az=a.z-cz,bx=b.x-cx,bz=b.z-cz;
+                paving.push(ax+ox,az+oz,bx+ox,bz+oz,bx-ox,bz-oz,ax+ox,az+oz,bx-ox,bz-oz,ax-ox,az-oz);
+              }
+              a=b;
+            }
+          }
+          surface(paving,material.pavers,.06,1);
+        }
+      }
       surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       if(wires.length){
         for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
@@ -904,7 +961,8 @@
       const sin=Math.sin(car.yaw),cos=Math.cos(car.yaw),speed=Math.abs(car.speed||0);
       sun.target.position.set(Math.round(x+sin*17),car.y,Math.round(z-cos*17));sun.position.copy(sun.target.position).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       const now=performance.now();if(now-shadowStamp>(small?115:66)){renderer.shadowMap.needsUpdate=true;shadowStamp=now;}
-      land.material=wooded||car.region==='highlands'?upland:meadow;relief.update(car.x,car.z);
+      const viewpoint=car.sightView||car;
+      land.material=wooded||car.region==='highlands'?upland:meadow;relief.update(viewpoint.x,viewpoint.z);
       if(car.showroom&&!inside){
         const portrait=camera.aspect<.85;
         eye.set(portrait?-5.6:-4.3,portrait?1.9:1.6,portrait?8.0:5.5);
@@ -942,7 +1000,7 @@
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
       weather.render(camera,now);
-      const waterLevel=nearbyWaterLevel(x,z);
+      const waterLevel=nearbyWaterLevel(viewpoint.x-originX,viewpoint.z-originZ);
       waterSurface.reflect(renderer,scene,camera,waterLevel,now,waterLevel!==null);
       renderer.render(scene,camera);
       const elapsed=now-lastPaint;

@@ -134,14 +134,14 @@
     stamp(round,0x967656,0,8.77,gate,.32,.18,.32,0,Math.PI/2);
   }
   (window.VietnamSights??=[]).push({
-    id:'chua-dia-tang-phi-lai',name:'Chùa Địa Tạng Phi Lai',city:'Thanh Liêm',collection:'ha-nam',province:'Ninh Bình',region:'Bắc Bộ',
+    id:'chua-dia-tang-phi-lai',name:'Chùa Địa Tạng Phi Lai',city:'Thanh Liêm',formerProvince:'Hà Nam',province:'Ninh Bình',region:'Bắc Bộ',
     description:'Từ lối vào Ninh Trung, nhìn lên chính điện tựa núi Phi Lai. Hai bên thềm có voi đá quỳ và những khoảng sân sỏi trắng xen lối đi bằng phiến đá.',
     lon:105.95182,lat:20.44505,start:[105.9524,20.445099],yaw:1.46,gardenRadius:90,width:38,depth:34,
     solids:[[0,-5,7.75,3.5],[0,-12.7,6.35,3.8],[-13.1,-6.7,4.05,3.35],[13.1,-6.7,4.05,3.35],[-4.4,5.4,1,1.32],[4.4,5.4,1,1.32]],
     photo:'https://vietnam.vnanet.vn/vietnamese/long-form/dia-tang-phi-lai-tu-diem-du-lich-van-hoa-tam-linh-297867.html',
     source:'https://vietnamtourism.gov.vn/post/47997',map:'https://www.openstreetmap.org/?mlat=20.44505&mlon=105.95182#map=19/20.44505/105.95182',build:philang
   },{
-    id:'chua-ba-danh',name:'Chùa Bà Đanh',city:'Kim Bảng',collection:'ha-nam',province:'Ninh Bình',region:'Bắc Bộ',
+    id:'chua-ba-danh',name:'Chùa Bà Đanh',city:'Kim Bảng',formerProvince:'Hà Nam',province:'Ninh Bình',region:'Bắc Bộ',
     description:'Chùa Bà Đanh, tên chữ Bảo Sơn Tự, nằm bên sông Đáy. Tam quan có ba bộ cửa gỗ, gác chuông phía trên và đôi rồng chầu mặt nguyệt trên bờ nóc.',
     lon:105.85272,lat:20.56927,start:[105.85355,20.56868],yaw:-.74,gardenRadius:85,width:26,depth:28,
     solids:[[0,6,6.4,1.9],[-9,6,2.1,.48],[9,6,2.1,.48],[0,-8.9,7.9,3.05]],

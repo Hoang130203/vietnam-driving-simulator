@@ -1,6 +1,6 @@
 'use strict';
 (window.VietnamSights??=[]).push({
-  id:'so-kien',name:'Vương cung thánh đường Sở Kiện',city:'Thanh Liêm',province:'Ninh Bình',region:'Bắc Bộ',collection:'ha-nam',
+  id:'so-kien',name:'Vương cung thánh đường Sở Kiện',city:'Thanh Liêm',province:'Ninh Bình',region:'Bắc Bộ',formerProvince:'Hà Nam',
   lon:105.89674,lat:20.49988,start:[105.895985,20.499923],width:31.2,depth:67.2,yaw:-1.77,
   map:'https://www.openstreetmap.org/way/1177046931',
   photo:'https://baoquangninh.vn/ve-dep-thanh-duong-hon-140-tuoi-cach-ha-noi-70km-goc-chup-nao-cung-nhu-troi-au-3272692.html',

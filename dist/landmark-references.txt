@@ -137,8 +137,6 @@ https://www.openstreetmap.org/node/5563291701
 
 OpenStreetMap contributors (ODbL) — https://www.openstreetmap.org/copyright
 
-Hà Nam cũ · Ninh Bình
-
 Nhà Bá Kiến — Lý Nhân
 Ở làng Đại Hoàng xưa, mái ngói thấp che ba gian nhà gỗ lim. Sau hàng cửa bức bàn là bốn bộ khung với mười sáu cột kê trên chân đá xanh.
 https://paivietnam.vn/en/locations/all-locations/nha-ba-kien-2034
@@ -174,3 +172,50 @@ Từ ĐH.05 nhìn qua hồ Tam Chúc, hai cầu đi bộ dẫn tới tòa Thủy
 https://catbaexpress.com/khu-du-lich-chua-tam-chuc-ha-nam.html
 https://nhandan.vn/ha-nam-san-sang-cac-dieu-kien-cung-ruoc-ton-tri-xa-loi-duc-phat-post879333.html
 https://www.openstreetmap.org/way/1346643096
+
+Quần thể Tam Chúc
+
+Cổng Tam Quan nội
+Từ bến hồ nhìn vào, lầu giữa nổi lên với ba lớp mái cong. Hai lầu bên thấp hơn nối với lầu giữa bằng hành lang gỗ mở ra sân cột kinh.
+https://pystravel.vn/tin/17354-ban-do-chua-tam-chuc.html
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1386126630
+
+Vườn Cột Kinh
+Hai cụm cột đá mở một lối giữa hướng về điện Quan Âm. Mỗi cột vươn lên từ đài sen, thân sáu cạnh mang chữ và kết thúc bằng một nụ sen đá.
+https://danviet.vn/kham-pha-vuon-cot-kinh-bang-da-doc-dao-o-ngoi-chua-lon-nhat-the-gioi-77771055006-d789265.html
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1518302470
+
+Điện Quan Âm
+Qua Vườn Cột Kinh, những bậc đá dẫn lên điện thờ Quan Âm. Từ hiên điện, trục bậc thềm nhìn thẳng ra sân cột kinh và mặt hồ.
+https://thesmartlocal.com/vietnam/tam-chuc-pagoda/
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1386126640
+
+Điện Pháp Chủ
+Điện Pháp Chủ nằm ở giữa trục hành lễ. Dưới hai tầng mái cong là pho tượng Phật Thích Ca và những phù điêu kể về cuộc đời Đức Phật.
+https://thesmartlocal.com/vietnam/tam-chuc-pagoda/
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1386126642
+
+Điện Tam Thế
+Điện Tam Thế có ba tầng mái và thờ ba pho Phật tượng trưng cho quá khứ, hiện tại và tương lai. Trước bậc thềm là chiếc vạc đồng lớn.
+https://thesmartlocal.com/vietnam/tam-chuc-pagoda/
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1386126641
+
+Chùa Ngọc
+Trên đỉnh núi Thất Tinh, chùa Ngọc có ba tầng mái cong. Thân tháp ghép từ các khối granit đỏ do nghệ nhân Ấn Độ chế tác, phía trước mở ra hồ Tam Chúc.
+https://dantri.com.vn/du-lich/doc-dao-ngoi-chua-co-pho-tuong-phat-hong-ngoc-nang-4-tan-20190427142245497.htm
+https://bnews.vn/photo/ve-dep-chua-ngoc-o-trung-tam-van-hoa-phat-giao-tam-chuc/122136/trang-1.html
+https://www.openstreetmap.org/way/1518302477
+
+Đình Tam Chúc
+Đình nằm trên một đảo giữa hồ Lục Nhạc. Cầu đi bộ gấp khúc năm đoạn nối đảo đình với đảo Cò. Qua tán cây ven đảo có thể thấy tiền đường, hậu cung và sân lát gạch.
+https://ngaynay.vn/phatgiao/canh-sac-chua-tam-chuc-vinh-ha-long-tren-can-post100706.html
+https://vietnamtourism.gov.vn/en/printer/15748?type=1
+https://www.openstreetmap.org/way/1517604966
+
+Lối đi bộ, đường bậc, bãi cỏ và vùng cây được đối chiếu với dữ liệu OpenStreetMap, © OpenStreetMap contributors, ODbL 1.0. Ranh sân lát đá trước ba điện được ước lượng từ ảnh trên cao.
+https://www.openstreetmap.org/#map=17/20.5532/105.7960

@@ -65,7 +65,14 @@ function createVietnamRelief(T,scene,compact){
     // A low-pass reconstruction removes abrupt changes of grade at DEM texel edges.
     const sample=(dx,dz)=>elevation(...uvAt(x+dx,z+dz));
     const h=sample(0,0)*.5+(sample(-105,0)+sample(105,0)+sample(0,-105)+sample(0,105))*.125;
-    const value=(h-base)*.43;
+    let value=(h-base)*.43;
+    if(activePass?.stage.id==='kim-bang'){
+      const east=(x-activePass.x)*activePass.eastScale,south=z-activePass.z;
+      const weight=1-T.MathUtils.smoothstep(Math.hypot(east,south),3600,5600);
+      // Preserve the lake datum while the limestone summit rises above the halls.
+      const local=activePass.grid.elevation(east,south);
+      value+=((local-10)*.80+(10-base)*.43-value)*weight;
+    }
     nodes.set(key,value);return value;
   }
   function ground(x,z){
@@ -112,7 +119,7 @@ function createVietnamRelief(T,scene,compact){
   function setOrigin(g,x,z){
     if(graph!==g){graph=g;anchorX=anchorZ=NaN;nodes.clear();base=graph&&pixels?elevation(...uvAt(0,0)):0;datum.value=base;}
     const pass=g?byGraph.get(g):null;
-    if(activePass!==pass){activePass=pass;anchorX=anchorZ=NaN;}
+    if(activePass!==pass){activePass=pass;anchorX=anchorZ=NaN;nodes.clear();}
     if(nodes.size>12000)nodes.clear();
     originX=x;originZ=z;
   }
