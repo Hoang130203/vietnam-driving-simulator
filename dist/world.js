@@ -15,6 +15,10 @@ try{saved=JSON.parse(localStorage.getItem('taylai.world.trip'));const model=loca
 $('garage').value=car.model;
 $('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('taylai.garage',car.model);}catch{}};
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
+function breakfastCall(){
+ const line='Bánh mì nóng giòn đây! Ai bánh mì nào!';
+ inform('“'+line+'”',4);driveAudio.broadcast(line,false);
+}
 function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge)*.47);}
 function save(){
  if(!activeTrip||!player||!roads||car.flood)return;
@@ -326,14 +330,24 @@ function tick(dt){
  trafficStep(dt);spawnTick+=dt;if(spawnTick>1.6){fillTraffic();spawnTick=0;}
  snapshot+=dt;if(snapshot>4){save();snapshot=0;}
 }
-function updateHud(){
- const monument=gfx.nearLandmark(car.x,car.z);
- $('tourView').hidden=!monument||monument.distance>450;
- let landmark=monument;
+function visitTarget(){
+ const site=source[3];
+ if(site&&!site.km){
+   const p=roads.point(site.lon,site.lat),distance=Math.hypot(car.x-p.x,car.z-p.z);
+   if(distance<=Math.max(165,(site.approachMeters||0)+85))return {data:site,...p,distance};
+ }
+ let landmark=gfx.nearLandmark(car.x,car.z);
+ if(landmark?.distance>450)landmark=null;
  for(const pin of tourPins){
    const distance=Math.hypot(car.x-pin.x,car.z-pin.z);
    if(distance<420&&(!landmark||distance<landmark.distance))landmark={...pin,distance};
  }
+ return landmark;
+}
+function updateHud(){
+ let landmark=visitTarget();
+ $('tourView').hidden=!landmark;
+ $('scenicRadio').hidden=mode!=='drive'||!landmark||Math.abs(car.speed)>.28;
  const site=source[3];
  if(site){const p=roads.point(site.lon,site.lat),distance=Math.hypot(car.x-p.x,car.z-p.z);
    if(distance<5000&&(!landmark||landmark.distance>distance))landmark={...p,distance,data:site};}
@@ -351,6 +365,13 @@ function traceMapLine(g,points){
  g.beginPath();
  points.forEach((p,i)=>i?g.lineTo(p.x-car.x,p.z-car.z):g.moveTo(p.x-car.x,p.z-car.z));
 }
+$('scenicRadio').onclick=()=>{
+ if(mode!=='drive'||Math.abs(car.speed)>.28)return;
+ const stop=visitTarget();if(!stop)return;
+ const line=stop.data.id==='tam-chuc'?'Từ ven hồ Tam Chúc, xin gửi một lời chào tới những tay lái vừa dừng chân.':
+   'Bạn đang nghe Sóng Ven Đường. Ai vừa dừng chân ở '+stop.data.name+' ơi, chúc bạn một chuyến đi đẹp trời!';
+ inform('♫ '+line,8);driveAudio.broadcast(line,true);
+};
 function drawDepartureMap(){
  const c=$('departureMap'),g=c.getContext('2d');
  // North-up overview of the actual starting roads. The driving map follows the car.
@@ -480,22 +501,54 @@ function pause(){
  if(mode!=='drive')return;mode='paused';keySet.clear();save();$('raceMode').textContent=duel?'Lái tự do':'Đua xuyên Việt';$('positionLabel').textContent=nameOf(player.edge)+' · '+fmt(distance);$('rest').showModal();
 }
 $('launch').onclick=begin;$('pause').onclick=pause;
-function showMonument(monument){
+function showMonument(monument,viewIndex=0){
+ const views=monument.data.views,view=views?.[viewIndex];
+ const data=view?{...monument.data,...view}:monument.data;
  const portraitOverview=monument.data.id==='tam-chuc'&&innerWidth<innerHeight;
- const angle=portraitOverview?monument.data.yaw-.27:(monument.data.viewAngle??(monument.data.yaw+.23));
- car.sightView={...monument,angle,elevation:monument.data.viewElevation??.27,zoom:1};
- $('tourZoom').value='1';$('tourReference').href=monument.data.photo;
- $('tourDescription').textContent=monument.data.description||'';$('tourDescription').hidden=!monument.data.description;
+ const angle=portraitOverview?data.yaw-.27:(data.viewAngle??(data.yaw+.23));
+ const [east,south]=view?.offset??[0,0];
+ car.sightView={monument,data,x:monument.x+east,z:monument.z+south,height:view?.height??monument.height,
+   angle,elevation:data.viewElevation??.27,zoom:1};
+ $('tourZoom').value='1';$('tourReference').href=data.photo||data.map;
+ $('tourReference').textContent=data.photo?'Ảnh tham khảo ↗':'Bản đồ địa điểm ↗';
+ $('tourDescription').textContent=data.description||'';$('tourDescription').hidden=!data.description;
  $('tourTitle').textContent=monument.data.name;$('tourCamera').hidden=false;
- $('complexStopLabel').hidden=!monument.data.complex;
- if(monument.data.complex)$('complexStop').value=monument.data.id;
+ $('complexStopLabel').hidden=!(views||data.complex);
+ const select=$('complexStop');
+ if(views){
+   select.replaceChildren(...views.map((v,i)=>new Option(v.name,i)));select.value=String(viewIndex);
+ }else if(data.complex){
+   select.replaceChildren(...templeStopOptions);select.value=data.id;
+ }
 }
-$('tourView').onclick=()=>{
- const monument=gfx.nearLandmark(car.x,car.z);if(mode!=='drive'||!monument)return;
+async function frameStop(stop){
+ const {x,z}=roads.point(stop.lon,stop.lat);
+ if(Math.hypot(x-(tourCenter?.x??viewX),z-(tourCenter?.z??viewZ))>285){
+   tourGraph??=new VietnamRoads(indexData,roads.lon,roads.lat);
+   loadStructuresNear(tourGraph,x,z);
+   await Promise.all([tourGraph.load(x,z),gfx.loadDistrict(tourGraph,x,z),(async()=>{
+     try{tourWater??=new VietnamWater(await fetchWaterIndex(),tourGraph);await tourWater.load(x,z);}catch{tourWater=null;}
+   })()]);
+   drawDistrict(tourGraph,tourWater,x,z,tourGraph.nearby(x,z,560));tourCenter={x,z};
+ }
+ if(stop===tamChucOverview)return showMonument({data:stop,x,z,height:75});
+ const authored=gfx.nearLandmark(x,z);
+ if(authored?.data.id===stop.id)return showMonument(authored);
+ const footprint=gfx.sightFootprint(stop,x,z);
+ const wide=['Hồ','Vịnh','Khu bảo tồn','Vườn quốc gia','Đỉnh núi','Bãi biển','Điểm ngắm cảnh'].includes(stop.kind);
+ const span=footprint?Math.max(15,footprint.maxX-footprint.minX,footprint.maxZ-footprint.minZ):wide?165:68;
+ const approach=roads.point(...stop.start);
+ showMonument({data:{...stop,width:span,depth:span,yaw:Math.atan2(approach.x-x,approach.z-z),viewElevation:wide?.51:.43},
+   x,z,height:footprint?.h||Math.min(24,span*.2)});
+}
+$('tourView').onclick=async()=>{
+ const monument=visitTarget();if(mode!=='drive'||!monument)return;
  mode='tour';keySet.clear();
- const center=roads.point(tamChucOverview.lon,tamChucOverview.lat);
- const overview=source[3]?.id==='tam-chuc'&&monument.data.complex==='tam-chuc'&&Math.hypot(center.x-car.x,center.z-car.z)<540;
- showMonument(overview?{...center,data:tamChucOverview,height:75}:monument);
+ const target=monument.data.id==='tam-chuc'?tamChucOverview:monument.data;
+ loadingStop(true);
+ try{await frameStop(target);}
+ catch{loadingStop(false);await closeTour();inform('Chưa tải được cảnh. Bạn có thể mở lại góc ngắm.');return;}
+ loadingStop(false);
  for(const id of ['hud','touch','camera','pause'])$(id).hidden=true;
  $('backToCar').focus({preventScroll:true});
 };
@@ -506,20 +559,14 @@ function loadingStop(busy){
  $('tourCamera').setAttribute('aria-busy',String(busy));
 }
 $('complexStop').onchange=async e=>{
+ if(mode==='tour'&&car.sightView?.monument.data.views){
+   showMonument(car.sightView.monument,Number(e.target.value));return;
+ }
  const stop=e.target.value==='tam-chuc'?tamChucOverview:tamChucParts.find(s=>s.id===e.target.value);
  if(mode!=='tour'||!stop)return;
  loadingStop(true);
  try{
-   const {x,z}=roads.point(stop.lon,stop.lat);
-   if(Math.hypot(x-(tourCenter?.x??viewX),z-(tourCenter?.z??viewZ))>290){
-     // Share the geographic origin, keeping the parked car and its road graph intact.
-     tourGraph??=new VietnamRoads(indexData,roads.lon,roads.lat);
-     tourWater??=new VietnamWater(await fetchWaterIndex(),tourGraph);
-     await Promise.all([tourGraph.load(x,z),tourWater.load(x,z),gfx.loadDistrict(tourGraph,x,z)]);
-     gfx.setRoads(tourGraph.nearby(x,z,560),x,z,tourWater.nearby(x,z),tourGraph);
-     tourCenter={x,z};
-   }
-   showMonument(stop===tamChucOverview?{x,z,data:stop,height:75}:gfx.nearLandmark(x,z));
+   await frameStop(stop);
  }catch{
    $('complexStop').value=car.sightView.data.id;
    $('tourDescription').hidden=false;$('tourDescription').textContent='Chưa tải được cảnh. Hãy chọn lại công trình hoặc trở lại xe.';
@@ -529,6 +576,7 @@ async function closeTour(){
  if(mode!=='tour'||$('backToCar').disabled)return;
  if(tourGraph){
    loadingStop(true);
+   loadStructuresNear(roads,car.x,car.z);
    try{await gfx.loadDistrict(roads,car.x,car.z);refreshView();}
    finally{tourGraph=tourWater=tourCenter=null;loadingStop(false);}
  }
@@ -544,7 +592,7 @@ $('world').addEventListener('pointerdown',e=>{
 $('world').addEventListener('pointermove',e=>{
  if(!car.sightView||tourPointer?.id!==e.pointerId)return;
  car.sightView.angle-=(e.clientX-tourPointer.x)*.009;
- car.sightView.elevation=clamp(car.sightView.elevation+(e.clientY-tourPointer.y)*.004,.13,1.05);
+ car.sightView.elevation=clamp(car.sightView.elevation+(e.clientY-tourPointer.y)*.004,Math.min(.13,car.sightView.data.viewElevation??.13),1.05);
  tourPointer.x=e.clientX;tourPointer.y=e.clientY;
 });
 $('world').addEventListener('lostpointercapture',()=>{tourPointer=null;});
@@ -591,9 +639,9 @@ const tamChucParts=VietnamLandmarks.entries.filter(site=>site.complex==='tam-chu
 const tamChucOverview={id:'tam-chuc',complex:'tam-chuc',name:'Toàn cảnh trục chùa Tam Chúc',lon:105.79565,lat:20.55279,yaw:2.39,viewAngle:1.24,viewElevation:.50,width:260,depth:595,
  description:'Từ hồ vào núi, trục chùa đi qua Tam Quan nội, Vườn Cột Kinh và ba điện Quan Âm, Pháp Chủ, Tam Thế. Chùa Ngọc nằm cao hơn trên núi Thất Tinh.',
  photo:'https://vietnamtourism.gov.vn/en/printer/15748?type=1'};
-$('complexStop').append(new Option('Toàn cảnh trục chùa','tam-chuc'));
 const summitId='chua-ngoc-tam-chuc',summitName='Chùa Ngọc · đỉnh Thất Tinh';
-for(const part of tamChucParts)$('complexStop').append(new Option(part.id===summitId?summitName:part.name,part.id));
+const templeStopOptions=[new Option('Toàn cảnh trục chùa','tam-chuc'),
+ ...tamChucParts.map(part=>new Option(part.id===summitId?summitName:part.name,part.id))];
 const summitMarker=document.createElement('button');
 summitMarker.id='summitMarker';summitMarker.hidden=true;summitMarker.textContent=summitName;
 $('tourCamera').before(summitMarker);
@@ -618,11 +666,12 @@ for(const model of models){
  for(const site of tourismSites){
    const d=(site.lon-model.lon)**2+(site.lat-model.lat)**2;
    if(d<best){best=d;closest=site;}
-   if(d<.003**2&&(normalize(model.name)===normalize(site.name)||model.map&&model.map===site.map))replaced.add(site);
+   if(site.id===model.catalogId||d<.003**2&&(normalize(model.name)===normalize(site.name)||model.map&&model.map===site.map))replaced.add(site);
  }
  if(closest){model.region??=closest.region;model.province??=closest.province;}
 }
-const catalog=tourismSites.filter(site=>!replaced.has(site)&&site.id!=='osm-way-1346643116');
+const catalog=tourismSites.filter(site=>!replaced.has(site)&&site.id!=='osm-way-1346643116')
+  .map(site=>({...site,photo:window.VietnamSightDetails?.[site.id]?.photo}));
 const mountainPlaces=mountainStages.map(stage=>({
  id:stage.id,name:stage.name,kind:'Đường đèo',city:'Đường đèo',start:stage.start,
  lon:stage.start[0],lat:stage.start[1],bearing:stage.bearing,km:stage.angles.length*stage.step/1000
@@ -790,7 +839,7 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
 (async()=>{
  $('openMap').disabled=true;
  try{
-   gfx=createWorldScene($('world'));indexData=await fetchJSON('vn-roads/index.json');
+   gfx=createWorldScene($('world'),breakfastCall);indexData=await fetchJSON('vn-roads/index.json');
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
    $('openingAtlas').disabled=false;$('openMap').disabled=false;$('travel').disabled=false;
    const valid=new URLSearchParams(location.search).get('intro')!=='tam-chuc'&&saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;

@@ -732,7 +732,8 @@ function render(now){
  if(arcade){const steps=Math.max(1,Math.ceil(dt*90));for(let i=0;i<steps;i++)raceUpdate(dt/steps);}else update(dt);
  const s=state,ground=at(s.d),canvas=$('world'),width=canvas.clientWidth,heightPx=canvas.clientHeight;
  if(width!==w||heightPx!==h){w=width;h=heightPx;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();}
- rig.position.set(s.x,ground.y,s.z);rig.rotation.set(Math.atan(roadGrade(s.d,s.h)),-s.h,0,'YXZ');yawQ.copy(rig.quaternion);
+ rig.position.set(s.x,ground.y+(arcade?s.lift:0),s.z);
+ rig.rotation.set(Math.atan(roadGrade(s.d,s.h))+(arcade?s.jumpPitch:0),-s.h,0,'YXZ');yawQ.copy(rig.quaternion);
  if(!mountainField)hills.position.set(s.x,0,s.z);
  const focus=at(s.d+20);sun.target.position.set(Math.round(focus.x),Math.round(focus.y),Math.round(focus.z));sun.position.copy(sun.target.position);sun.position.x-=38;sun.position.y+=45;sun.position.z+=22;
  if(now-lastShadow>(s.mode==='drive'?42:300)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}

@@ -8,6 +8,31 @@
   let nextTick = 0;
   let lowTick = false;
   let boosting = false;
+  let voiceLine;
+  function stopVoice() {
+    if (voiceLine) window.speechSynthesis?.cancel();
+    voiceLine = null;
+  }
+  function broadcast(line, radio) {
+    if (!enabled) return;
+    stopVoice();
+    if (radio) {
+      tone(392,392,.15,.09,0,'triangle');
+      tone(494,494,.17,.08,.16,'triangle');
+      tone(587,587,.26,.07,.34,'triangle');
+    } else {
+      tone(1210,1030,.21,.06);
+      tone(1450,1280,.18,.045,.19);
+    }
+    const speech=window.speechSynthesis;
+    const voice=speech?.getVoices().find(v=>/^vi\b/i.test(v.lang));
+    if (!voice) return;
+    const utterance=new SpeechSynthesisUtterance(line);
+    utterance.voice=voice; utterance.lang='vi-VN'; utterance.volume=radio ? .82 : .67;
+    utterance.rate=radio ? .96 : 1.03;
+    utterance.onend=utterance.onerror=()=>{if(voiceLine===utterance)voiceLine=null;};
+    voiceLine=utterance; speech.speak(utterance);
+  }
 
   function makeCabin(ctx) {
     const output = ctx.createGain();
@@ -92,6 +117,7 @@
   }
   function toggle() {
     enabled=!enabled;
+    if(!enabled)stopVoice();
     try{localStorage.setItem(preference,enabled?'0':'1');}catch{}
     if(enabled)unlock();else if(sound)sound.output.gain.setTargetAtTime(0,sound.ctx.currentTime,.025);
     return enabled;
@@ -101,6 +127,7 @@
   },{capture:true});
 
   function update({ speed, throttle, braking, signal, mode, boost=false, slip=0, offroad=false }) {
+    if(mode!=='driving'&&voiceLine)stopVoice();
     if (!enabled || sound?.ctx.state !== 'running') return;
     const { ctx, engine, engineGain, intake, roadGain, tire, rush, rushGain, scrub, scrubGain } = sound;
     const now = ctx.currentTime;
@@ -171,5 +198,5 @@
     gain.gain.value=.4+strength*.45;source.connect(filter).connect(gain).connect(output);source.start();
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
-  window.driveAudio = { toggle, update, cue, ignition, impact, get enabled(){return enabled;} };
+  window.driveAudio = { toggle, update, cue, ignition, impact, broadcast, get enabled(){return enabled;} };
 })();

@@ -1,5 +1,44 @@
 TƯ LIỆU DỰNG MÔ HÌNH ĐỊA DANH VIỆT NAM
 
+Các liên kết ảnh của atlas được đối chiếu theo đối tượng OpenStreetMap, thuộc tính hình ảnh P18 của Wikidata và Wikimedia Commons. Thông tin kiến trúc dùng các thẻ trên đúng đường bao công trình. Hình thu nhỏ trong danh sách mô hình là ảnh kết xuất của trò chơi.
+https://www.openstreetmap.org/copyright
+https://www.wikidata.org/wiki/Property:P18
+
+Thác Bản Giốc, Pongour và Dray Nur
+Đối chiếu cụm thác tách đôi qua doi cây ở Cao Bằng, các bậc đá xòe ở Lâm Đồng và vách dài trên sông Sêrêpốk.
+https://vietnam.travel/vi/things-to-do/ban-gioc-waterfall-majestic-beauty-northern-border/
+https://vietgoing.com/article/329-cac-diem-du-lich-o-huyen-duc-trong-lam-dong.html
+https://vhttdl.daklak.gov.vn/Articles/Detail/1435
+
+Tràng An, Hạ Long, Phong Nha và chợ nổi Cái Răng
+Ảnh từ trên cao cho thấy cách thuyền tập trung ở bến Tràng An. Ảnh thực địa giúp đối chiếu chân đá Hòn Trống Mái, cửa động ven sông Son và cây bẹo trên các ghe ở Cái Răng.
+https://dantri.com.vn/du-lich/toan-canh-trang-an-dia-diem-tong-thong-my-muon-den-tham-nhin-tu-tren-cao-20190307143029291.htm
+https://halongbay.com.vn/vi/p/610-hon-trong-mai-bieu-tuong-doc-dao-cua-vinh-ha-long
+https://plo.vn/trai-nghiem-di-thuyen-10-km-ngam-ky-quan-de-nhat-dong-phong-nha-tien-son-post832221.html
+https://canthotourism.vn/vi/chocairang
+
+Ngọ Môn, Mỹ Sơn, Dinh Độc Lập và hải đăng Kê Gà
+Đối chiếu màu ngói lưu ly và nền đài chữ U, chi tiết cửa sa thạch và mái tháp Chăm, nhịp rèm hoa đá và mặt bằng tháp đèn tám cạnh.
+https://aluoi3.hue.gov.vn/Du-khach/Thong-tin-du-khach/Kham-pha-Hue/tb/Ngo-Mon-546198
+https://whc.unesco.org/en/list/949/gallery/
+https://dsvh.gov.vn/di-tich-kien-truc-nghe-thuat-khu-den-thap-my-son-2943
+https://dinhdoclap.gov.vn/kien-truc-dinh-doc-lap/
+https://www.openstreetmap.org/way/1272874768
+
+Đại học Bách khoa Hà Nội
+Sơ đồ của trường và hình học OpenStreetMap định vị C1, đài phun nước, các dãy giảng đường, thư viện Tạ Quang Bửu và các nhánh đường nội bộ. Ảnh của trường dùng để đối chiếu mặt đứng C1, biểu tượng I ♥ BK, Khối đá trắng trước đài phun nước, cầu thang đỏ C9, mặt đứng và đồng hồ thư viện, cùng các gân bê tông dưới vòm Parabol. Kích thước chi tiết và cây xanh được ước lượng từ ảnh. Cổng trong mô phỏng đặt lùi khoảng 20 m so với điểm cổng cũ, theo phương án trường công bố tháng 11/2026. Ảnh xem trước là hình kết xuất từ mô hình.
+https://hust.edu.vn/uploads/sys/quality-assurance/2019/05/cea-00-02-map-of-hust-da-chuyen-doi.399630.20688.pdf
+https://library.hust.edu.vn/vi/node/826
+https://library.hust.edu.vn/en/node/44
+https://hust.edu.vn/vi/news/tin-tuc-su-kien/chao-mung-ky-niem-70-nam-thanh-lap-dai-hoc-bach-khoa-ha-noi-70-nam-qua-cac-bieu-tuong-vuot-thoi-gian-655996.html
+Biểu trưng nhận diện trên sảnh C1 (streetscape/hust-emblem.png) của Đại học Bách khoa Hà Nội.
+https://hust.edu.vn/uploads/sys/logo-dhbk-1-02_130_191.png
+https://ts.hust.edu.vn/tin-tuc/co-so-vat-chat-truong-dai-hoc-bach-khoa-ha-noi
+https://hust.edu.vn/vi/news/hoat-dong-chung/di-doi-cong-parabol-bao-ton-bieu-tuong-dai-hoc-bach-khoa-ha-noi-656109.html
+https://www.openstreetmap.org/#map=18/21.00568/105.84346
+Vị trí cây, lối bộ và thảm cỏ trong bach-khoa-grounds.js dựa trên OpenStreetMap, © OpenStreetMap contributors, ODbL 1.0.
+https://www.openstreetmap.org/copyright
+
 Kỳ Đài, Huế
 Góc chụp từ sông Hương về phía Ngọ Môn dùng để đối chiếu các mặt tường vát, mũi nhô của pháo đài và tỷ lệ cột cờ.
 https://dantri.com.vn/thoi-su/noi-ghi-dau-nhung-khoanh-khac-chuyen-dong-lich-su-20250901183433824.htm

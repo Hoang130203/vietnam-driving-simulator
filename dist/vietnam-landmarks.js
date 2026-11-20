@@ -47,7 +47,8 @@ window.VietnamLandmarks=(()=>{
       for(let i=0;i<(order?order.count:p.count);i++){
         const j=order?order.getX(i):i,px=p.getX(j),py=p.getY(j),pz=p.getZ(j),nx=n.getX(j),ny=n.getY(j),nz=n.getZ(j);
         positions.push(px,py,pz);normals.push(nx,ny,nz);colours.push(colour.r,colour.g,colour.b);
-        uvs.push((Math.abs(nx)>Math.abs(nz)?pz:px)*.23,(Math.abs(ny)>.64?pz:py)*.23);
+        const top=Math.abs(ny)>Math.max(Math.abs(nx),Math.abs(nz));
+        uvs.push((top||Math.abs(nz)>=Math.abs(nx)?px:pz)*.23,(top?pz:py)*.23);
       }
       transformed.dispose();
     }
@@ -89,7 +90,8 @@ window.VietnamLandmarks=(()=>{
       const cloth=new T.PlaneGeometry(width,height,24,6);cloth.translate(width/2,-height/2,0);
       const flag=new T.Mesh(cloth,new T.MeshStandardMaterial({map:texture,side:T.DoubleSide,roughness:.94}));flag.position.set(px,py,pz);
       const pos=cloth.attributes.position,rest=pos.array.slice();let frame=-1;
-      flag.onBeforeRender=()=>{const time=Math.floor(performance.now()/60);if(time===frame)return;frame=time;
+      const motion=matchMedia('(prefers-reduced-motion: reduce)');
+      flag.onBeforeRender=()=>{const time=motion.matches?0:Math.floor(performance.now()/60);if(time===frame)return;frame=time;
         for(let i=0;i<pos.count;i++){const x=rest[i*3],y=rest[i*3+1],f=x/width,phase=x*.69+y*.22-time*.16;
           pos.setXYZ(i,x*(1-.07*f),y-f*(.7+.18*Math.sin(phase)),f*(1.25*Math.sin(phase)+.33*Math.sin(phase*2.1)));}
         pos.needsUpdate=true;cloth.computeVertexNormals();};
@@ -960,7 +962,7 @@ window.VietnamLandmarks=(()=>{
       const x=random()*128,y=random()*128,r=1+random()*11;
       for(const dx of [-128,0,128])for(const dy of [-128,0,128]){
         const xx=x+dx,yy=y+dy,grad=ctx.createRadialGradient(xx,yy,0,xx,yy,r);
-        grad.addColorStop(0,'rgba(91,82,70,.13)');grad.addColorStop(1,'rgba(91,82,70,0)');ctx.fillStyle=grad;ctx.fillRect(xx-r,yy-r,r*2,r*2);
+        grad.addColorStop(0,'rgba(91,82,70,'+(addition?.plasterStain??.13)+')');grad.addColorStop(1,'rgba(91,82,70,0)');ctx.fillStyle=grad;ctx.fillRect(xx-r,yy-r,r*2,r*2);
       }
     }
     const map=new T.CanvasTexture(tile);map.wrapS=map.wrapT=T.RepeatWrapping;map.colorSpace=T.SRGBColorSpace;
@@ -994,20 +996,39 @@ window.VietnamLandmarks=(()=>{
     return group;
   }
   function create(T,scene){
-    const cached=new Map();let active=[];
+    const cached=new Map(),finishes=createSightFinishes(T);let active=[];
+    function trim(){
+      const limit=Math.max(12,active.length);
+      for(const [id,mesh] of cached){
+        if(cached.size<=limit)break;
+        if(mesh.visible)continue;
+        scene.remove(mesh);cached.delete(id);
+        const resources=new Set();
+        mesh.traverse(obj=>{
+          if(obj.geometry)resources.add(obj.geometry);
+          if(!obj.material)return;
+          for(const m of [].concat(obj.material)){
+            resources.add(m);
+            for(const v of Object.values(m))if(v?.isTexture&&!v.userData.sightShared)resources.add(v);
+          }
+        });
+        for(const resource of resources)resource.dispose();
+      }
+    }
     function setOrigin(graph,cx,cz,ground=()=>0){
       for(const {mesh} of active)mesh.visible=false;
       active=[];
       if(!graph)return;
       for(const data of entries){
         const {x,z}=graph.point(data.lon,data.lat);if(Math.hypot(x-cx,z-cz)>(data.viewDistance??1050))continue;
-        if(!cached.has(data.id)){const mesh=model(T,data.id);mesh.userData.height=new T.Box3().setFromObject(mesh).max.y*(data.scale?.[1]||1);scene.add(mesh);cached.set(data.id,mesh);}
+        if(!cached.has(data.id)){const mesh=model(T,data.id);finishes.apply(mesh);mesh.userData.height=new T.Box3().setFromObject(mesh).max.y*(data.scale?.[1]||1);scene.add(mesh);cached.set(data.id,mesh);}
         const mesh=cached.get(data.id);mesh.position.set(x-cx,ground(x,z),z-cz);mesh.rotation.y=data.yaw;mesh.visible=true;
         if(data.scale)mesh.scale.fromArray(data.scale);
         const c=Math.cos(data.yaw),s=Math.sin(data.yaw);
         mesh.userData.fitGround?.((u,v)=>ground(x+u*c+v*s,z-u*s+v*c)-mesh.position.y);
         active.push({data,x,z,mesh,c,s});
       }
+      trim();
     }
     function nearest(x,z,maxMeters=650){
       let best=null;
@@ -1021,6 +1042,7 @@ window.VietnamLandmarks=(()=>{
       return active.some(a=>{
         const dx=x-a.x,dz=z-a.z,extra=a.data.id==='cathedral'?8:a.data.id==='turtle'?12:2;
         const u=dx*a.c-dz*a.s,v=dx*a.s+dz*a.c;
+        if(a.data.reserve)return a.data.reserve(u,v,padding);
         if(a.data.id==='cathedral'&&Math.abs(u)<16+padding&&v>0&&v<57+padding)return true;
         return Math.abs(u)<a.data.width/2+extra+padding&&Math.abs(v)<a.data.depth/2+extra+padding;
       });
@@ -1030,6 +1052,7 @@ window.VietnamLandmarks=(()=>{
         const dx=x-a.x,dz=z-a.z,u=dx*a.c-dz*a.s,v=dx*a.s+dz*a.c;
         function solid(cx,cz,w,d){
           const lx=u-cx,lz=v-cz;
+          if(Math.abs(lx)>=w+r||Math.abs(lz)>=d+r)return null;
           let nx=lx-Math.max(-w,Math.min(w,lx)),nz=lz-Math.max(-d,Math.min(d,lz)),depth;
           const length=Math.hypot(nx,nz);
           if(length>=r)return null;
@@ -1046,7 +1069,7 @@ window.VietnamLandmarks=(()=>{
       }
       return null;
     }
-    return {setOrigin,nearest,reserved,contact};
+    return {setOrigin,nearest,reserved,contact,weather:finishes.weather};
   }
   return {entries,create};
 })();

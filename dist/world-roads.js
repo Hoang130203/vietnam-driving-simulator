@@ -55,6 +55,7 @@ class VietnamRoads {
        }
        if(length<.5)continue;
        edge={id,start,end,name,kind,oneway:Boolean(oneway),points,dist,length};
+       if(kind==='service')edge.authoredHalfWidth=window.VietnamRoadWidths?.get(Math.min(start,end)+':'+Math.max(start,end));
      }
      fresh.set(id,edge);
      for(const n of new Set([start,end])){if(!nodes.has(n))nodes.set(n,[]);nodes.get(n).push(edge);}

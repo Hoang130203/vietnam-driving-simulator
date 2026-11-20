@@ -113,7 +113,7 @@
 .arcade .hud small {color: var(--lime); font-size: 11px; letter-spacing: .11em}
 .arcade .routeInfo strong {margin: 3px 0; font-size: clamp(16px, 1.5vw, 22px); line-height: 1.25}
 .arcade .routeInfo span:empty {display: none}
-.arcade #tourView {min-height: 35px; color: #e8fbbd; border-color: #adcb896b}
+.arcade :is(#tourView, #scenicRadio) {min-height: 35px; color: #e8fbbd; border-color: #adcb896b}
 .arcade .navigationDock {width: var(--map-width)}
 .arcade .telemetry {right: var(--right); min-width: 145px; padding: 10px 13px; color: #cadacf; font-size: 12px}
 .arcade .telemetry strong {font: var(--display); font-size: 50px; color: white}
@@ -155,7 +155,7 @@
   .arcade .touch button.active {background: #edffcf; color: #172821; border-color: #fff; transform: translateY(2px)}
   .arcade[data-steering=right] .touch {flex-direction: row-reverse}
   .arcade[data-steering=right] .touch [data-key=shift] {justify-self: start}
-  .arcade #tourView, .arcade header .tools button {min-height: 44px}
+  .arcade :is(#tourView, #scenicRadio), .arcade header .tools button {min-height: 44px}
   .arcade:not([data-phase=grid]) .tools button {width: 44px; padding: 0; font-size: 0; gap: 0}
   .arcade:not([data-phase=grid]) .tools #sound::before {width: 19px; height: 19px}
   .arcade:not([data-phase=grid]) #pause::before {content: ""; box-sizing: border-box; width: 11px; height: 15px; border-inline: 4px solid currentColor}
