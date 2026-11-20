@@ -1,0 +1,111 @@
+"""Bake short mountain stages from the bundled OSM road centre lines and terrain raster."""
+import gzip
+import json
+import math
+import unicodedata
+from bisect import bisect_right
+from collections import defaultdict
+from pathlib import Path
+
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1] / "dist"
+STEP = 20
+
+
+def longest_chain(edges):
+    links = defaultdict(list)
+    for key, points in edges.items():
+        for end in (points[0], points[-1]):
+            links[end].append(key)
+    remaining = set(edges)
+    best, longest = [], 0
+    while remaining:
+        key = min(remaining)
+        remaining.remove(key)
+        chain = list(edges[key])
+        for _ in range(2):
+            chain.reverse()
+            while len(links[chain[-1]]) == 2:
+                options = [i for i in links[chain[-1]] if i in remaining]
+                if not options:
+                    break
+                key = options[0]
+                remaining.remove(key)
+                part = edges[key]
+                chain.extend((part if part[0] == chain[-1] else part[::-1])[1:])
+        length = distances(chain)[-1]
+        if length > longest:
+            best, longest = chain, length
+    return best
+
+
+def distances(points):
+    mx = 1.1132 * math.cos(math.radians(points[0][1] / 1e5))
+    result = [0]
+    for (x, y), (u, v) in zip(points, points[1:]):
+        result.append(result[-1] + math.hypot((x-u)*mx, (y-v)*1.109))
+    return result
+
+
+def elevation(dem, lon, lat):
+    x = (((lon+180)/360*256-200)/7)*dem.width-.5
+    y = (((1-math.asinh(math.tan(math.radians(lat)))/math.pi)*128-110)/13)*dem.height-.5
+    ix, iy = math.floor(x), math.floor(y)
+    return sum(3500*(dem.getpixel((ix+i, iy+j))/255)**1.6 * (1-abs(x-ix-i))*(1-abs(y-iy-j))
+               for i in (0, 1) for j in (0, 1))
+
+
+def stage(name, edges, dem):
+    points = longest_chain(edges)
+    dist = distances(points)
+    finish = min(3200, int(dist[-1]//STEP)*STEP)
+    if finish < 1300:
+        return
+    offset = (dist[-1]-finish)/2
+    samples = []
+    for d in range(0, finish+1, STEP):
+        station = d+offset
+        i = min(len(points)-2, bisect_right(dist, station)-1)
+        f = (station-dist[i])/(dist[i+1]-dist[i])
+        samples.append([(a+(b-a)*f)/1e5 for a,b in zip(points[i],points[i+1])])
+    angles, heights = [], []
+    mx = math.cos(math.radians(samples[0][1]))
+    for a,b in zip(samples,samples[1:]):
+        angle = math.degrees(math.atan2((b[0]-a[0])*mx,b[1]-a[1]))
+        if angles:
+            angle = angles[-1]+(angle-angles[-1]+180)%360-180
+        angles.append(angle)
+    base = elevation(dem,*samples[0])
+    for lon,lat in samples:
+        h = (elevation(dem,lon,lat)-base)*.62
+        if heights:
+            h = max(heights[-1]-STEP*.15,min(heights[-1]+STEP*.15,h))
+        heights.append(round(h,1))
+    slug = unicodedata.normalize('NFKD',name.lower().replace('đ','d')).encode('ascii','ignore').decode()
+    slug = '-'.join(slug.replace("'",'').split())
+    return dict(id=slug,name=name,start=[round(v,7) for v in samples[0]],bearing=round(angles[0],1),
+                step=STEP,angles=[round(v-angles[0],1) for v in angles],heights=heights)
+
+
+def main():
+    groups = defaultdict(dict)
+    for tile in sorted((ROOT/'vn-roads').glob('*.gz')):
+        for key, _, _, label, kind, oneway, coords in json.load(gzip.open(tile)):
+            name = label.split(' · ')[0]
+            if name.startswith('Đèo ') and not oneway and kind not in ('service','track'):
+                groups[name][key] = list(zip(coords[::2],coords[1::2]))
+    dem = Image.open(ROOT/'streetscape/surfaces/vietnam-elevation.png').convert('L')
+    stages = [s for name in sorted(groups) if (s:=stage(name, groups[name], dem))]
+    seen = set()
+    for s in stages:
+        if s["id"] in seen:
+            s["id"] += "-" + str(min(groups[s["name"]]))
+        seen.add(s["id"])
+    rows = [json.dumps(s,ensure_ascii=False,separators=(',',':')) for s in stages]
+    (ROOT/'mountain-stages.js').write_text("// Centre lines: OpenStreetMap contributors, ODbL. Elevations: bundled Vietnam DEM.\nwindow.mountainStages=[\n"+",\n".join(rows)+"\n];\n",encoding='utf8')
+    print(len(stages), 'stages')
+
+
+if __name__ == '__main__':
+    main()

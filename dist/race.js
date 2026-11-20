@@ -111,7 +111,8 @@ function beginRace(){
  const p=at(0,1.6);
  state={mode:'grid',d:0,x:p.x,z:p.z,h:p.h,offset:1.6,v:0,steer:0,time:0,signal:0};
  parkCup();cupFx.reset();inside=false;placeRivals();$('routeName').textContent=route.name;$('progress').max=route.finish;
- $('next').href='?route='+(river?'pass':'river');
+ const choices=Object.keys(routes);$('next').href='?route='+choices[(choices.indexOf(route.id)+1)%choices.length];
+ if(route.stage){const link=$('freePass');link.href='./?pass='+route.id;link.textContent='Lái tự do tại '+route.name;}
  requestAnimationFrame(render);
 }
 function startCountdown(){

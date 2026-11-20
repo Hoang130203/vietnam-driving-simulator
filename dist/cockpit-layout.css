@@ -103,3 +103,5 @@ body:has(#tourCamera:not([hidden])) #world{touch-action:none;cursor:grab}
  #atlas #places{max-height:100px}
  #atlas .atlasFoot{position:sticky;bottom:-24px;background:#162429;padding:8px 0}
 }
+#atlas #racePass{color:#afead2;font-weight:700;text-underline-offset:3px;white-space:nowrap}
+.launchpanel .extra{flex-wrap:wrap;column-gap:12px;row-gap:4px}

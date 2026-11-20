@@ -9,16 +9,32 @@ const routes={
   pass:{id:'pass',name:'Đèo trà',finish:2480,crossing:645,bridge:[440,552],near:'Cầu Suối Trà',turn:'Ngã ba nông trường',junction:1030,sign:-1,
     headings:[[0,0],[100,0],[270,-46],[425,-74],[560,-65],[690,-15],[805,42],[995,51],[1065,-31],[1145,-40],[1330,-77],[1450,-54],[1600,22],[1740,61],[1900,35],[2050,-32],[2210,-6],[2350,10],[2480,10]]}
 };
+if(arcade){
+ const group=document.createElement('optgroup');group.label='Đường đèo Việt Nam';
+ for(const stage of mountainStages){
+   const finish=stage.angles.length*stage.step;
+   routes[stage.id]={id:stage.id,name:stage.name,stage,finish,crossing:finish*.55,
+     bridge:[Math.round(finish*.27/4)*4,Math.round(finish*.27/4)*4+80],junction:finish*.7,sign:1,near:'Cầu trên chặng',turn:'Ngã rẽ'};
+   group.append(new Option(stage.name+' · '+(finish/1000).toLocaleString('vi-VN')+' km',stage.id));
+ }
+ $('route').append(group);
+}
+function sampleStage(values,station,spacing){
+ const pos=clamp(station/spacing,0,values.length-1),i=Math.floor(pos);
+ return values[i]+((values[i+1]??values[i])-values[i])*(pos-i);
+}
 const route=(Object.hasOwn(routes,query.get('route')) && routes[query.get('route')]) || (exam&&crypto.getRandomValues(new Uint8Array(1))[0]%2?routes.pass:routes.river);
 $('route').value=route.id;$('route').disabled=exam;$('routeName').textContent=route.name;
 $('route').onchange=e=>{const u=new URL(location.href);u.searchParams.set('route',e.target.value);location.href=u.href;};
 const step=4,points=[];
 function heading(d){
+  if(route.stage)return sampleStage(route.stage.angles,d-route.stage.step/2,route.stage.step)*Math.PI/180;
   const pairs=route.headings;let i=1;while(i<pairs.length-1&&pairs[i][0]<d)i++;
   const [a,b]=[pairs[i-1],pairs[i]], t=clamp((d-a[0])/(b[0]-a[0]),0,1);
   return (a[1]+(b[1]-a[1])*t*t*(3-2*t))*Math.PI/180;
 }
 function height(d){
+  if(route.stage)return sampleStage(route.stage.heights,d,route.stage.step);
   const [a,b]=route.bridge;
   const ramp=Math.max(0,Math.min(1,(d-a+64)/64,(b+64-d)/64));
   const bridge=ramp*ramp*(3-2*ramp)*2.6;
@@ -56,7 +72,7 @@ function roadCoordinates(x,z,near){
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas:$('world'),antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.25:1.55));scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
 const sky=new T.TextureLoader().load('streetscape/sky.jpg',tex=>{tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.background=tex;if(!scene.environment)scene.environment=tex;});
-if(arcade)new T.TextureLoader().load('streetscape/'+route.id+'-reflection.jpg',tex=>{
+if(arcade)new T.TextureLoader().load('streetscape/'+(route.stage?'pass':route.id)+'-reflection.jpg',tex=>{
  tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.environment=tex;
 });
 renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.04;
