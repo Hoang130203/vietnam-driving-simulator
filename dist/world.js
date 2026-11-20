@@ -450,7 +450,7 @@ function setAtlasView(map){
 $('atlasMap').onclick=()=>setAtlasView(true);
 $('atlasList').onclick=()=>setAtlasView(false);
 async function openAtlas(filter='all'){
- setAtlasView(false);
+ setAtlasView(filter==='all');
  originatedInPause=$('rest').open;if(originatedInPause)$('rest').close();
  $('atlas').showModal();$('findPlace').value='';$('tourFilter').value=filter;choosePlace(filter==='mountain'&&!source[3]?.km?tourPlace(mountainPlaces.find(p=>p.id==='deo-hai-van')||mountainPlaces[0]):source);resetPlaces();
  if(!atlasData){

@@ -18,3 +18,9 @@
  .pedals button{padding-inline:3px}.controls{grid-row:4;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
  .controls kbd{display:none}#feedback{grid-row:5}details{grid-column:1/-1}
 }
+.view #map{inset:auto auto 8px 8px;width:clamp(95px,16vw,165px);height:auto}
+.view .instruments{left:auto;right:8px}
+@media(any-pointer:coarse),(max-width:630px){
+ .view .tools{inset:6px 6px auto auto}
+ .view .command{max-width:calc(100% - 153px)}
+}

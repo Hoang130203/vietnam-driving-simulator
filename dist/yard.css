@@ -17,3 +17,5 @@
  .controls [data-act]{grid-column:span 2}
  footer{grid-column:1/-1}
 }
+#view #map{left:9px;right:auto;width:clamp(100px,17vw,170px);height:auto}
+#view #meters{left:auto;right:9px}
