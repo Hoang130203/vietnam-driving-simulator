@@ -137,6 +137,10 @@ function createVietnamRelief(T,scene,compact){
     const ax=Math.round(x/spacing)*spacing,az=Math.round(z/spacing)*spacing;
     if(ax!==anchorX||az!==anchorZ){
       anchorX=ax;anchorZ=az;anchor.value.set(ax,az);let i=0;
+      const pagoda=activePass?.stage.id==='kim-bang'&&window.VietnamSights?.find(site=>site.id==='chua-ngoc-tam-chuc');
+      const peak=pagoda&&graph.point(pagoda.lon,pagoda.lat);
+      const nearPeak=peak&&Math.hypot(peak.x-ax,peak.z-az)<5000;
+      const xs=nearPeak?summitAxis(peak.x-ax):axis,zs=nearPeak?summitAxis(peak.z-az):axis;
       for(let j=0;j<=cells;j++)for(let k=0;k<=cells;k++,i++){
         const dx=xs[k],dz=zs[j];
         const blend=nearPeak?1-T.MathUtils.smoothstep(Math.hypot(ax+dx-peak.x,az+dz-peak.z),135,640):0;
@@ -147,10 +151,6 @@ function createVietnamRelief(T,scene,compact){
           const p=activePass,east=(ax+dx-p.x)*p.eastScale,south=az+dz-p.z;
           const tx=east*p.cos+south*p.sin,tz=-east*p.sin+south*p.cos;
           const coverage=1-T.MathUtils.smoothstep(Math.max(Math.abs(tx),Math.abs(tz)),11200,15200);
-      const pagoda=activePass?.stage.id==='kim-bang'&&window.VietnamSights?.find(site=>site.id==='chua-ngoc-tam-chuc');
-      const peak=pagoda&&graph.point(pagoda.lon,pagoda.lat);
-      const nearPeak=peak&&Math.hypot(peak.x-ax,peak.z-az)<5000;
-      const xs=nearPeak?summitAxis(peak.x-ax):axis,zs=nearPeak?summitAxis(peak.z-az):axis;
           h+=(p.grid.elevation(tx,tz)-h)*coverage;
         }
         pos.set([dx,h,dz],i*3);uv.set([u,1-v],i*2);
