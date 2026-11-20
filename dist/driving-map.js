@@ -8,7 +8,7 @@ function createDrivingMap(getView) {
     if (dialog.open && !frame) frame = requestAnimationFrame(() => { frame = 0; if (dialog.open) draw(); });
   }
   function draw() {
-    const {graph, car, edge, water, places, duel, amenities} = getView();
+    const {graph, car, edge, water, places, duel, guide, amenities} = getView();
     const w = canvas.clientWidth, h = canvas.clientHeight, ratio = Math.min(devicePixelRatio || 1, 2);
     if (!w || !h) return;
     if (canvas.width !== Math.round(w * ratio) || canvas.height !== Math.round(h * ratio)) {
@@ -49,6 +49,13 @@ function createDrivingMap(getView) {
       }
     }
     path(edge.points); g.lineWidth = Math.max(3, Math.min(8, 7 * scale)); g.strokeStyle = '#487354'; g.stroke();
+    if (guide) {
+      path(guide.points); g.strokeStyle='#1d7960'; g.lineWidth=4; g.stroke();
+      if (guide.detour) {
+        path(guide.detour.points); g.setLineDash([6,4]); g.strokeStyle='#94421e'; g.stroke(); g.setLineDash([]);
+      }
+      g.fillStyle='#185443'; g.beginPath(); g.arc(px(guide.finish.x),py(guide.finish.z),6,0,Math.PI*2); g.fill();
+    }
     if (duel) {
       const points = [];
       for (let m = duel.player; m < duel.length; m += 4) points.push(graph.sample(duel.at(m)));

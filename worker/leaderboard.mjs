@@ -1,10 +1,12 @@
 import courseLengths from "./course-lengths.js";
 
 const tour = "xuyen-viet";
+const guided = "ba-sao-tam-chuc";
+const guidedMetres = 5412;
 const hour = 3600_000;
 const maxAge = 7 * 24 * hour;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const knownRoute = route => route === tour || Object.hasOwn(courseLengths, route);
+const knownRoute = route => route === tour || route === guided || Object.hasOwn(courseLengths, route);
 const json = (data, status = 200, headers = {}) => Response.json(data, {
   status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers },
 });
@@ -75,6 +77,25 @@ async function start(request, db, body, now) {
   return json({runId},201,cookie ? {"Set-Cookie":cookie} : {});
 }
 
+// Freeze the official time on arrival. Choosing a nickname or retrying a
+// submission later must never alter the recorded time or a previous record.
+async function arrive(request, db, body, now) {
+  if (typeof body.runId !== "string" || !uuid.test(body.runId)) return fail("Mã lượt chơi không hợp lệ.",400);
+  const {player} = await identity(request,false);
+  if (!player) return fail("Hãy bắt đầu một lượt chơi mới.",401);
+  const [_, row] = await db.batch([
+    db.prepare(`UPDATE race_runs SET score=?-started,updated=?
+      WHERE id=? AND player=? AND route=? AND score IS NULL AND started BETWEEN ? AND ?`)
+      .bind(now,now,body.runId,player,guided,now-maxAge,now-guidedMetres*10),
+    db.prepare("SELECT score,started FROM race_runs WHERE id=? AND player=? AND route=?")
+      .bind(body.runId,player,guided),
+  ]);
+  const run=row.results[0];
+  if (!run || run.started<now-maxAge) return fail("Lượt đi không còn hiệu lực.",410);
+  if (run.score===null) return fail("Chưa đủ thời gian để hoàn thành tuyến.",422);
+  return json({timeMs:run.score});
+}
+
 async function finish(request, db, body, now) {
   if (typeof body.runId !== "string" || !uuid.test(body.runId)) return fail("Mã lượt chơi không hợp lệ.",400);
   const {player} = await identity(request,false);
@@ -87,20 +108,24 @@ async function finish(request, db, body, now) {
   const value = distance ? body.distanceM : body.timeMs;
   if (!Number.isSafeInteger(value) || value < 1) return fail("Thành tích không hợp lệ.",400);
   const score = distance ? -value : value;
-  if (run.score !== null && (!distance || score >= run.score)) {
+  const guidedArrival = run.route === guided;
+  if (guidedArrival && run.score !== value) return fail("Cần xác nhận thời gian tại đích.",422);
+  if (run.score !== null && (!guidedArrival || run.name!==null) && (!distance || score >= run.score)) {
     if (!distance && (run.score !== score || run.name !== name)) return fail("Lượt đua này đã ghi kết quả.",409);
     return json(await standings(db,run.route,player));
   }
   const elapsed = now-run.started;
   // Generous upper speed bound covers nitro, game-frame jitter and launch-request latency.
   const maxMetres = (elapsed/1000 + 4)*100;
-  if (distance ? value>maxMetres : (courseLengths[run.route]>maxMetres || value<courseLengths[run.route]*10 || value>maxAge)) {
+  const metres = guidedArrival ? guidedMetres : courseLengths[run.route];
+  if (distance ? value>maxMetres : (metres>maxMetres || value<metres*10 || value>maxAge)) {
     return fail("Thành tích chưa phù hợp với chặng và thời gian chơi.",422);
   }
   if (distance && run.updated !== null && now-run.updated < 3000) return json({error:"Chờ vài giây trước khi cập nhật."},429,{"Retry-After":"3"});
   await db.batch([
     db.prepare(`UPDATE race_runs SET score=?,name=?,updated=? WHERE id=? AND player=?
-      AND (score IS NULL OR (route=? AND score>? AND updated<=?))`).bind(score,name,now,body.runId,player,tour,score,now-3000),
+      AND (score IS NULL OR (route=? AND score=? AND name IS NULL) OR (route=? AND score>? AND updated<=?))`)
+      .bind(score,name,now,body.runId,player,guided,score,tour,score,now-3000),
     db.prepare(`INSERT INTO race_records(route,player,score,name,achieved)
       SELECT route,player,score,name,updated FROM race_runs WHERE id=? AND player=? AND score IS NOT NULL
       ON CONFLICT(route,player) DO UPDATE SET score=excluded.score,name=excluded.name,achieved=excluded.achieved
@@ -142,12 +167,13 @@ export default {
       return json(await standings(env.DB,route,player));
     }
     const action = url.pathname.slice(base.length);
-    if (!["/start","/finish"].includes(action)) return fail("Không tìm thấy.",404);
+    if (!["/start","/arrive","/finish"].includes(action)) return fail("Không tìm thấy.",404);
     if (request.method !== "POST") return fail("Phương thức không hợp lệ.",405);
     if (request.headers.get("Origin") !== url.origin) return fail("Nguồn yêu cầu không hợp lệ.",403);
     if (request.headers.get("Content-Type")?.split(";")[0].trim() !== "application/json") return fail("Cần dữ liệu JSON.",415);
     const body = await readBody(request);
     if (!body) return fail("Nội dung không hợp lệ.",400);
+    if (action === "/arrive") return arrive(request,env.DB,body,Date.now());
     return action === "/start" ? start(request,env.DB,body,Date.now()) : finish(request,env.DB,body,Date.now());
   },
 };

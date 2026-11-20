@@ -21,7 +21,7 @@ function breakfastCall(){
 }
 function stance(){return roadLaneOffset(player);}
 function save(){
- if(!activeTrip||!player||!roads||car.flood)return;
+ if(guide||!activeTrip||!player||!roads||car.flood)return;
  const [lon,lat]=roads.geo(car.x,car.z);
  try{localStorage.setItem('taylai.world.trip',JSON.stringify({lon,lat,label:source[0],destination:source[3]?.id,distance,passes,dir:player.dir,edge:player.edge.id,yaw:car.yaw,origin:[roads.lon,roads.lat]}));}catch{}
 }
@@ -73,8 +73,10 @@ async function streamWater(graph){
    return await water.load(car.x,car.z);
  }catch{/* Road navigation stays available when this scenery layer is offline. */}
 }
-async function startAt(place,restore=null){
- loadRequest={place,restore};activeTrip=false;
+async function startAt(place,restore=null,guided=false){
+ guide=null;guideStarted=0;
+ $('startGuided').disabled=true;$('startGuided').hidden=guided;$('guidedInfo').hidden=true;
+ loadRequest={place,restore,guided};activeTrip=false;
  const firstDrive=place===openingPlace&&!restore;
  car.opening=firstDrive;car.openingPose=firstDrive?1:0;car.dawn=firstDrive?1:0;openingCameraTime=0;
  document.body.removeAttribute('data-awaiting-motion');
@@ -84,10 +86,11 @@ async function startAt(place,restore=null){
  const site=place[3]||destinations.find(entry=>restore?.destination===entry.id);
  $('journeyTitle').textContent=firstDrive?'Tam Chúc':site?.name||place[0];
  $('journeyTitle').classList.toggle('longTitle',$('journeyTitle').textContent.length>25);
- $('journeyCaption').textContent=restore?'Tiếp tục hành trình đã lưu · '+fmt(restore.distance):
+ $('journeyCaption').textContent=guided?'Theo QL21 tới đường ven hồ. Đồng hồ chạy từ lúc cầm lái đến khi về đích, kể cả khi tạm dừng.':restore?'Tiếp tục hành trình đã lưu · '+fmt(restore.distance):
    firstDrive||site?.id==='tam-chuc'?'Theo đường ven hồ tới quần thể chùa Tam Chúc.':
    samePlace(place,baSaoDrive)?'Theo đường Điện Biên Phủ về phía Khả Phong, qua khu dân cư Ba Sao và chân núi.':
    site?.km?'Chinh phục '+fmt(site.km*1000)+' đường đèo.':[site?.kind,site?.city].filter(Boolean).join(' · ')||'Khám phá những con đường quanh điểm xuất phát.';
+ if(guided)$('journeyTitle').textContent=tamChucDrive.title;
  $('departureCoords').textContent=place[2].toFixed(4)+'° N  /  '+place[1].toFixed(4)+'° E';
  $('departureMap').getContext('2d').clearRect(0,0,$('departureMap').width,$('departureMap').height);
  const token=++loadToken;mode='loading';keySet.clear();$('grid').hidden=false;$('hud').hidden=true;$('touch').hidden=true;
@@ -112,6 +115,7 @@ async function startAt(place,restore=null){
      if((target.x-p.x)*Math.sin(p.yaw)-(target.z-p.z)*Math.cos(p.yaw)<0)nearest.dir=-1;
    }
    if(restore&&restore.edge===nearest.edge.id&&restore.dir===-1&&!nearest.edge.oneway)nearest.dir=-1;
+   if(guided){guide=createTamChucDrive(graph);nearest={...guide.start};}
    nextWeatherCheck=0;roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
    car.region=place[2]<10.8?'delta':place[2]>21.6||(place[1]>107&&place[2]>11&&place[2]<15)?'highlands':'city';
    duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();gfx.resetFx();
@@ -120,8 +124,8 @@ async function startAt(place,restore=null){
    loadStructuresNear(graph,car.x,car.z);
    await Promise.all([gfx.terrainReady,streamWater(graph),gfx.loadDistrict(graph,car.x,car.z)]);if(token!==loadToken)return;
    refreshView();drawDepartureMap();seedTraffic();mode='grid';
-   $('challenge').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Lái tiếp':'Cầm lái';
- }catch(e){if(token===loadToken){$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
+   $('challenge').disabled=guided;$('startGuided').disabled=false;$('launch').disabled=false;$('launch').textContent=restore?'Lái tiếp':'Cầm lái';
+ }catch(e){if(token===loadToken){$('startGuided').disabled=false;$('loadStatus').textContent=e.message;$('launch').textContent='Thử tải lại';$('launch').disabled=false;mode='error';pendingPlace=place;}}
 }
 async function stream(){
  if(busy||streamRetry>0||Math.hypot(car.x-loadX,car.z-loadZ)<300)return;
@@ -324,6 +328,15 @@ function tick(dt){
  if(mode==='drive')waterStep(dt);
  trackRoad();const moved=Math.hypot(car.x-x,car.z-z);distance+=moved;
  if(mode!=='drive')return;
+ if(guide && guide.timeMs===null && guide.update(player,!car.offroad&&!car.flood)){
+   guide.timeMs=Math.max(1,Math.round(performance.now()-guideStarted));
+   guidedBoard.arrive();
+   DriveBody.reset(car);
+   mode='arrival';keySet.clear();
+   $('arrivalResult').textContent=fmt(guide.length)+' · Thời gian của bạn '+formatRaceTime(guide.timeMs);
+   $('guidedArrival').showModal();
+   return;
+ }
  if(duel){
    duel.move(player,moved,dt,npcs);hitVehicle(duel.actor);
    if(duel.player>=duel.gate){
@@ -335,6 +348,8 @@ function tick(dt){
  snapshot+=dt;if(snapshot>4){save();snapshot=0;}
 }
 function visitTarget(){
+ if(guide?.timeMs && Math.hypot(car.x-guide.finish.x,car.z-guide.finish.z)<160)
+   return {data:tamChuc,...guide.finish,distance:Math.hypot(car.x-guide.finish.x,car.z-guide.finish.z)};
  const site=source[3];
  if(site&&!site.km){
    const p=roads.point(site.lon,site.lat),distance=Math.hypot(car.x-p.x,car.z-p.z);
@@ -350,7 +365,7 @@ function visitTarget(){
 }
 function updateHud(){
  let landmark=visitTarget();
- $('tourView').hidden=!landmark;
+ $('tourView').hidden=!landmark;$('tourView').textContent=landmark?.data.id==='tam-chuc'?'Ngắm Tam Chúc':'Ngắm địa danh 3D';
  $('scenicRadio').hidden=mode!=='drive'||!landmark||Math.abs(car.speed)>.28;
  const site=source[3];
  if(site){const p=roads.point(site.lon,site.lat),distance=Math.hypot(car.x-p.x,car.z-p.z);
@@ -376,6 +391,11 @@ function updateHud(){
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';
  $('turnInfo').textContent=car.flood?'Xe ngập nước · chờ cứu hộ':car.wading?'Đang lội nước':duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
+ $('guidedInfo').hidden=!guide;
+ if(guide){
+   $('guidedInfo').textContent=guide.timeMs?'Đã đến Tam Chúc · '+formatRaceTime(guide.timeMs):'Tam Chúc · Còn '+fmt(guide.remaining)+' · '+formatRaceTime(Math.max(0,Math.floor(performance.now()-guideStarted))).split('.')[0];
+   if(guide.timeMs===null && !car.flood && !car.wading)$('turnInfo').textContent=guide.instruction();
+ }
  drawMini(landmark);
 }
 function traceMapLine(g,points){
@@ -409,7 +429,7 @@ function drawDepartureMap(){
  g.beginPath();g.arc(c.width/2,c.height/2,5,0,Math.PI*2);g.fillStyle='#f2ffca';g.fill();
 }
 let mapPlaces=[];
-const drivingMap=createDrivingMap(()=>({graph:roads,car,edge:player.edge,water,duel,places:mapPlaces,amenities:gfx.streetLife?.places||[]}));
+const drivingMap=createDrivingMap(()=>({graph:roads,car,edge:player.edge,water,duel,guide,places:mapPlaces,amenities:gfx.streetLife?.places||[]}));
 function openDrivingMap(){
  if(mode!=='drive')return;
  mode='map';keySet.clear();save();
@@ -429,6 +449,12 @@ function drawMini(landmark){
  for(const e of nearby){
    g.strokeStyle=e.id===player.edge.id?'#d8f791':'#93aba2';g.lineWidth=e.id===player.edge.id?7:3;
    traceMapLine(g,e.points);g.stroke();
+ }
+ if(guide){
+   g.lineWidth=6;g.strokeStyle='#8af5ae';traceMapLine(g,guide.points);g.stroke();
+   if(guide.detour){
+     g.setLineDash([10,7]);g.strokeStyle='#ffba78';traceMapLine(g,guide.detour.points);g.stroke();g.setLineDash([]);
+   }
  }
  if(duel){
    g.strokeStyle='#a4ff63';g.lineWidth=5;g.beginPath();
@@ -502,17 +528,35 @@ function frame(now){
  requestAnimationFrame(frame);
 }
 const worldBoard=createLeaderboard('xuyen-viet','Xuyên Việt');
-let tripStart=0;
+const guidedBoard=createLeaderboard(tamChucDrive.id,tamChucDrive.title,true);
+let tripStart=0,guide=null,guideStarted=0;
+async function launchGuided(){
+ await startAt(baSaoDrive,null,true);
+ if(mode==='grid'&&guide)begin();
+}
+$('startGuided').onclick=launchGuided;
+$('arrivalRetry').onclick=()=>{$('guidedArrival').close();launchGuided();};
+$('showGuidedBoard').onclick=()=>guidedBoard.open();
+$('arrivalBoard').onclick=()=>guidedBoard.open(guide.timeMs);
+function leaveArrival(){
+ $('guidedArrival').close();mode='drive';keySet.clear();updateHud();
+}
+$('arrivalTour').onclick=()=>{leaveArrival();$('tourView').click();};
+$('arrivalDrive').onclick=leaveArrival;
+$('guidedArrival').oncancel=e=>{e.preventDefault();leaveArrival();};
 $('showBoard').onclick=()=>worldBoard.open();
 $('openSetup').onclick=()=>$('journeySetup').showModal();
 $('closeSetup').onclick=()=>$('journeySetup').close();
-$('scoreBoard').onclick=()=>worldBoard.open(distance-tripStart);
+$('scoreBoard').onclick=()=>guide?guidedBoard.open(guide.timeMs):worldBoard.open(distance-tripStart);
 function begin(){
- if(mode==='error'){if(loadRequest&&indexData&&gfx)startAt(loadRequest.place,loadRequest.restore);else location.reload();return;}
+ if(mode==='error'){if(loadRequest&&indexData&&gfx)startAt(loadRequest.place,loadRequest.restore,loadRequest.guided);else location.reload();return;}
  if(!player||mode!=='grid')return;
  if($('journeySetup').open)$('journeySetup').close();
  $('openingStill').hidden=true;
- activeTrip=true;tripStart=distance;worldBoard.start();
+ activeTrip=true;tripStart=distance;
+ if(guide){guideStarted=performance.now();guidedBoard.start();}else worldBoard.start();
+ $('raceMode').hidden=Boolean(guide);
+ $('scoreBoard').textContent=guide?'Bảng hạng Ba Sao → Tam Chúc':'Xem hạng và gửi thành tích';
  mode='drive';document.body.dataset.phase='drive';$('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('camera').hidden=false;$('pause').hidden=false;updateHud();
  if(car.opening){
    document.body.setAttribute('data-awaiting-motion','');
@@ -913,6 +957,7 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
    const stopId=params.get('landmark');
    const landmark=stopId&&(models.find(p=>p.id===stopId||p.catalogId===stopId)||tamChucParts.find(p=>p.id===stopId)||catalog.find(p=>p.id===stopId))||(collection&&tamChuc);
    if(landmark||stage)await startAt(tourPlace(landmark||stage));
+   else if(params.get('drive')===tamChucDrive.id)await startAt(baSaoDrive,null,true);
    else if(params.get('drive')==='ba-sao')await startAt(baSaoDrive);
    else await startAt(valid?[saved.label||'Hành trình đang lái',saved.lon,saved.lat]:openingPlace,valid?saved:null);
    requestAnimationFrame(frame);

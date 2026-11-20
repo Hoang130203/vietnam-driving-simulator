@@ -1,14 +1,17 @@
 'use strict';
-function createLeaderboard(routeId,title){
+function formatRaceTime(ms){
+  return Math.floor(ms/60000)+':'+String(Math.floor(ms/1000)%60).padStart(2,'0')+'.'+String(ms%1000).padStart(3,'0');
+}
+function createLeaderboard(routeId,title,serverTimed=false){
   const world=routeId==='xuyen-viet',dialog=document.createElement('dialog');
-  dialog.className='scoreBoard';dialog.setAttribute('aria-labelledby','boardTitle');
-  dialog.innerHTML='<div class="boardHead"><h2 id="boardTitle">Bảng xếp hạng online</h2><button type="button" aria-label="Đóng bảng xếp hạng">✕</button></div><p class="boardMode"></p><p role="status"></p><ol></ol><form hidden><label>Biệt danh <input name="alias" required minlength="1" maxlength="24" autocomplete="off"></label><button class="hot">Gửi thành tích</button></form><button class="reloadBoard">Tải lại bảng</button>';
-  document.body.append(dialog);
-  dialog.querySelector('.boardMode').textContent=title+' · '+(world?'Quãng đường trong một lượt':'Thời gian gồm giây phạt');
+  dialog.className='scoreBoard';dialog.setAttribute('aria-labelledby','boardTitle-'+routeId);
+  dialog.innerHTML='<div class="boardHead"><h2>Bảng xếp hạng online</h2><button type="button" aria-label="Đóng bảng xếp hạng">✕</button></div><p class="boardMode"></p><p role="status"></p><ol></ol><form hidden><label>Biệt danh <input name="alias" required minlength="1" maxlength="24" autocomplete="off"></label><button class="hot">Gửi thành tích</button></form><button class="reloadBoard">Tải lại bảng</button>';
+  dialog.querySelector('h2').id='boardTitle-'+routeId;document.body.append(dialog);
+  dialog.querySelector('.boardMode').textContent=title+' · '+(world?'Quãng đường trong một lượt':serverTimed?'Thời gian từ Ba Sao đến hồ Tam Chúc':'Thời gian gồm giây phạt');
   const status=dialog.querySelector('[role=status]'),list=dialog.querySelector('ol'),form=dialog.querySelector('form');
   const name=form.elements.alias,submit=form.querySelector('button'),reload=dialog.querySelector('.reloadBoard');
-  const format=world?m=>m.toLocaleString('vi-VN')+' m':ms=>Math.floor(ms/60000)+':'+String(Math.floor(ms/1000)%60).padStart(2,'0')+'.'+String(ms%1000).padStart(3,'0');
-  let run=null,pending=null,lastSent=0,displayVersion=0,sending=false;
+  const format=world?m=>m.toLocaleString('vi-VN')+' m':formatRaceTime;
+  let run=null,arrival=null,pending=null,lastSent=0,displayVersion=0,sending=false;
   try{name.value=localStorage.getItem('taylai.alias')||'';}catch{}
   async function api(path,data){
     const opts={signal:AbortSignal.timeout(12000),cache:'no-store'};
@@ -18,8 +21,17 @@ function createLeaderboard(routeId,title){
     return res.json();
   }
   function start(){
-    pending=null;lastSent=0;
+    pending=null;arrival=null;lastSent=0;
     run=api('/start',{route:routeId}).then(v=>v.runId).catch(()=>null);
+  }
+  function arrive(){
+    const current=run;
+    if(!arrival)arrival=Promise.resolve(current).then(id=>id?api('/arrive',{runId:id}):null)
+      .then(result=>result?.timeMs??null).catch(()=>{
+        if(current===run)arrival=null;
+        return null;
+      });
+    return arrival;
   }
   function rows(entries){
     list.replaceChildren();
@@ -39,6 +51,19 @@ function createLeaderboard(routeId,title){
     finally{if(version===displayVersion)reload.disabled=false;}
   }
   async function open(score){
+    if(serverTimed && Number.isFinite(score)){
+      form.hidden=true;
+      if(!dialog.open)dialog.showModal();
+      status.textContent='Đang xác nhận thời gian về đích…';
+      const official=await arrive();
+      if(!dialog.open)return;
+      if(official===null){
+        await load();
+        status.textContent+=' · Chưa xác nhận được thời gian online của lượt này.';
+        return;
+      }
+      score=official;
+    }
     pending=Number.isFinite(score)?Math.round(score):null;
     form.hidden=!pending||pending<=lastSent;
     submit.textContent=pending?'Gửi '+format(pending):'Gửi thành tích';
@@ -58,5 +83,5 @@ function createLeaderboard(routeId,title){
     finally{sending=false;submit.disabled=false;reload.disabled=false;}
   };
   reload.onclick=load;dialog.querySelector('.boardHead button').onclick=()=>dialog.close();
-  return {start,open};
+  return {start,arrive,open};
 }
