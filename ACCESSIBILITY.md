@@ -1,6 +1,6 @@
 # Khả năng tiếp cận
 
-Tay Lái Việt ưu tiên điều hướng bằng bàn phím, nhãn rõ ràng cho nút và thông báo bài tập có thể đọc được. Dự án chưa có đánh giá khả năng tiếp cận toàn diện.
+ViVu3D ưu tiên điều hướng bằng bàn phím, nhãn rõ ràng cho nút và thông báo bài tập có thể đọc được. Dự án chưa có đánh giá khả năng tiếp cận toàn diện.
 
 ## Thiết bị và cách điều khiển
 

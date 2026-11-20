@@ -1,6 +1,6 @@
 # Chính sách bảo mật
 
-Phạm vi tiếp nhận là mã nguồn hiện tại trên nhánh `main` và các phiên bản triển khai chính thức của Tay Lái Việt.
+Phạm vi tiếp nhận là mã nguồn hiện tại trên nhánh `main` và các phiên bản triển khai chính thức của ViVu3D.
 
 Gửi lỗ hổng qua [kênh báo cáo riêng tư trên GitHub](https://github.com/tang-vu/vietnam-driving-simulator/security/advisories/new). Hãy ghi phần bị ảnh hưởng, phiên bản hoặc commit nếu biết, điều kiện phát sinh và ảnh hưởng bạn quan sát được.
 

@@ -3,7 +3,7 @@ name: Đề xuất cải tiến
 about: Đề xuất chế độ, nội dung luyện tập, cung đường hoặc thay đổi giao diện
 ---
 
-## Bạn muốn làm gì trong Tay Lái Việt?
+## Bạn muốn làm gì trong ViVu3D?
 
 ## Trải nghiệm hiện tại vướng ở đâu?
 

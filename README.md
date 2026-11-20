@@ -1,8 +1,8 @@
-# Tay Lái Việt
+# ViVu3D
 
-[Chơi Tay Lái Việt trên web](https://driving.tang-vu.chatgpt.site/)
+[Chơi ViVu3D trên web](https://vivu3d.com/)
 
-Tay Lái Việt là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
+ViVu3D là trình mô phỏng lái xe 3D trên trình duyệt. Bạn có thể lái tự do qua mạng đường Việt Nam, đua trên đường kín hoặc luyện các bài sát hạch hạng B.
 
 | Chế độ | Nội dung |
 | --- | --- |

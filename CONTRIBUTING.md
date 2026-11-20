@@ -1,4 +1,4 @@
-# Đóng góp cho Tay Lái Việt
+# Đóng góp cho ViVu3D
 
 - Dùng [mẫu issue](https://github.com/tang-vu/vietnam-driving-simulator/issues/new/choose) để báo lỗi hoặc đề xuất. Với lỗi trên bản đồ, ghi địa danh, tuyến hoặc vị trí nếu biết. Với nội dung sát hạch, gửi nguồn và số câu hoặc bài thi.
 - Với thay đổi lớn hoặc đóng góp mã nguồn, hãy trao đổi trước trong issue. Nếu dự án cần quyền sử dụng thương mại đối với phần bạn viết, người duy trì sẽ trao đổi với bạn trước khi hợp nhất. Xem [thông báo bản quyền](LICENSE).
