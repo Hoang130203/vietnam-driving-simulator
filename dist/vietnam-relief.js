@@ -85,7 +85,7 @@ function createVietnamRelief(T,scene,compact){
     const current=byGraph.get(g);
     if(current&&Math.hypot(current.x-x,current.z-z)<12000)return false;
     let closest=null,range=12000;
-    for(const stage of window.mountainStages||[]){
+    for(const stage of [...(window.mountainStages||[]),...(window.landmarkTerrain||[])]){
       const p=g.point(...stage.start),dist=Math.hypot(p.x-x,p.z-z);
       if(dist<range){range=dist;closest={...p,stage};}
     }

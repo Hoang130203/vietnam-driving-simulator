@@ -482,6 +482,8 @@
       // Reordering visible roads or clipping a distant street cannot cascade into a new layout.
       function compareCandidate(a,b){return a.priority-b.priority||a.key.localeCompare(b.key);}
       const plotSize=12;
+      const templeGrounds=graph?VietnamLandmarks.entries.filter(s=>s.gardenRadius).map(s=>({...graph.point(s.lon,s.lat),radius:s.gardenRadius}))
+        .filter(p=>Math.hypot(p.x-cx,p.z-cz)<620+p.radius):[];
       function visitPlots(c,cb){
         for(let i=Math.floor((c.hx-c.footprint)/plotSize);i<=Math.floor((c.hx+c.footprint)/plotSize);i++)
           for(let j=Math.floor((c.hz-c.footprint)/plotSize);j<=Math.floor((c.hz+c.footprint)/plotSize);j++)cb(i+','+j);
@@ -544,6 +546,7 @@
             const width=4.5+random()*2.9,depth=5+random()*3.9;
             const dist=s.w+(house?3.5+depth/2:3)+random()*(house?3:5);
             const hx=x+sign*s.nx*dist,hz=z+sign*s.nz*dist,footprint=house?Math.hypot(width,depth)/2+.8:1.7;
+            if(house&&templeGrounds.some(p=>Math.hypot(hx+cx-p.x,hz+cz-p.z)<p.radius))continue;
             if(blocked(hx,hz,footprint)||onApproach(hx+cx,hz+cz)||house&&district.mappedBlock(hx+cx,hz+cz))continue;
             const c={key:s.seed+':'+index+':'+sign,priority,s,sign,hx,hz,footprint,house,width,depth,type,random};
             candidates.push(c);

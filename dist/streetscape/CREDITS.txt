@@ -33,6 +33,7 @@ https://registry.opendata.aws/terrain-tiles/
 https://github.com/tilezen/joerd/blob/master/docs/attribution.md
 
 The mountain racing stages use additional Mapzen Terrarium tiles (2026-11-20), sampled more densely near the course and at wider intervals toward the horizon.
+The Kim Bảng and Phi Lai landmark surroundings also use local Mapzen Terrarium elevation grids from the same AWS dataset. Building outlines around Sở Kiện and Tam Chúc include extracts from the OpenStreetMap API, © OpenStreetMap contributors, ODbL 1.0.
 
 Regional terrain colour is adapted from NASA Blue Marble Next Generation, accessed through NASA GIBS. It is a historical satellite composite.
 https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/

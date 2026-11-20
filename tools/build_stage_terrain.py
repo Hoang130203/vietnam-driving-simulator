@@ -142,6 +142,8 @@ def bake(stage, folder, output, coarse):
 def main():
     text = (DIST/'mountain-stages.js').read_text(encoding='utf8')
     stages = json.loads(text.split('window.mountainStages=',1)[1].strip().rstrip(';'))
+    sights = (DIST/'landmark-terrain.js').read_text(encoding='utf8')
+    stages.extend(json.loads(sights.split('window.landmarkTerrain=',1)[1].strip().rstrip(';')))
     output = DIST/'stage-terrain'
     output.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='taylai-dem-') as tmp:
