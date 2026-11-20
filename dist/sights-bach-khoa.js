@@ -172,8 +172,6 @@
         box(white,-46.33+4.79*i,10.45,-137.84,.27,12,.27);
         box(white,-39.15,4.52+3.96*i,-137.84,14.55,.27,.27);
       }
-      const badge=new T.TextureLoader().load('streetscape/hust-emblem.png');badge.colorSpace=T.SRGBColorSpace;
-      panel(badge,-28.75,12.26,-137.9,3.55,5.19,0,true);
       lettering('C1','#ae762c',-27.6,4.8,-137.91,1.9,1.3);
       box(white,-35.8,16.65,-138.22,22.6,.23,.85);
       for(let j=0;j<9;j++){

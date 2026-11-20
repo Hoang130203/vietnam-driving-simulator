@@ -213,3 +213,12 @@
   .arcade:not(.journey)[data-phase=grid] #world, .arcade:not(.journey) .grid {top: 65px}
   .arcade:not(.journey)[data-phase=grid] #world {height: calc(100% - 65px)}
 }
+.arcade .runNotice, .arcade .submitNotice, .arcade .infoLinks {
+  margin: .65rem 0 0; font: 400 .875rem/1.4 system-ui, sans-serif;
+}
+.journey .opening .runNotice {color: #fff; text-shadow: 0 1px 4px #14231d}
+.arcade .runNotice a, .arcade .submitNotice a, .arcade .infoLinks a {
+  display: inline; padding: 0; background: none; border: 0; color: inherit;
+  font: inherit; text-decoration: underline; text-underline-offset: .18em; pointer-events: auto;
+}
+.arcade .submitNotice {flex-basis: 100%; margin: 0 0 .25rem}

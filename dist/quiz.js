@@ -2,7 +2,7 @@
   'use strict';
   const dialog = document.getElementById('quiz');
   const key = 'taylai.csgt2025.study.v1';
-  const source = 'https://www.csgt.vn/upload/services/273963059_Bộ 600 câu hỏi dùng cho sát hạch lái xe cơ giới đường bộ.pdf';
+  const source = 'https://csgt.bocongan.gov.vn/index.php/van-ban/bo-600-cau-hoi-dung-cho-sat-hach-lai-xe-co-gioi-duong-bo';
   // Phụ lục III, Công văn 2262/CSGT-P5 ngày 07/05/2025.
   const critical = new Set([
     19,20,21,22,23,24,25,26,27,28,30,32,34,35,47,48,52,53,55,58,
