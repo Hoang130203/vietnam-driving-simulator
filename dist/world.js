@@ -8,13 +8,23 @@ const fmt=d=>(d/1000).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFra
 let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],nextNpc=1,mode='loading',inside=false,source=featured[0];
 let viewX=Infinity,viewZ=Infinity,loadX=Infinity,loadZ=Infinity,busy=false,loadToken=0,streamRetry=0,tourPins=[];
 let hp=100,nitro=100,cooldown=0,distance=0,snapshot=0,toastTime=0,crashTime=0,crashKind='car',passes=0,duel=null;
-let car={model:'supercar',x:0,z:0,yaw:0,speed:0,steer:0,brake:false},last=performance.now(),uiTick=0,spawnTick=0;
+let car={model:'supercar',spec:worldGarage.supercar,x:0,z:0,yaw:0,speed:0,steer:0,brake:false},last=performance.now(),uiTick=0,spawnTick=0;
 let scenicTrace=null;
 let activeTrip=false,loadRequest=null,openingCameraTime=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
-try{const model=localStorage.getItem('taylai.garage');if(['gt','rally'].includes(model))car.model=model;}catch{}
+function selectVehicle(model){
+ if(!Object.hasOwn(worldGarage,model))return;
+ car.model=model;car.spec=worldGarage[model];gfx?.preloadVehicle(model);
+}
+try{selectVehicle(localStorage.getItem('taylai.world.garage')||localStorage.getItem('taylai.garage'));}catch{}
 $('garage').value=car.model;
-$('garage').onchange=()=>{car.model=$('garage').value;try{localStorage.setItem('taylai.garage',car.model);}catch{}};
+$('garage').onchange=()=>{
+ selectVehicle($('garage').value);
+ try{
+   if(car.spec.worldOnly)localStorage.setItem('taylai.world.garage',car.model);
+   else{localStorage.setItem('taylai.garage',car.model);localStorage.removeItem('taylai.world.garage');}
+ }catch{}
+};
 function inform(text,time=3){$('callout').textContent=text;toastTime=time;}
 function breakfastCall(){
  const line='Bánh mì nóng giòn đây! Ai bánh mì nào!';
@@ -334,11 +344,12 @@ function tick(dt){
  cooldown=Math.max(0,cooldown-dt);streamRetry=Math.max(0,streamRetry-dt);
  const gas=held('w','arrowup'),reverse=held('s','arrowdown'),brake=held(' '),boost=!car.wading&&held('shift')&&nitro>1&&!reverse&&!brake;
  nitro=clamp(nitro+(boost?-27:held('shift')?0:6)*dt,0,100);
- const tune={gt:[6.4,43],rally:[7.7,40],supercar:[8.4,48]}[car.model];
  const x=car.x,z=car.z;
- DriveBody.step(car,{grade:gfx.grade(car.x,car.z,car.yaw),gas,reverse,brake,boost,steer:Number(held('d','arrowright'))-Number(held('a','arrowleft')),power:tune[0],top:tune[1]},dt);
- for(const axle of [1.2,-1.2]){
-   const cx=car.x+Math.sin(car.yaw)*axle,cz=car.z-Math.cos(car.yaw)*axle,hit=gfx.contact(cx,cz,.88);
+ DriveBody.step(car,{grade:gfx.grade(car.x,car.z,car.yaw),gas,reverse,brake,boost,steer:Number(held('d','arrowright'))-Number(held('a','arrowleft')),power:car.spec.power,top:car.spec.top},dt);
+ const radius=car.spec.width?car.spec.width/2:.88;
+ const probeOffset=car.spec.width?car.spec.length/2-radius:1.2;
+ for(const axle of [probeOffset,-probeOffset]){
+   const cx=car.x+Math.sin(car.yaw)*axle,cz=car.z-Math.cos(car.yaw)*axle,hit=gfx.contact(cx,cz,radius);
    if(!hit)continue;
    hit.axle=axle;const impact=DriveBody.resolve(car,hit);
    if(impact.closing>.7)hurt(hit.kind||'shoulder',impact,hit);
@@ -623,9 +634,9 @@ function begin(){
    address.searchParams.delete('intro');
    history.replaceState(null,'',address);
  }
- if(guide?.route.id){guideStarted=performance.now();boardFor(guide.route).start();}
+ if(guide?.route.id){guideStarted=performance.now();boardFor(guide.route).start(tripVehicleChoice(car.model));}
  else if(guide){startCustomClock();save();}
- else worldBoard.start();
+ else worldBoard.start(tripVehicleChoice(car.model));
  $('raceMode').hidden=Boolean(guide);
  $('scoreBoard').hidden=Boolean(guide&&!guide.route.id);
  $('scoreBoard').textContent=guide?'Bảng hạng · '+guide.route.title:'Xem hạng và gửi thành tích';

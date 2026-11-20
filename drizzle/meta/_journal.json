@@ -8,6 +8,13 @@
       "when": 1795148739176,
       "tag": "0000_leaderboard",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795188494164,
+      "tag": "0001_vehicle_choices",
+      "breakpoints": true
     }
   ]
 }

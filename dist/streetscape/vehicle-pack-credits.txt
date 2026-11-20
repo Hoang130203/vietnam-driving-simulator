@@ -15,3 +15,8 @@ Window transmission changed to tinted alpha blending. Wheel and steering pivots
 retain the original articulated hierarchy. Paint and tail light material names
 were normalized for game control.
 City taxi body repainted in golden yellow.
+
+family-suv.glb is adapted from Mid-Size SUV by tevy, v1 LOD1, CC0 1.0.
+https://tevy.dev/models/suv/v1/lod1.glb
+The three-row version has a longer wheelbase and cargo area, a raised roof,
+seven seats, steering pivots, and embedded JPEG maps.

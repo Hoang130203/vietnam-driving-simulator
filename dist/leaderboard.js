@@ -20,9 +20,9 @@ function createLeaderboard(routeId,title,serverTimed=false){
     if(!res.ok){const body=await res.json().catch(()=>null);throw new Error(body?.error||'Chưa kết nối được bảng online.');}
     return res.json();
   }
-  function start(){
+  function start(vehicleChoice){
     pending=null;arrival=null;lastSent=0;
-    run=api('/start',{route:routeId}).then(v=>v.runId).catch(()=>null);
+    run=api('/start',{route:routeId,...vehicleChoice}).then(v=>v.runId).catch(()=>null);
   }
   function arrive(){
     const current=run;

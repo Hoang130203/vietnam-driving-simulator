@@ -1,5 +1,11 @@
 ﻿import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+export const vehicleChoices = sqliteTable("vehicle_choices", {
+  previousVehicle: text("previous_vehicle").notNull(),
+  vehicle: text("vehicle").notNull(),
+  trips: integer("trips").notNull(),
+}, (t) => [primaryKey({columns:[t.previousVehicle,t.vehicle]})]);
+
 export const runs = sqliteTable("race_runs", {
   id: text("id").primaryKey(),
   player: text("player").notNull(),

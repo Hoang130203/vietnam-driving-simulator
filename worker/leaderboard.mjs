@@ -2,6 +2,7 @@ import courseLengths from "./course-lengths.js";
 import guidedLengths from "./guided-lengths.js";
 
 const tour = "xuyen-viet";
+const tourVehicles = new Set(["supercar","gt","rally","family-sedan","suv"]);
 const isGuided = route => Object.hasOwn(guidedLengths,route);
 const hour = 3600_000;
 const maxAge = 7 * 24 * hour;
@@ -65,14 +66,23 @@ async function start(request, db, body, now) {
   const address = request.headers.get("cf-connecting-ip");
   const network = address ? await digest("network:" + Math.floor(now / (24 * hour)) + ":" + address) : player;
   const runId = crypto.randomUUID();
-  const [, inserted] = await db.batch([
+  const statements = [
     db.prepare("DELETE FROM race_runs WHERE id IN (SELECT id FROM race_runs WHERE started<? ORDER BY started LIMIT 50)").bind(now-maxAge),
     db.prepare(`INSERT INTO race_runs(id,player,network,route,started)
       SELECT ?,?,?,?,? WHERE
       (SELECT COUNT(*) FROM race_runs WHERE player=? AND started>?)<90 AND
       (SELECT COUNT(*) FROM race_runs WHERE network=? AND started>?)<600`)
       .bind(runId,player,network,body.route,now,player,now-hour,network,now-hour),
-  ]);
+  ];
+  if ((body.route === tour || isGuided(body.route)) && tourVehicles.has(body.vehicle)) {
+    const previous = tourVehicles.has(body.previousVehicle) ? body.previousVehicle : "";
+    // Count only accepted starts. The aggregate contains no run or player identifiers.
+    statements.push(db.prepare(`INSERT INTO vehicle_choices(previous_vehicle,vehicle,trips)
+      SELECT ?,?,1 WHERE EXISTS (SELECT 1 FROM race_runs WHERE id=?)
+      ON CONFLICT(previous_vehicle,vehicle) DO UPDATE SET trips=trips+1`)
+      .bind(previous,body.vehicle,runId));
+  }
+  const [, inserted] = await db.batch(statements);
   if (!inserted.meta.changes) return json({error:"Bạn đã mở nhiều lượt chơi. Hãy thử lại sau."},429,{"Retry-After":"60"});
   return json({runId},201,cookie ? {"Set-Cookie":cookie} : {});
 }

@@ -8,6 +8,7 @@ window.DriveBody={
  },
  // kg, dimensionless normal restitution. Vehicle masses include a nominal occupant.
  mass(body){
+   if(body?.spec?.mass)return body.spec.mass;
    return body?.bike||body?.kind==='scooter'?205:({rally:1260,gt:1570,supercar:1480,van:1900,taxi:1420,rival:1460,person:75}[body?.model||body?.kind]||1450);
  },
  strikeTraffic(actor,hit,event,yaw,attackerX,attackerZ,targetX,targetZ){
@@ -93,7 +94,7 @@ window.DriveBody={
    c.reverseDelay=input.reverse&&forward<.35?c.reverseDelay+dt:0;
    if(input.reverse&&c.reverseDelay>.28&&!input.gas&&forward>-5)drive=-4.4;
    if(forward>=limit&&drive>0)drive=0;
-   const drag=(c.offroad?1.65:.48)+(c.offroad?.013:.0031)*forward*forward+(c.brake?17:0);
+   const drag=(c.offroad?1.65:.48)+(c.offroad?.013:.0031)*forward*forward+(c.brake?(c.spec?.braking??17):0);
    const grade=input.grade||0,gravity=9.81*grade/Math.hypot(1,grade);
    const rolling=forward+(drive-gravity)*dt;
    return rolling-Math.sign(rolling)*Math.min(Math.abs(rolling),drag*dt);
@@ -104,8 +105,8 @@ window.DriveBody={
    const grip=c.offroad?4.2:c.model==='rally'?9:7.2;
    c.steer+=(input.steer-c.steer)*(1-Math.exp(-dt*8));
    const next=this.forwardSpeed(c,input,dt,forward);
-   const wheel=c.steer*.52/(1+Math.abs(next)*.056);
-   const yawRate=Math.max(-1.8,Math.min(1.8,next*Math.tan(wheel)/2.68));
+   const wheel=c.steer*(c.spec?.steerLock??.52)/(1+Math.abs(next)*.056);
+   const yawRate=Math.max(-1.8,Math.min(1.8,next*Math.tan(wheel)/(c.spec?.wheelbase??2.68)));
    const settle=1-Math.exp(-dt*5);
    c.pitch+=(Math.max(-.065,Math.min(.045,(next-forward)/dt*.003))-c.pitch)*settle;
    c.roll+=(Math.max(-.072,Math.min(.072,yawRate*next*.004))-c.roll)*settle;
@@ -122,10 +123,11 @@ window.DriveBody={
    const dx=c.x-other.x,dz=c.z-other.z;
    if(Math.abs(dx)>5.5||Math.abs(dz)>5.5)return null;
    const side=[Math.cos(c.yaw),Math.sin(c.yaw)],front=[side[1],-side[0]];
+   const bodyWidth=c.spec?.width?c.spec.width/2:.91,bodyLength=c.spec?.width?c.spec.length/2:1.98;
    const os=[Math.cos(other.yaw),Math.sin(other.yaw)],of=[os[1],-os[0]];
    const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];let hit;
    for(const a of [side,front,os,of]){
-     const center=dx*a[0]+dz*a[1],depth=.91*Math.abs(dot(side,a))+1.98*Math.abs(dot(front,a))+halfWidth*Math.abs(dot(os,a))+halfLength*Math.abs(dot(of,a))-Math.abs(center);
+     const center=dx*a[0]+dz*a[1],depth=bodyWidth*Math.abs(dot(side,a))+bodyLength*Math.abs(dot(front,a))+halfWidth*Math.abs(dot(os,a))+halfLength*Math.abs(dot(of,a))-Math.abs(center);
      if(depth<=0)return null;
      if(!hit||depth<hit.depth){const s=center<0?-1:1;hit={nx:a[0]*s,nz:a[1]*s,depth};}
    }

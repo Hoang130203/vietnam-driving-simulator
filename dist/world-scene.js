@@ -944,8 +944,10 @@
       breakfast.place(graph,cx,cz,segments,(x,z,r)=>!blocked(x,z,r)&&!contact(x+cx,z+cz,r),driveGround);
       shadowStamp=-1000;
     }
-    const assetPaths={supercar:'streetscape/race-car.glb',gt:'streetscape/gt-coupe.glb',rally:'streetscape/rally-car.glb',sedan:'traffic/hatchback.glb',van:'traffic/kei-van.glb',scooter:'traffic/motor-scooter.glb',taxi:'streetscape/city-taxi.glb',rival:'streetscape/gt-coupe.glb'};
-    const lengths={supercar:4.6,gt:4.65,rally:4.25,sedan:3.95,van:4.05,scooter:1.84,taxi:4.52,rival:4.65};
+    const trafficModels={
+      sedan:{asset:'traffic/hatchback.glb',length:3.95},van:{asset:'traffic/kei-van.glb',length:4.05},
+      scooter:{asset:'traffic/motor-scooter.glb',length:1.84},taxi:{asset:'streetscape/city-taxi.glb',length:4.52},rival:worldGarage.gt
+    };
     const cache=new Map(),colors=[0x446370,0x9f553e,0x9aaba9,0x384c67,0xa7a39c,0x99864e];
     const contactTexture=document.createElement('canvas');contactTexture.width=contactTexture.height=64;
     const ctx=contactTexture.getContext('2d'),grad=ctx.createRadialGradient(32,32,9,32,32,31);
@@ -954,12 +956,15 @@
     const fallbackMats=colors.map(c=>new T.MeshStandardMaterial({color:c,metalness:.5,roughness:.28}));
     const tires=basic(0x212323),windows=new T.MeshStandardMaterial({color:0x35494e,metalness:.48,roughness:.17}),lamps=new T.MeshBasicMaterial({color:0xa83227});
     function loadModel(kind){
-      if(!cache.has(kind))cache.set(kind,TrafficModels.load.loadAsync(assetPaths[kind]).then(({scene:model})=>{
-        const b=new T.Box3().setFromObject(model,true),center=b.getCenter(new T.Vector3()),scale=lengths[kind]/(b.max.z-b.min.z);
+      if(cache.has(kind))return cache.get(kind);
+      const spec=worldGarage[kind]||trafficModels[kind];
+      const request=kind==='family-sedan'?loadWorldFamilySedan(T,spec.asset):TrafficModels.load.loadAsync(spec.asset).then(gltf=>gltf.scene);
+      cache.set(kind,request.then(model=>{
+        const b=new T.Box3().setFromObject(model,true),center=b.getCenter(new T.Vector3()),scale=spec.length/(b.max.z-b.min.z);
         model.scale.multiplyScalar(scale);model.position.set(-center.x*scale,-b.min.y*scale,-center.z*scale);
         model.traverse(n=>{if(n.isMesh){n.castShadow=true;n.receiveShadow=true;}});
         return model;
-      }).catch(()=>null));return cache.get(kind);
+      }).catch(()=>{cache.delete(kind);return null;}));return cache.get(kind);
     }
     const riderGeometry={
       head:new T.SphereGeometry(1,16,10),
@@ -985,7 +990,8 @@
     }
     function makeVehicle(kind,idx,player=false){
       const root=new T.Group(),outside=new T.Group(),low=new T.Group();root.add(outside);outside.add(low);scene.add(root);
-      const len=lengths[kind]||4,wide=kind==='scooter'?.55:1.8,high=kind==='van'?1.65:1.18;
+      const spec=player?worldGarage[kind]:trafficModels[kind];
+      const len=spec.length,wide=spec.width??(kind==='scooter'?.55:1.8),high=spec.height??(kind==='van'?1.65:1.18);
       const shadow=new T.Mesh(unitPlane,contactMat);shadow.rotation.x=-Math.PI/2;shadow.position.y=.013;shadow.scale.set(wide*1.75,len*1.32,1);root.add(shadow);
       const paint=fallbackMats[idx%colors.length];
       function block(x,y,z,w,h,l,m){
@@ -1019,7 +1025,7 @@
             if(/^(paint|paint_body)$/.test(src.name)){
               if(!tints.has(src)){
                 const m=src.clone();
-                if(player)m.color.setHex(kind==='supercar'?0xc63322:kind==='rally'?0x246397:0xb7b4a5);
+                if(player)m.color.setHex(spec.paint);
                 else if(kind==='rival')m.color.setHex(0x3a7790);
                 else if(kind!=='taxi')m.color.setHex(colors[idx%colors.length]);
                 tints.set(src,m);
@@ -1086,22 +1092,26 @@
       streetLife.render(dt,car.sightView?.x??car.x,car.sightView?.z??car.z,driveGround);
       const wake=car.flood?Math.exp(-car.flood.age*.36):car.wading?Math.min(1,Math.abs(car.speed)*.11):0;
       waterSurface.setWake(x,z,car.yaw+(car.speed<0?Math.PI:0),wake,car.flood?.age||0);
-      const kind=['supercar','gt','rally'].includes(car.model)?car.model:'supercar';
+      const kind=car.model;
       if(!player||player.kind!==kind){
         if(player)player.root.visible=false;
-        if(!players.has(kind))players.set(kind,makeVehicle(kind,0,true));player=players.get(kind);player.request();player.root.visible=true;
+        if(!players.has(kind))players.set(kind,makeVehicle(kind,0,true));
+        player=players.get(kind);
+        if(player.modelReady&&!player.detail)player.loading=false;
+        player.request();player.root.visible=true;
       }
       pose(player,car,dt,true);player.outside.visible=!inside;
       player.shadow.visible=!car.flood;for(const shadow of player.axleShadows)shadow.visible=!car.flood;
       player.outside.rotation.set(-(car.pitch||0),0,-(car.roll||0));
       car.y=player.root.position.y-.011;playerRig.position.copy(player.root.position);
+      playerRig.position.y+=car.spec.seatLift??0;
       playerRig.rotation.set(-player.root.rotation.x,-car.yaw,-player.root.rotation.z,'YXZ');
       mirrorRotation.copy(playerRig.quaternion);
       cabinCourse.finish=Math.ceil(totalDriven);cabinCourse.name=car.roadName||'Việt Nam';
       if(cabin)cabin.update(inside,Math.abs(car.speed||0)*3.6,car.steer||0,totalDriven,cabinCourse);
       const closest=(traffic||[]).map(a=>({a,d:(a.x-car.x)**2+(a.z-car.z)**2})).filter(v=>v.d<360*360).sort((a,b)=>a.d-b.d);
       for(const [index,{a,d}] of closest.entries()){
-        const kind=assetPaths[a.kind]?a.kind:'sedan';
+        const kind=Object.hasOwn(trafficModels,a.kind)?a.kind:'sedan';
         let item=trafficItems.get(a.id);
         if(item&&item.kind!==kind){trafficItems.delete(a.id);item.root.visible=false;(pools.get(item.kind)||pools.set(item.kind,[]).get(item.kind)).push(item);item=null;}
         if(!item){item=pools.get(kind)?.pop()||makeVehicle(kind,Math.abs(Number(a.id)||index));trafficItems.set(a.id,item);}

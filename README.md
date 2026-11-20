@@ -16,6 +16,8 @@ Mục **Cung đường nổi tiếng** có sáu chặng đèo dài 3,2 km. Chọ
 
 Các bài tập và điểm số phục vụ luyện tập. Khi chuẩn bị thi thật, hãy đối chiếu với tài liệu của cơ quan sát hạch.
 
+Trong **Xuyên Việt → Tùy chọn → Xe của bạn**, chọn **Sedan 5 chỗ** để lái phố hoặc **SUV 7 chỗ** cho góc nhìn cao hơn. Game nhớ mẫu xe trên trình duyệt và tải model khi được chọn.
+
 ## Chạy trên máy
 
 Cần Git, Python 3 và trình duyệt hỗ trợ WebGL cho các chế độ 3D. Lệnh bên dưới phục vụ trò chơi từ `dist/`. Để gửi điểm hoặc xem bảng xếp hạng chung, mở bản web ở đầu trang.
