@@ -345,14 +345,6 @@ function updateHud(){
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';
  $('turnInfo').textContent=car.flood?'Xe ngập nước · chờ cứu hộ':car.wading?'Đang lội nước':duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
- if(!$('turnInfo').textContent){
-   let closest=null,range=50;
-   for(const p of gfx.streetLife.places){
-     const d=Math.hypot(p.x-car.x,p.z-car.z);
-     if(d<range){closest=p;range=d;}
-   }
-   if(closest)$('turnInfo').textContent=(closest.name||vietnamPlaceTypes[closest.kind].label)+' · '+Math.round(range)+' m';
- }
  drawMini(landmark);
 }
 function traceMapLine(g,points){

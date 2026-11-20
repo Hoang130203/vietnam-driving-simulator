@@ -6,12 +6,9 @@ const vietnamPlaceTypes={
 };
 
 function createWorldStreetLife(T,scene,small,environment,amenities){
-  const signGroup=new T.Group(),walkGroup=new T.Group();
-  signGroup.name='Biển địa điểm OSM';walkGroup.name='Người đi bộ';
-  scene.add(signGroup,walkGroup);
-  const board=new T.PlaneGeometry(3.6,1.2),post=new T.CylinderGeometry(.065,.085,2.6,6);
-  const metal=new T.MeshLambertMaterial({color:0x858a81});
-  const signs=new Map(),walkers=[],models=new Map(),bins=new Map();
+  const walkGroup=new T.Group();
+  walkGroup.name='Người đi bộ';scene.add(walkGroup);
+  const walkers=[],models=new Map(),bins=new Map();
   let graph,places=[],paths=[],originX=0,originZ=0,walkTime=0;
   function localHour(){return (new Date().getUTCHours()+7)%24;}
   function interest(kind,h){
@@ -40,54 +37,6 @@ function createWorldStreetLife(T,scene,small,environment,amenities){
     const main=/^(motorway|trunk|primary)/.test(kind);
     return {walkers,vehicles:Math.round((3+11*density+attraction*4+(main?3:0))*(dark ? .67 : 1)),
       scooter:fast?0:Math.min(.72,.18+density*.37+attraction*.22)};
-  }
-  function makeSign(place){
-    const {label,colour}=vietnamPlaceTypes[place.kind],canvas=document.createElement('canvas');
-    canvas.width=512;canvas.height=168;
-    const ctx=canvas.getContext('2d');ctx.fillStyle=colour;ctx.fillRect(0,0,512,168);
-    ctx.strokeStyle='#eee9d5';ctx.lineWidth=4;ctx.strokeRect(7,7,498,154);
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff9e8';
-    const name=place.name||label,named=name.toLocaleLowerCase('vi')!==label.toLocaleLowerCase('vi');
-    if(named){ctx.font='600 29px "Segoe UI",sans-serif';ctx.fillText(label.toLocaleUpperCase('vi'),256,43);}
-    let size=54;while(size>24){ctx.font='bold '+size+'px "Segoe UI",sans-serif';if(ctx.measureText(name).width<=466)break;size-=2;}
-    ctx.fillText(name,256,named?105:84,466);
-    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
-    const mat=new T.MeshLambertMaterial({map,side:T.DoubleSide});
-    const group=new T.Group(),panel=new T.Mesh(board,mat),support=new T.Mesh(post,metal);
-    support.position.y=1.3;panel.position.set(0,2.85,.08);group.add(panel,support);
-    group.name=name;signGroup.add(group);
-    return {group,mat};
-  }
-  function removeSign(id,item){
-    signGroup.remove(item.group);item.mat.map.dispose();item.mat.dispose();signs.delete(id);
-  }
-  function updateSigns(g,clear,ground){
-    const keep=new Set(),positions=[],nearestByKind=new Map();
-    for(const p of places){
-      if(Math.hypot(p.x-originX,p.z-originZ)>280)break;
-      if(!nearestByKind.has(p.kind))nearestByKind.set(p.kind,p);
-    }
-    const candidates=new Set([...nearestByKind.values(),...places]);
-    for(const p of candidates){
-      if(keep.size>=(small?8:14))break;
-      const near=g.nearest(p.x,p.z,g.nearby(p.x,p.z,105));
-      if(!near||near.error>95**2||near.edge.kind.startsWith('motorway'))continue;
-      const road=g.sample(near),nx=Math.cos(road.yaw),nz=Math.sin(road.yaw);
-      const side=(p.x-road.x)*nx+(p.z-road.z)*nz>=0?1:-1;
-      const w=worldRoadHalfWidth(near.edge);
-      // Keep the mapped pin on the minimap. Place its name board on the same
-      // side of the street in a free patch of verge near the entrance.
-      let position;
-      for(const along of [0,3,-3,6,-6]){
-        const x=road.x+side*nx*(w+2.25)+along*nz,z=road.z+side*nz*(w+2.25)-along*nx;
-        if(clear(x,z,.45)&&!positions.some(q=>Math.hypot(x-q.x,z-q.z)<5)){position={x,z};break;}
-      }
-      if(!position)continue;
-      let item=signs.get(p.id);if(!item){item=makeSign(p);signs.set(p.id,item);}
-      item.group.position.set(position.x-originX,ground(position.x,position.z),position.z-originZ);
-      item.group.rotation.y=Math.atan2(-side*nx,-side*nz);keep.add(p.id);positions.push(position);
-    }
-    for(const [id,item] of signs)if(!keep.has(id))removeSign(id,item);
   }
   function updatePaths(g,segments,clear){
     const candidates=[],hour=localHour();
@@ -122,7 +71,7 @@ function createWorldStreetLife(T,scene,small,environment,amenities){
       if(valid)paths.push(p);
     }
   }
-  function rebuild(g,x,z,segments,clear,ground){
+  function rebuild(g,x,z,segments,clear){
     graph=g;originX=x;originZ=z;
     places=amenities.nearby(g,x,z,500).filter(p=>vietnamPlaceTypes[p.kind]).sort((a,b)=>
       Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z));
@@ -131,7 +80,7 @@ function createWorldStreetLife(T,scene,small,environment,amenities){
       const key=Math.floor(p.x/128)+','+Math.floor(p.z/128);
       if(!bins.has(key))bins.set(key,[]);bins.get(key).push(p);
     }
-    updateSigns(g,clear,ground);updatePaths(g,segments,clear);
+    updatePaths(g,segments,clear);
   }
   function walker(i){
     if(walkers[i])return walkers[i];

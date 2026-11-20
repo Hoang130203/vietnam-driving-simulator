@@ -87,13 +87,15 @@ function createWorldSigns(T, scene, small) {
   const triangle = new T.Shape();
   triangle.moveTo(0,.47); triangle.lineTo(-.49,-.44); triangle.lineTo(.49,-.44); triangle.closePath();
   const triangularBack = new T.ShapeGeometry(triangle);
+  const roundBack = new T.CircleGeometry(.49, 48);
 
   function faceFor(sign, used) {
     const key = JSON.stringify(sign.rows || sign.type);
     used.add(key);
     if (faces.has(key)) return faces.get(key);
     const guide = Boolean(sign.rows), canvas = document.createElement('canvas');
-    canvas.width = guide ? 768 : 192; canvas.height = guide ? 104 * sign.rows.length + 28 : 176;
+    canvas.width = guide ? 768 : 192;
+    canvas.height = guide ? 104 * sign.rows.length + 28 : sign.type === 'one-way' || sign.type === 'no-entry' ? 192 : 176;
     const g = canvas.getContext('2d');
     g.lineJoin = g.lineCap = 'round';
     if (guide) {
@@ -110,6 +112,15 @@ function createWorldSigns(T, scene, small) {
           g.fillText(distance, 730, y, 140); g.textAlign = 'left';
         }
       });
+    } else if (sign.type === 'no-entry') {
+      g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(96,96,94,0,2*Math.PI); g.fill();
+      g.fillStyle = '#c92727'; g.beginPath(); g.arc(96,96,91,0,2*Math.PI); g.fill();
+      g.fillStyle = '#fffaf0'; g.fillRect(32,79,128,34);
+    } else if (sign.type === 'one-way') {
+      g.fillStyle = '#fffaf0'; g.fillRect(0,0,192,192);
+      g.fillStyle = '#155395'; g.fillRect(4,4,184,184);
+      g.fillStyle = '#fffaf0'; g.beginPath(); g.moveTo(96,20); g.lineTo(149,82);
+      g.lineTo(117,82); g.lineTo(117,166); g.lineTo(75,166); g.lineTo(75,82); g.lineTo(43,82); g.closePath(); g.fill();
     } else {
       g.beginPath(); g.moveTo(96, 12); g.lineTo(182, 160); g.lineTo(10, 160); g.closePath();
       g.fillStyle = '#ffcd38'; g.fill(); g.strokeStyle = '#c32927'; g.lineWidth = 13; g.stroke();
@@ -145,6 +156,16 @@ function createWorldSigns(T, scene, small) {
       if (distance < 470) candidates.push({at, type, rows, distance});
     }
     for (const edge of edges) {
+      if (edge.oneway && edge.length >= 10) {
+        const inset = Math.min(12, edge.length * .35);
+        for (const dir of [1, -1]) {
+          const node = dir === 1 ? edge.start : edge.end;
+          const links = (graph.nodes.get(node) || []).filter(other => other !== edge);
+          // An OSM way can be split mid-block. Sign actual entrances from other streets.
+          const entrance = links.some(other => !other.oneway || (links.length > 1 && other.end === node));
+          if (entrance) candidate(edge, dir, dir === 1 ? inset : edge.length-inset, dir === 1 ? 'one-way' : 'no-entry');
+        }
+      }
       if (edge.length < 19) continue;
       for (const dir of edge.oneway ? [1] : [1, -1]) {
         const station = d => dir === 1 ? d : edge.length - d;
@@ -179,18 +200,22 @@ function createWorldSigns(T, scene, small) {
         }
       }
     }
-    candidates.sort((a, b) => a.distance - b.distance || a.at.edge.id - b.at.edge.id);
+    const rank = sign => sign.distance + (sign.rows ? 40 : 0);
+    candidates.sort((a, b) => rank(a) - rank(b) || a.at.edge.id - b.at.edge.id);
     for (const sign of candidates) {
       if (placed.length >= (small ? 19 : 32)) break;
       const {at, rows} = sign, width = rows ? 4.45 : 1.22;
-      const height = rows ? width * (104 * rows.length + 28) / 768 : 1.12;
+      const square = sign.type === 'one-way', round = sign.type === 'no-entry';
+      const height = rows ? width * (104 * rows.length + 28) / 768 : (square || round ? width : 1.12);
       const offset = worldRoadHalfWidth(at.edge) + width / 2;
       let p;
       for (const along of [0, -5, 5, -10]) {
         const s = at.s + along * at.dir;
         if (s < 2 || s > at.edge.length - 2) continue;
         const q = graph.sample({...at, s}, offset + 1.1);
-        if (clear(q.x, q.z, width / 2) && !placed.some(a => Math.hypot(q.x - a.x, q.z - a.z) < 19)) {p = q; break;}
+        if (!clear(q.x, q.z, width / 2)) continue;
+        const crowded = placed.some(a => Math.hypot(q.x-a.x, q.z-a.z) < (Math.cos(a.yaw-q.yaw) > .7 ? 19 : 4));
+        if (!crowded) {p = q; break;}
       }
       if (!p) continue;
       placed.push(p);
@@ -200,7 +225,7 @@ function createWorldSigns(T, scene, small) {
       face.position.set(x, y, z); face.rotation.y = yaw; face.scale.set(width, height, 1);
       face.name = rows ? rows.map(r => r.arrow + ' ' + r.label).join(' / ') : sign.type;
       group.add(face);
-      const back = new T.Mesh(rows ? plane : triangularBack, backMetal);
+      const back = new T.Mesh(rows || square ? plane : round ? roundBack : triangularBack, backMetal);
       back.position.copy(face.position); back.rotation.copy(face.rotation); back.scale.copy(face.scale);
       back.translateZ(-.025); group.add(back);
       for (const lateral of rows ? [-1.28, 1.28] : [0]) {

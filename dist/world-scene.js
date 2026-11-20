@@ -885,7 +885,7 @@
         m.castShadow=true;m.receiveShadow=true;roadGroup.add(m);
       }
       rebuildSigns(graph,edges,cx,cz,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r),driveGround,registerObstacle);
-      streetLife.rebuild(graph,cx,cz,segments,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r),driveGround);
+      streetLife.rebuild(graph,cx,cz,segments,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r));
       shadowStamp=-1000;
     }
     const assetPaths={supercar:'streetscape/race-car.glb',gt:'streetscape/gt-coupe.glb',rally:'streetscape/rally-car.glb',sedan:'traffic/hatchback.glb',van:'traffic/kei-van.glb',scooter:'traffic/motor-scooter.glb',taxi:'streetscape/city-taxi.glb',rival:'streetscape/gt-coupe.glb'};

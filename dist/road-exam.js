@@ -509,13 +509,17 @@ if(!route.stage){
   scatter('box',0x627779,shutter.x,floor+1.43,shutter.z,4.3,2.86,.12,-yard.h);
   for(let i=1;i<=8;i++)scatter('box',0x768887,shutter.x,floor+i*.31,shutter.z,4.32,.032,.15,-yard.h);
 }
+const signMetal=new T.MeshLambertMaterial({color:0x898e89});
 function board(d,l,text,bg='#235642',w=5,mount=3){
   const p=at(d,l),c=document.createElement('canvas');c.width=768;c.height=192;const g=c.getContext('2d');
   g.fillStyle=bg;g.fillRect(0,0,c.width,c.height);g.strokeStyle='#fff5cb';g.lineWidth=7;g.strokeRect(7,7,754,178);
   g.fillStyle='#fff';g.font='bold 76px Arial';g.textAlign='center';g.fillText(text,384,124,725);
   const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
   const base=mount===3?renderedGround(p.x,p.z):p.y;
-  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,base+mount,p.z);face.rotation.y=-p.h;scene.add(face);
+  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex}));
+  const back=new T.Mesh(face.geometry,signMetal);
+  back.rotation.y=Math.PI;back.position.z=-.03;face.add(back);
+  face.position.set(p.x,base+mount,p.z);face.rotation.y=-p.h;face.translateZ(.10);scene.add(face);
   if(mount===3)scatter('pole',0x797c74,p.x,base+1.48,p.z,.12,3.04,.12);
 }
 board(36,7,route.name.toLocaleUpperCase('vi'));if(!route.stage)board(route.bridge[0]-17,7.9,route.near);if(!route.stage)board(route.junction-42,8,route.sign>0?'BẾN CHỢ  →':'←  NÔNG TRƯỜNG');

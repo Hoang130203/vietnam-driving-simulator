@@ -32,7 +32,7 @@ Trong Xuyên Việt, mở **Danh lam 3D** ở mục điểm xuất phát để c
 
 Trong bản đồ điểm xuất phát, gõ tên đường, số nhà hoặc địa danh, có dấu hoặc không dấu. Thêm tên tỉnh hoặc quận để phân biệt những nơi trùng tên. Thử **48 Hàng Ngang, Hà Nội**, **QL21** hoặc **cây xăng gần đây**. Khi chọn kết quả, bản đồ đánh dấu vị trí để bạn bắt đầu lái. [Tìm Ba Sao trên trang game](https://driving.tang-vu.chatgpt.site/?search=Ba%20Sao) · [Nguồn dữ liệu tìm kiếm](dist/vn-search/CREDITS.txt).
 
-Chọn **Ba Sao · Quốc lộ 21** rồi lái theo đường Điện Biên Phủ về phía Khả Phong để đi từ khu dân cư ra chân núi. Khi chạy trên máy, có thể [mở ngay Ba Sao](http://127.0.0.1:8000/?drive=ba-sao). Gần chợ, trường học, trạm xăng, quán cà phê và bệnh viện đã được lập bản đồ, biển ven đường và bản đồ nhỏ giúp nhận ra địa điểm.
+Chọn **Ba Sao · Quốc lộ 21** rồi lái theo đường Điện Biên Phủ về phía Khả Phong để đi từ khu dân cư ra chân núi. Khi chạy trên máy, có thể [mở ngay Ba Sao](http://127.0.0.1:8000/?drive=ba-sao). Biển giao thông báo trước khúc cua, giao lộ và cho biết chiều được phép đi. Chợ, trường học, trạm xăng, quán cà phê và bệnh viện có ký hiệu trên bản đồ.
 
 Game tải cảnh theo vị trí xe. Dữ liệu mặt bằng nhà OSM trên toàn quốc được đóng gói sẵn. Google Open Buildings bổ sung công trình từ ảnh vệ tinh qua mạng, với dữ liệu lưu sẵn quanh 10 thành phố, Tam Chúc và hành lang Ba Sao. Game ưu tiên chiều cao hoặc số tầng OSM, sau đó đến chiều cao vệ tinh ước tính. Mặt tiền và mái hiên được dựng trong game. [Nguồn nhà OSM](dist/vn-osm-buildings/CREDITS.txt) · [Nguồn nhà và chiều cao vệ tinh](dist/vn-structures/CREDITS.txt).
 

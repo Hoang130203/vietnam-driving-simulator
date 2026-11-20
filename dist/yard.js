@@ -104,6 +104,7 @@ function ribbon(path,width,offset,height,material){
  g.setAttribute('uv',new Y.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
  scene.add(new Y.Mesh(g,material));
 }
+const signPlate=new Y.PlaneGeometry(4.3,1.26);
 function sign(st,offset,text,color='#215f54'){
  const p=point(st,offset),ground=altitude(st);
  localBlock(st,offset,1.45,.09,2.9,.09,0x676d69);
@@ -112,8 +113,10 @@ function sign(st,offset,text,color='#215f54'){
  ctx.strokeStyle='white';ctx.lineWidth=5;ctx.strokeRect(6,6,500,138);
  ctx.font='bold 48px Arial';ctx.fillStyle='white';ctx.textAlign='center';ctx.fillText(text,256,92,477);
  const tex=new Y.CanvasTexture(c);tex.colorSpace=Y.SRGBColorSpace;
- const board=new Y.Mesh(new Y.PlaneGeometry(4.3,1.26),new Y.MeshBasicMaterial({map:tex,side:Y.DoubleSide}));
- board.position.set(p.x,ground+2.65,-p.y);board.rotation.y=-p.h;scene.add(board);
+ const board=new Y.Mesh(signPlate,new Y.MeshBasicMaterial({map:tex}));
+ const back=new Y.Mesh(signPlate,mat(0x898e89));
+ back.rotation.y=Math.PI;back.position.z=-.03;board.add(back);
+ board.position.set(p.x,ground+2.65,-p.y);board.rotation.y=-p.h;board.translateZ(.085);scene.add(board);
 }
 const yellow=mat(0xffd14d), white=mat(0xf2f1df);
 yellow.side=white.side=Y.DoubleSide;
