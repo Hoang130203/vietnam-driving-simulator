@@ -8,6 +8,22 @@
     return namedPass(edge)?Math.min(w,3.85):w;
   };
 
+  // Use a geographic grid so revisiting the same place from another spawn keeps the same trees.
+  function forestPlots(graph,cx,cz,visit){
+    const pitch=12,metresLon=105000,metresLat=110900,radius=600;
+    const [lon,lat]=graph.geo(cx,cz);
+    const east=lon*metresLon,south=-lat*metresLat,rx=radius*metresLon/graph.mx;
+    for(let ix=Math.floor((east-rx)/pitch);ix<=Math.floor((east+rx)/pitch);ix++){
+      for(let iz=Math.floor((south-radius)/pitch);iz<=Math.floor((south+radius)/pitch);iz++){
+        let seed=(Math.imul(ix,73856093)^Math.imul(iz,19349663))>>>0;
+        const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+        const gx=(ix+rand())*pitch,gz=(iz+rand())*pitch;
+        const p=graph.point(gx/metresLon,-gz/metresLat);
+        if(Math.hypot(p.x-cx,p.z-cz)<=radius)visit(ix,iz,p.x,p.z,gx,gz,rand);
+      }
+    }
+  }
+
   window.createWorldScene=function(canvas){
     const T=window.THREE,scene=new T.Scene();
     const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -215,7 +231,7 @@
       const natural=localGround;
       const complexCenter=graph?.point(105.7956,20.5528);
       const innerPrecinct=complexCenter&&Math.hypot(complexCenter.x-cx,complexCenter.z-cz)<1500;
-      const cover=innerPrecinct?(window.tamChucGroundCover||[]).map(([kind,coords])=>{
+      const cover=complexCenter&&Math.hypot(complexCenter.x-cx,complexCenter.z-cz)<2200?(window.tamChucGroundCover||[]).map(([kind,coords])=>{
         const points=[];
         for(let i=0;i<coords.length;i+=2){
           const p=graph.point(105.79+coords[i]/1e6,20.54+coords[i+1]/1e6);
@@ -235,8 +251,7 @@
           return inside;
         });
       }
-      const passRoad=edges.some(namedPass);
-      wooded=passRoad||relief.altitude(cx,cz)>280;
+
       const segments=[],cells=new Map(),roadData=[],landData=[],bankData=[],railVerts=[],railIndices=[],cutVerts=[],cutUv=[],cutIndices=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
       obstacleCells=new Map();
       roadsideImpact.rebase(cx,cz);
@@ -413,7 +428,7 @@
           const mx=graph?111320*Math.cos(latitude*Math.PI/180)/graph.mx:1;
           const sourceLength=Math.hypot(dx*mx,dz);
           const s={ax,az,bx,bz,fx,fz,nx,nz,len:length,sourceLength,w:width,kind:e.kind,oneway:e.oneway,rank:perp,seed};
-          s.graded=namedPass(e)||wooded&&!district.builtUp(cx+(ax+bx)*.5,cz+(az+bz)*.5)&&!['residential','service','living_street'].includes(e.kind);
+          s.graded=namedPass(e)||relief.altitude((a.x+b.x)*.5,(a.z+b.z)*.5)>280&&!district.builtUp(cx+(ax+bx)*.5,cz+(az+bz)*.5)&&!['residential','service','living_street'].includes(e.kind);
           if(s.graded){
             const n=Math.max(1,Math.ceil(length/12));s.interval=length/n;s.crown=[];
             for(let j=0;j<=n;j++){
@@ -445,6 +460,7 @@
         s.crown[0]=crestNodes.get(nodeKey(s.ax,s.az));
         s.crown[s.crown.length-1]=crestNodes.get(nodeKey(s.bx,s.bz));
       }
+      wooded=segments.some(s=>s.graded);
       roadway=!wooded?relief.ground:(x,z)=>{
         const lx=x-cx,lz=z-cz,naturalY=natural(lx,lz);
         let weightSum=0,formationSum=0,influence=0;
@@ -652,35 +668,32 @@
           for(const angle of [.35,1.92])instance('tree',unitPlane,x,h*.49,z,h*.94,h,1,angle,0xe0d5b4,tree);
         }
       }
-      if(wooded||innerPrecinct){
-        // World-aligned, seeded stands keep their identity as streamed road tiles move.
-        // Dense stands only grow in gaps between mapped roads, water and settlements.
-        const pitch=innerPrecinct?12:20,radius=innerPrecinct?700:460;
-        for(let ix=Math.floor((cx-radius)/pitch);ix<=Math.ceil((cx+radius)/pitch);ix++){
-          for(let iz=Math.floor((cz-radius)/pitch);iz<=Math.ceil((cz+radius)/pitch);iz++){
-            let seed=(Math.imul(ix,73856093)^Math.imul(iz,19349663))>>>0;
-            const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-            const wx=(ix+rand())*pitch,wz=(iz+rand())*pitch;
-            if(!wooded&&!inGrove(wx-cx,wz-cz)&&relief.altitude(wx,wz)<63)continue;
-            const openness=.46+.19*Math.sin(wx*.013+wz*.004)+.18*Math.sin(wz*.019-wx*.005);
-            if(rand()>openness+.24||district.builtUp(wx,wz)||onApproach(wx,wz))continue;
+      if(graph){
+        forestPlots(graph,cx,cz,(ix,iz,wx,wz,gx,gz,rand)=>{
+            const precinct=Math.hypot(wx-complexCenter.x,wz-complexCenter.z)<1500;
+            if(!precinct&&rand()>.36)return;
+            if(!(precinct&&inGrove(wx-cx,wz-cz))&&relief.altitude(wx,wz)<(precinct?63:280))return;
+            const openness=.46+.19*Math.sin(gx*.013+gz*.004)+.18*Math.sin(gz*.019-gx*.005);
+            if(rand()>openness+.24||district.builtUp(wx,wz)||onApproach(wx,wz))return;
             const lx=wx-cx,lz=wz-cz,dist=Math.hypot(lx,lz);
-            if(dist>radius||blocked(lx,lz,5.5)||obstacleCells.has(obstacleKey(lx,lz)))continue;
+            if(blocked(lx,lz,5.5))return;
+            const occupants=obstacleCells.get(obstacleKey(lx,lz))||[];
+            if(occupants.some(o=>!String(o.id).startsWith('stand:')&&
+              Math.hypot(lx-o.x,lz-o.z)<(o.radius||Math.hypot(o.w,o.d))+2))return;
             const altitude=relief.altitude(wx,wz),cool=altitude>650;
             const pine=cool&&rand()<.73;
             const h=(pine?10:6.7)+rand()*(pine?10:7.1),w=h*(pine?.5:.82)*(.82+rand()*.32);
             const angle=rand()*Math.PI,tint=tone.setHSL(.24+rand()*.10,.08+rand()*.14,.66+rand()*.18).getHex();
             const id='stand:'+ix+':'+iz;
             const tree=registerObstacle({id,kind:'tree',x:lx,z:lz,radius:Math.max(.16,h*.02),height:h,parts:[]});
-            const planes=dist>275&&small?1:2;
+            const planes=2;
             for(let k=0;k<planes;k++)instance(pine?'pine':'tree',unitPlane,lx,h*.485,lz,w,h,1,angle+k*Math.PI/2,tint,tree);
-            if(dist>210||rand()>.76)continue;
+            if(dist>210||rand()>.76)return;
             for(let k=0;k<3;k++){
               const fx=lx+(rand()-.5)*12,fz=lz+(rand()-.5)*12,fh=.6+rand()*1.0;
               if(!blocked(fx,fz,1.5))instance('fern',unitPlane,fx,fh*.47,fz,fh*2.24,fh,1,rand()*Math.PI,tint);
             }
-          }
-        }
+        });
       }
       if(cutVerts.length){
         const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(cutVerts,3));
@@ -1015,7 +1028,7 @@
       sun.target.position.set(Math.round(x+sin*17),car.y,Math.round(z-cos*17));sun.position.copy(sun.target.position).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       const now=performance.now();if(now-shadowStamp>(small?115:66)){renderer.shadowMap.needsUpdate=true;shadowStamp=now;}
       const viewpoint=car.sightView||car;
-      land.material=wooded||car.region==='highlands'?upland:meadow;relief.update(viewpoint.x,viewpoint.z);
+      land.material=car.region==='highlands'?upland:meadow;relief.update(viewpoint.x,viewpoint.z);
       if(car.showroom&&!inside&&!car.opening){
         const portrait=camera.aspect<.85;
         eye.set(portrait?-5.6:-4.3,portrait?1.9:1.6,portrait?8.0:5.5);
