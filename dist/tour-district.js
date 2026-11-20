@@ -19,6 +19,7 @@ function createTourDistrict(T,scene,plaster){
   };
   const palette=[0xf3e1c6,0xd3d9cc,0xe9d0bb,0xf0d9a7,0xb9c6c9,0xeae6db].map(v=>new T.Color(v));
   const roofs=[0x9f6757,0xa09a8e,0x798d92,0xaca69c].map(v=>new T.Color(v));
+  const concrete=new T.Color(0x989186);
   let indexPromise,available,grid,scale,loadedGraph,signature,loaded=[],cells=new Map(),serial=0;
   const cache=new Map(),blocks=new Map(),cell=32;
   async function load(graph,x,z){
@@ -78,7 +79,7 @@ function createTourDistrict(T,scene,plaster){
     function quad(b,a,c,lo,hi,tint,count,floors){
       const span=a.distanceTo(c);
       for(const [p,y,u] of [[a,lo,0],[c,lo,span],[a,hi,0],[c,lo,span],[c,hi,span],[a,hi,0]]){
-        vertex(b,p.x,y,p.y,u/5,y/4,tint);b.bays.push(count?u/span*count:-1,y/hi*floors);
+        vertex(b,p.x,y,p.y,u/5,y/4,tint);b.bays.push(count?u/span*count:-1,Math.max(0,y)/hi*floors);
       }
     }
     for(const [id,kind,tagH,levels,raw,shape] of loaded){
@@ -90,7 +91,17 @@ function createTourDistrict(T,scene,plaster){
       for(const p of outer){minX=Math.min(minX,p.x);minZ=Math.min(minZ,p.y);maxX=Math.max(maxX,p.x);maxZ=Math.max(maxZ,p.y);}
       const x=(minX+maxX)/2,z=(minZ+maxZ)/2;
       if(Math.hypot(x-cx,z-cz)>620+Math.hypot(maxX-minX,maxZ-minZ)/2||landmarks?.reserved(x,z,1))continue;
+      // Keep floors level, and seat the plinth against the terrain around the
+      // entire footprint, including courtyard edges and long downhill walls.
       baseY=ground(x,z);
+      const profiles=rings.map(ring=>ring.map((a,j)=>{
+        const c=ring[(j+1)%ring.length],steps=Math.max(1,Math.ceil(a.distanceTo(c)/12)),samples=[];
+        for(let k=0;k<steps;k++){
+          const t=k/steps,px=a.x+(c.x-a.x)*t,pz=a.y+(c.y-a.y)*t,h=ground(px,pz);
+          baseY=Math.max(baseY,h);samples.push({x:px,z:pz,h});
+        }
+        return samples;
+      }));
       const seed=Math.abs(parseInt(id.slice(1),10)||0),warehouse=/warehouse|industrial|shed|garage|roof|barn/.test(kind);
       const h=Math.min(460,Math.max(2,tagH||levels*3.3||(warehouse?5.4:3.7+seed%3*3))),b={id,h,rings,minX,minZ,maxX,maxZ};
       const block=Math.floor(x/70)+','+Math.floor(z/70);blocks.set(block,(blocks.get(block)||0)+1);
@@ -114,11 +125,26 @@ function createTourDistrict(T,scene,plaster){
           const p=flat[index];vertex(batches[1],p.x,h,p.y,0,0,roofColor);
         }
       }
-      for(const ring of rings)for(let j=0;j<ring.length;j++){
+      for(let ri=0;ri<rings.length;ri++)for(let j=0;j<rings[ri].length;j++){
+        const ring=rings[ri],profile=profiles[ri];
         const a=ring[j],c=ring[(j+1)%ring.length],length=a.distanceTo(c);
         if(length<.2)continue;
         const count=warehouse?0:Math.floor(length/2.85),floors=Math.max(1,Math.round(h/3.3));
-        quad(batches[0],a,c,0,eave,base,count,floors);
+        const samples=profile[j],next=profile[(j+1)%ring.length][0],wallBatch=batches[0];
+        // On nearly level blocks the wall itself can reach beneath the grass.
+        if(samples.every(p=>baseY-p.h<.16)&&baseY-next.h<.16){
+          quad(wallBatch,a,c,-.39,eave,base,count,floors);continue;
+        }
+        quad(wallBatch,a,c,0,eave,base,count,floors);
+        for(let k=0;k<samples.length;k++){
+          const l=samples[k],r=samples[k+1]||profile[(j+1)%ring.length][0];
+          // The grass mesh sits 17 cm below the nominal ground.
+          const lowL=l.h-baseY-.22,lowR=r.h-baseY-.22;
+          for(const [p,y] of [[l,lowL],[r,lowR],[l,0],[r,lowR],[r,0],[l,0]]){
+            vertex(wallBatch,p.x,y,p.z,Math.hypot(p.x-a.x,p.z-a.y)/5,y/4,concrete);
+            wallBatch.bays.push(-1,0);
+          }
+        }
       }
     }
     for(const b of batches){

@@ -1,0 +1,75 @@
+﻿@font-face {
+  font-family: "Barlow Condensed";
+  src: url("ui-font/barlow-condensed-bold-italic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+.arcade {--paper:#f5f2e8;--ink:#152c29;--lime:#d2f477;--panel:clamp(345px,34vw,500px)}
+.arcade[data-phase=grid] header {
+  height:60px;padding:0 max(16px,3vw);background:var(--ink);color:white;
+  display:flex;gap:20px;border-bottom:1px solid #ffffff28
+}
+.arcade .brand {display:flex;align-items:center;gap:.22em;white-space:nowrap}
+.arcade .brand:before {content:"";width:20px;height:18px;transform:skew(-15deg);background:repeating-linear-gradient(90deg,var(--lime) 0 4px,transparent 4px 7px)}
+.arcade .brand b {color:var(--lime)}
+.arcade header nav {display:none}
+.arcade[data-phase=grid] header nav {display:flex;align-self:stretch;align-items:stretch;gap:clamp(12px,2vw,30px)}
+.arcade header nav a {display:grid;align-items:center;color:#dbe1d9;text-decoration:none;font-size:14px;font-weight:650;border-bottom:3px solid transparent;padding-top:3px}
+.arcade header nav [aria-current] {color:var(--lime);border-color:var(--lime)}
+.arcade[data-phase=grid] #world {inset:60px 0 0 var(--panel);width:calc(100% - var(--panel));height:calc(100% - 60px)}
+.arcade .grid {inset:60px auto 0 0;width:var(--panel);display:flex;align-items:flex-start;padding:clamp(20px,3vw,48px);color:var(--ink);background:var(--paper);color-scheme:light}
+.arcade .gridcopy {display:block;width:100%;height:auto;max-width:none;min-height:0;margin:auto 0}
+.arcade .gridcopy>small {color:#46665c;text-transform:uppercase;font-size:12px;letter-spacing:.16em}
+.arcade .gridcopy h1 {font:italic 700 clamp(50px,5.8vw,90px)/.94 "Barlow Condensed",Impact,sans-serif;letter-spacing:-.025em;text-shadow:none;margin:6px 0 10px}
+.arcade .gridcopy>p {font-size:15px;line-height:1.45;margin:0 0 20px;padding:0;color:#435a50;max-width:32ch}
+.arcade .launchpanel {display:grid;gap:7px;width:100%}
+.arcade .launchpanel label {font-size:13px;font-weight:700;color:#345046;margin:5px 0 0}
+.arcade .launchpanel select,.arcade .launchpanel #openMap,.arcade .launchpanel #challenge {
+ width:100%;min-width:0;color:var(--ink);background:#fffdf5;border:1px solid #98aaa0;border-radius:6px;padding:11px 12px;min-height:44px
+}
+.arcade .launchpanel #openMap,.fieldlabel {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.arcade #openMap span {position:static;color:#436955;font-size:12px;white-space:nowrap}
+.arcade .launchpanel a,.arcade .guide {color:#345746;font-size:13px;text-underline-offset:3px}
+.arcade .launchpanel a {margin:0;align-self:center;font-weight:650}
+.arcade .launchpanel .hot {width:100%;background:var(--ink);color:var(--lime);border:0;border-radius:6px;padding:14px 16px;margin:8px 0 0;text-align:left}
+.arcade .launchpanel .hot:after {content:"→";float:right}
+.arcade .launchpanel #loadStatus {color:#634c22}
+.arcade .launchpanel #loadStatus:empty,.arcade #freePass[href="./"] {display:none}
+.arcade .guide {margin-top:15px;border-top:1px solid #c5cec2}
+.arcade .guide summary {cursor:pointer;font-weight:650;padding:12px 0}
+.arcade .guide p {font-size:14px;line-height:1.5;margin:0}
+.arcade #trip {font-size:12px;color:#b4c9bd}
+.atlasSwitch {display:none}
+@media (max-width:650px) and (orientation:portrait) {
+ .arcade[data-phase=grid] {--preview:clamp(110px,23dvh,250px)}
+ .arcade[data-phase=grid] header {height:88px;padding:4px 14px 0;flex-wrap:wrap;gap:0;align-content:space-between}
+ .arcade[data-phase=grid] header nav {order:3;width:100%;justify-content:space-around;height:40px}
+ .arcade[data-phase=grid] #world {inset:88px 0 auto;width:100%;height:var(--preview)}
+ .arcade .grid {inset:calc(88px + var(--preview)) 0 0;width:auto;padding:18px max(20px,var(--left)) 36px}
+ .arcade .gridcopy {margin:0}
+ .arcade .gridcopy h1 {font-size:48px}
+ .arcade .gridcopy>p {margin-bottom:8px;max-width:none}
+ .atlasSwitch {display:flex;gap:5px;margin:6px 0 12px}
+ .atlasSwitch button {flex:1}
+ .atlasSwitch [aria-pressed=true] {color:#122b26;background:var(--lime)}
+ .arcade #atlas .atlasCols {display:block}
+ #atlas[data-view=list] #country,#atlas[data-view=map] .atlasBrowse {display:none}
+ #atlas[data-view=map] #country {height:42dvh;width:100%;min-height:120px}
+ #atlas #places {max-height:27dvh}
+}
+@media (orientation:landscape) and (max-height:590px) {
+ .arcade[data-phase=grid] header {height:46px}
+ .arcade[data-phase=grid] #world {top:46px;height:calc(100% - 46px)}
+ .arcade .grid {top:46px;padding:14px 20px 28px}
+ .arcade .gridcopy {max-width:none;margin:0}
+ .arcade .gridcopy h1 {font-size:44px}
+ .arcade .gridcopy>p {margin:4px 0 8px}
+}
+@media (orientation:landscape) and (max-height:440px) {
+ .arcade .gridcopy>small,.arcade .gridcopy>p {display:none}
+ .arcade .gridcopy h1 {font-size:36px;margin-bottom:7px}
+ .arcade .launchpanel {gap:3px}
+ .arcade .launchpanel label {margin:0}
+ .arcade .launchpanel .hot {margin-top:5px}
+}

@@ -111,7 +111,7 @@ renderer.shadowMap.autoUpdate=false;
 sun.shadow.mapSize.set(shadowSize,shadowSize);Object.assign(sun.shadow.camera,{left:-43,right:43,top:43,bottom:-43,near:1,far:170});sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.normalBias=.025;sun.shadow.bias=-.00022;
 const camera=new T.PerspectiveCamera(62,1,.08,3300);
-const geom={box:new T.BoxGeometry(1,1,1),leaf:new T.PlaneGeometry(1,1),roof:new T.ConeGeometry(1,1,4),pole:new T.CylinderGeometry(.5,.5,1,8)};
+const geom={box:new T.BoxGeometry(1,1,1),leaf:new T.PlaneGeometry(1,1),houseRoof:new T.ConeGeometry(Math.SQRT1_2,1,4).rotateY(Math.PI/4),pole:new T.CylinderGeometry(.5,.5,1,8)};
 const batches=new Map(),temp=new T.Object3D();
 function scatter(kind,color,x,y,z,w,h,l,angle=0,pitch=0){
   const key=kind+color;let batch=batches.get(key);
@@ -127,7 +127,8 @@ function ribbon(left,right,color,raise,roadMaterial,dashed=false){
   const verts=[],uv=[],indices=[];
   for(let i=0;i<points.length;i++){
     for(const [edge,u] of [[left,0],[right,1]]){const p=at(i*step,edge);verts.push(p.x,p.y+raise,p.z);uv.push(u,i*step/9);}
-    if(i&&(!dashed||i%3===1)){const n=i*2;indices.push(n-2,n-1,n,n-1,n+1,n);}
+    const branchOpening=!route.stage&&Math.abs(right-left)<.12&&Math.sign(left)===-route.sign&&Math.abs((i-.5)*step-route.junction)<7;
+    if(i&&!branchOpening&&(!dashed||i%3===1)){const n=i*2;indices.push(n-2,n-1,n,n-1,n+1,n);}
   }
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
   const material=roadMaterial||new T.MeshLambertMaterial({color,side:T.DoubleSide});
@@ -204,7 +205,7 @@ if(mountainField){
   scene.fog.density=.00019;camera.far=22000;camera.updateProjectionMatrix();
 }
 const waterLevel=river?-3:height((bridgeStart+bridgeEnd)/2)-8;
-function surface(x,z,n){
+function naturalSurface(x,z,n){
   const a=n.dist,d=n.d;
   let y;
   if(mountainField){
@@ -231,6 +232,37 @@ function surface(x,z,n){
   return T.MathUtils.lerp(y,waterLevel-2,waterBlend);
 }
 function besideWater(d){return !route.stage&&(river||Math.abs(d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.8);}
+const junction=at(route.junction),branchSide=-route.sign,branchLength=64;
+function localPoint(p,l,d){
+  const c=Math.cos(p.h),s=Math.sin(p.h);
+  return {x:p.x+l*c+d*s,z:p.z+l*s-d*c};
+}
+function branchCurve(u){return u*(.27+.002*u);}
+function branchPosition(u,offset=0){return localPoint(junction,u*branchSide,branchCurve(u)+offset);}
+function branchCoords(x,z){
+  const dx=x-junction.x,dz=z-junction.z,c=Math.cos(junction.h),s=Math.sin(junction.h);
+  const u=(c*dx+s*dz)*branchSide;
+  return {u,v:s*dx-c*dz-branchCurve(u)};
+}
+function onBranch(x,z,margin){
+  if(route.stage)return false;
+  const {u,v}=branchCoords(x,z);
+  return u>=0&&u<branchLength+margin&&Math.abs(v)<5+margin;
+}
+const branchHeights=[junction.y];
+if(!route.stage)for(let u=4;u<=branchLength;u+=4){
+  const p=branchPosition(u),n=nearest(p.x,p.z),last=branchHeights.at(-1);
+  branchHeights.push(u<12?junction.y:clamp(naturalSurface(p.x,p.z,n),last-.36,last+.36));
+}
+function surface(x,z,n){
+  const natural=naturalSurface(x,z,n);
+  if(!onBranch(x,z,36))return natural;
+  const {u,v}=branchCoords(x,z),grade=sampleStage(branchHeights,u,4)-.12;
+  // Keep a complete terrain cell of graded shoulder around the lane and turning head.
+  // Otherwise coarse terrain triangles pull the road back into the uncut hillside.
+  const weight=smooth(4,11,u)*(1-smooth(13,36,Math.abs(v)))*(1-smooth(branchLength+10,branchLength+36,u));
+  return T.MathUtils.lerp(natural,grade,weight);
+}
 function ground(x,z){return surface(x,z,nearest(x,z));}
 const box=new T.Box3().setFromPoints(points.map(p=>new T.Vector3(p.x,0,p.z)));
 function groundMap(path){
@@ -335,7 +367,7 @@ for(const kind of ['tree','palm']){
 }
 function tree(d,l){
  const p=at(d,l),n=nearest(p.x,p.z),y=renderedGround(p.x,p.z);
- if(n.dist<10||besideWater(n.d)&&y<waterLevel+.6||Math.abs(n.d-route.junction)<22)return;
+ if(n.dist<10||besideWater(n.d)&&y<waterLevel+.6||onBranch(p.x,p.z,4))return;
  const palm=river&&random()<.42,kind=palm?'palm':'tree';
  const h=(palm?8:6.8)+random()*(palm?7:5.8),w=h*(palm?.588:.923)*(.9+random()*.2);
  const angle=random()*Math.PI;
@@ -351,7 +383,7 @@ function teaRows(d0,end,side){
     for(let d=d0;d<=end;d+=1.25){
       const hedge=side*(14+row*2.2+.4*Math.sin(d*.019+row*.17));
       const p=at(d,hedge),n=nearest(p.x,p.z),y=renderedGround(p.x,p.z);
-      if(n.dist<12||besideWater(n.d)&&y<waterLevel+2){prev=-1;continue;}
+      if(n.dist<12||besideWater(n.d)&&y<waterLevel+2||onBranch(p.x,p.z,2)){prev=-1;continue;}
       const k=verts.length/3,scale=.94+.08*Math.sin(d*1.71+row*2.2)+.05*Math.cos(d*.42-row);
       const tint=.83+.13*Math.sin(d*.27+row)+.09*Math.sin(d*2.3+row);
       for(const [delta,raise,tone] of [[-.76,.04,0x536749],[-.52,.54,0x8b9f69],
@@ -378,7 +410,29 @@ if(!route.stage)for(let d=bridgeStart;d<=bridgeEnd;d+=4){
     beside(d,side*(roadHalfWidth+.42),'pole',0x88948c,.13,.9,.13,.24);
     beside(d,side*(roadHalfWidth+.42),'box',0x87928c,.08,.08,4.18,.6);
   }
-  if((d-bridgeStart)%24===0)for(const side of [-1,1])beside(d,side*(roadHalfWidth-2),'pole',0x827e71,1.2,12,1.2,-12);
+}
+function footing(p,width,depth){
+  const samples=[renderedGround(p.x,p.z)];
+  for(const across of [-width/2,0,width/2])for(const along of [-depth/2,depth/2]){
+    const q=localPoint(p,across,along);samples.push(renderedGround(q.x,q.z));
+  }
+  return {low:Math.min(...samples),high:Math.max(...samples)};
+}
+if(!route.stage){
+  for(const d of [bridgeStart,bridgeEnd]){
+    const p=at(d),width=roadHalfWidth*2+1.3,top=p.y-.47;
+    const bottom=Math.min(top-.35,footing(p,width,2.4).low-.45);
+    scatter('box',0x8d8979,p.x,(top+bottom)/2,p.z,width,top-bottom,2.4,-p.h);
+  }
+  const spans=Math.ceil((bridgeEnd-bridgeStart)/25);
+  for(let i=1;i<spans;i++){
+    const d=bridgeStart+(bridgeEnd-bridgeStart)*i/spans,p=at(d),cap=p.y-.62;
+    scatter('box',0x878375,p.x,cap-.24,p.z,roadHalfWidth*2-.8,.50,1.85,-p.h);
+    for(const side of [-1,1]){
+      const q=at(d,side*(roadHalfWidth-2)),top=cap-.45,bottom=Math.min(top-.25,footing(q,1.2,1.2).low-.4);
+      scatter('pole',0x827e71,q.x,(bottom+top)/2,q.z,1.2,top-bottom,1.2);
+    }
+  }
 }
 for(let d=15;d<route.finish+50;d+=13){
   if(!route.stage&&d>bridgeStart-10&&d<bridgeEnd+10)continue;
@@ -389,32 +443,51 @@ for(let d=15;d<route.finish+50;d+=13){
   }
   if(!route.stage&&d%65<14&&d>70&&Math.abs(d-route.junction)>65){
     const side=river?1:(random()>.45?1:-1),l=side*(river?20+random()*7:49+random()*8),h=3.5+random()*2,w=5+random()*4;
-    const p=at(d,l),base=ground(p.x,p.z)-p.y-.45;
-    beside(d,l,'box',random()>.5?0xc6b699:0xa4ae99,w,h,8,base);
-    beside(d,l,'roof',0x955e45,w*.83,2,7.7,h+base,Math.PI/4);
-    beside(d,l-side*(w/2+.06),'box',0x414e4b,.08,2.3,1.2,base);
-    for(const dz of [-2.5,2.5])beside(d+dz,l-side*(w/2+.07),'box',0x648185,.09,1.15,1.3,1.5+base);
+    const p=at(d,l),pad=footing(p,w+.2,8.2),y=pad.high+.06,bottom=pad.low-.24;
+    if(y-bottom>2.4||besideWater(d)&&pad.low<waterLevel+.4||onBranch(p.x,p.z,6))continue;
+    scatter('box',0x817d6e,p.x,(y+bottom)/2,p.z,w+.2,y-bottom,8.2,-p.h);
+    scatter('box',random()>.5?0xc6b699:0xa4ae99,p.x,y+h/2,p.z,w,h,8,-p.h);
+    // Rotate the square cone in its own frame so rectangular roof eaves follow the walls.
+    scatter('houseRoof',0x955e45,p.x,y+h+1,p.z,w+.7,2,8.7,-p.h);
+    const door=localPoint(p,-side*(w/2+.04),0);
+    scatter('box',0x414e4b,door.x,y+1.15,door.z,.08,2.3,1.2,-p.h);
+    for(const dz of [-2.5,2.5]){
+      const q=localPoint(p,-side*(w/2+.045),dz);
+      scatter('box',0x648185,q.x,y+2.075,q.z,.09,1.15,1.3,-p.h);
+    }
   }
 }
-const junction=at(route.junction);
-if(!route.stage)for(const side of [-1,1]){
-  const angle=junction.h+side*Math.PI/2;
-  scatter('box',0x757670,junction.x+Math.sin(angle)*29,junction.y-.09,junction.z-Math.cos(angle)*29,8,.16,64,-angle);
+if(!route.stage){
+  const pos=[],uv=[],indices=[],cols=7;
+  for(let u=roadHalfWidth-1;u<=branchLength;u++){
+    const half=3.1+2.7*(1-smooth(5,15,u))+1.2*smooth(49,59,u);
+    for(let col=0;col<cols;col++){
+      const t=col/(cols-1),p=branchPosition(u,(2*t-1)*half),n=nearest(p.x,p.z);
+      const groundY=renderedGround(p.x,p.z),y=T.MathUtils.lerp(n.y,groundY,smooth(roadHalfWidth-.8,roadHalfWidth+5,n.dist));
+      pos.push(p.x,y+.025,p.z);uv.push(u/8,t);
+      const i=pos.length/3-1;
+      if(col&&i>=cols)indices.push(i-cols-1,i-1,i,i-cols-1,i,i-cols);
+    }
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  const road=new T.Mesh(g,new T.MeshLambertMaterial({color:0x97968d,map:asphalt,side:T.DoubleSide}));
+  road.name='Side road';road.receiveShadow=true;scene.add(road);
 }
 function board(d,l,text,bg='#235642',w=5,mount=3){
   const p=at(d,l),c=document.createElement('canvas');c.width=768;c.height=192;const g=c.getContext('2d');
   g.fillStyle=bg;g.fillRect(0,0,c.width,c.height);g.strokeStyle='#fff5cb';g.lineWidth=7;g.strokeRect(7,7,754,178);
   g.fillStyle='#fff';g.font='bold 76px Arial';g.textAlign='center';g.fillText(text,384,124,725);
   const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
-  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,p.y+mount,p.z);face.rotation.y=-p.h;scene.add(face);
-  if(mount===3)beside(d,l,'pole',0x797c74,.12,3,.12);
+  const base=mount===3?renderedGround(p.x,p.z):p.y;
+  const face=new T.Mesh(new T.PlaneGeometry(w,w/4),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));face.position.set(p.x,base+mount,p.z);face.rotation.y=-p.h;scene.add(face);
+  if(mount===3)scatter('pole',0x797c74,p.x,base+1.48,p.z,.12,3.04,.12);
 }
 board(36,7,route.name.toLocaleUpperCase('vi'));if(!route.stage)board(route.bridge[0]-17,7.9,route.near);if(!route.stage)board(route.junction-42,8,route.sign>0?'BẾN CHỢ  →':'←  NÔNG TRƯỜNG');
 if(arcade){
  if(!route.stage)for(let d=3;d<route.finish;d+=3){
    if(Math.abs(heading(d+10)-heading(d))<.027 && d>65 && d<route.finish-36)continue;
    const paint=Math.floor(d/3)%2?0xf5dfbe:0xd94e30;
-   for(const side of [-1,1])beside(d,side*5.94,'box',paint,.48,.075,3.04);
+   for(const side of [-1,1])if(side!==branchSide||Math.abs(d-route.junction)>8)beside(d,side*5.94,'box',paint,.48,.075,3.04);
  }
  for(const [d,label] of [[36,'XUẤT PHÁT'],[route.finish/2,'NỬA CHẶNG'],[route.finish,'VỀ ĐÍCH']]){
    if(route.stage&&d===route.finish/2)continue;

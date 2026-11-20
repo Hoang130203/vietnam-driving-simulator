@@ -83,29 +83,30 @@ function buildRoadside(){
   function store(d,l,variant){
     const p=at(d,l),wide=5.8+variant*.46,depth=5.9,h=3.75,side=Math.sign(l);
     // A level slab stepped into the hill supports the facade and its fittings.
-    const corners=[-1,1].flatMap(a=>[-1,1].map(b=>{
-      const q=at(d+wide*.5*a,l+depth*.5*b);return renderedGround(q.x,q.z);
-    }));
-    const high=Math.max(...corners),low=Math.min(...corners);
-    if(high-low>2.2||nearest(p.x,p.z).dist<9)return;
-    const y=high+.06,rise=y-p.y;
+    const {low,high}=footing(p,depth+.23,wide+.23);
+    if(high-low>2.2||nearest(p.x,p.z).dist<9||besideWater(d)&&low<waterLevel+.4||onBranch(p.x,p.z,6))return;
+    const y=high+.06;
+    function part(along,across,kind,color,w,h,span,base){
+      const q=localPoint(p,across,along);scatter(kind,color,q.x,y+base+h/2,q.z,w,h,span,-p.h);
+    }
     scatter('box',0x817d6e,p.x,(y+low-.24)/2,p.z,depth+.23,y-low+.24,wide+.23,-p.h);
-    beside(d,l,'box',0xbdb39a,depth,h,wide,rise);
+    part(0,0,'box',0xbdb39a,depth,h,wide,0);
     scatter('box',variant%2?0x806458:0x637779,p.x,y+h+.115,p.z,depth+.42,.23,wide+.58,-p.h);
-    const f=at(d,l-side*(depth/2+.022));
+    const f=localPoint(p,-side*(depth/2+.022),0);
     temp.position.set(f.x,y+h/2,f.z);temp.rotation.set(0,-p.h-side*Math.PI/2,0);temp.scale.set(wide,h,1);temp.updateMatrix();
     facades[variant].matrices.push(temp.matrix.clone());
-    const awning=l-side*(depth*.5+.78);
-    beside(d,awning,'box',variant%2?0x796758:0x68807b,1.85,.12,wide+.32,rise+2.58);
-    for(let dz=-wide/2;dz<wide/2;dz+=.22)beside(d+dz,awning,'box',0x89918a,1.84,.05,.044,rise+2.67);
-    for(const dz of [-1,1])beside(d+dz*(wide*.48),awning-side*.79,'pole',0x596864,.082,2.68,.082,rise);
-    beside(d,awning,'box',0xada89a,2.2,.18,wide+.5,rise-.04);
-    beside(d+wide*.28,l+side*.35,'pole',0x98aaab,1.05,.95,1.05,rise+h+.23);
+    const awning=-side*(depth*.5+.78),porch=localPoint(p,awning,0);
+    const porchFloor=Math.min(y-.1,footing({...porch,h:p.h},2.2,wide+.5).low-.12);
+    part(0,awning,'box',variant%2?0x796758:0x68807b,1.85,.12,wide+.32,2.58);
+    for(let dz=-wide/2;dz<wide/2;dz+=.22)part(dz,awning,'box',0x89918a,1.84,.05,.044,2.67);
+    for(const dz of [-1,1])part(dz*(wide*.48),awning-side*.79,'pole',0x596864,.082,2.68,.082,0);
+    part(0,awning,'box',0xada89a,2.2,y+.04-porchFloor,wide+.5,porchFloor-y);
+    part(wide*.28,side*.35,'pole',0x98aaab,1.05,.95,1.05,h+.23);
     for(const offset of [-1.35,1.35]){
-      beside(d-wide/2-.04,l+offset,'box',0x88897a,1.48,1.44,.12,rise+1.18);
-      beside(d-wide/2-.12,l+offset,'box',0x4b615b,1.27,1.24,.07,rise+1.27);
-      for(const slit of [-.4,0,.4])beside(d-wide/2-.17,l+offset+slit,'box',0x999888,.035,1.24,.035,rise+1.27);
-      beside(d-wide/2-.22,l+offset,'box',0xb7b3a1,1.68,.10,.45,rise+2.63);
+      part(-wide/2-.04,offset,'box',0x88897a,1.48,1.44,.12,1.18);
+      part(-wide/2-.12,offset,'box',0x4b615b,1.27,1.24,.07,1.27);
+      for(const slit of [-.4,0,.4])part(-wide/2-.17,offset+slit,'box',0x999888,.035,1.24,.035,1.27);
+      part(-wide/2-.22,offset,'box',0xb7b3a1,1.68,.10,.45,2.63);
     }
   }
   const clusters=river?[16,145,305,495,935,1235,1510,1830,2080]:[20,355,700,1120,1435,1770,2205];
@@ -121,6 +122,7 @@ function buildRoadside(){
   for(let d=1;d<route.finish+18;d+=34){
     if(!route.stage&&d>bridgeStart-8&&d<bridgeEnd+8){last=null;continue;}
     const p=at(d,8.8),y=renderedGround(p.x,p.z),height=6.8;
+    if(onBranch(p.x,p.z,1)||besideWater(d)&&y<waterLevel+.2){last=null;continue;}
     scatter('pole',0xaaa69a,p.x,y+height/2,p.z,.21,height,.21);
     scatter('box',0x65665f,p.x,y+height-.38,p.z,1.55,.1,.14,-p.h);
     const wires=[];

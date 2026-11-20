@@ -117,7 +117,7 @@
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
     const landmarks=window.VietnamLandmarks?.create(T,scene);
     const district=createTourDistrict(T,scene,material.wall);
-    let nearbyWater=()=>false;
+    let nearbyWaterLevel=()=>null;
     let obstacleCells=new Map(),waterContact=()=>null;
     const obstacleKey=(x,z)=>Math.floor(x/15)+','+Math.floor(z/15);
     function registerObstacle(o){
@@ -250,15 +250,24 @@
           maskSize,maskX,maskZ,maskScale,cx,cz);
       }
       // Index occupied blocks once so narrow streams also enable local reflections.
-      const wetBlocks=new Set(),blockSize=16,blocks=Math.ceil(maskSize/blockSize);
+      const wetBlocks=new Map(),blockSize=16,blocks=Math.ceil(maskSize/blockSize);
       if(wetMask)for(let row=0;row<maskSize;row++)for(let col=0;col<maskSize;col++){
-        if(wetMask[(row*maskSize+col)*4+3]>100)wetBlocks.add(Math.floor(row/blockSize)*blocks+Math.floor(col/blockSize));
+        if(wetMask[(row*maskSize+col)*4+3]<=100)continue;
+        const key=Math.floor(row/blockSize)*blocks+Math.floor(col/blockSize);
+        const d=(col%blockSize+.5-blockSize/2)**2+(row%blockSize+.5-blockSize/2)**2;
+        if(d<(wetBlocks.get(key)?.d??Infinity)){
+          wetBlocks.set(key,{x:maskX+(col+.5)/maskScale,z:maskZ+(row+.5)/maskScale,d});
+        }
       }
-      nearbyWater=(x,z)=>{
+      nearbyWaterLevel=(x,z)=>{
         const col=Math.floor((x-maskX)*maskScale/blockSize),row=Math.floor((z-maskZ)*maskScale/blockSize);
-        for(let j=Math.max(0,row-2);j<=Math.min(blocks-1,row+2);j++)
-          for(let i=Math.max(0,col-2);i<=Math.min(blocks-1,col+2);i++)if(wetBlocks.has(j*blocks+i))return true;
-        return false;
+        let nearest=null,distance=Infinity;
+        for(let j=Math.max(0,row-2);j<=Math.min(blocks-1,row+2);j++)for(let i=Math.max(0,col-2);i<=Math.min(blocks-1,col+2);i++){
+          const p=wetBlocks.get(j*blocks+i);if(!p)continue;
+          const d=(x-p.x)**2+(z-p.z)**2;
+          if(d<distance){nearest=p;distance=d;}
+        }
+        return nearest?localGround(nearest.x,nearest.z)-.085:null;
       };
       function wet(x,z){
         const col=Math.floor((x-maskX)*maskScale),row=Math.floor((z-maskZ)*maskScale);
@@ -879,7 +888,8 @@
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
-      waterSurface.reflect(renderer,scene,camera,car.y-.085,now,nearbyWater(x,z));
+      const waterLevel=nearbyWaterLevel(x,z);
+      waterSurface.reflect(renderer,scene,camera,waterLevel,now,waterLevel!==null);
       renderer.render(scene,camera);
       const elapsed=now-lastPaint;
       slowFrames=lastPaint&&elapsed>48&&elapsed<500?slowFrames+1:Math.max(0,slowFrames-1);
