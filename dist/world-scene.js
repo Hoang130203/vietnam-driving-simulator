@@ -75,17 +75,7 @@
       };
     }
     land.rotation.x=-Math.PI/2;land.position.y=-.17;land.receiveShadow=true;scene.add(land);
-    const waveCanvas=document.createElement('canvas');waveCanvas.width=waveCanvas.height=128;
-    const waveContext=waveCanvas.getContext('2d'),wavePixels=waveContext.createImageData(128,128);
-    for(let z=0;z<128;z++)for(let x=0;x<128;x++){
-      const a=x*Math.PI/64,b=z*Math.PI/64,i=(z*128+x)*4;
-      const dx=.19*Math.cos(3*a+5*b)+.14*Math.cos(7*a-9*b)+.045*Math.sin(11*a+15*b);
-      const dy=.26*Math.cos(3*a+5*b)-.21*Math.cos(7*a-9*b)+.07*Math.sin(11*a+15*b);
-      wavePixels.data[i]=128+dx*120;wavePixels.data[i+1]=128+dy*120;wavePixels.data[i+2]=248;wavePixels.data[i+3]=255;
-    }
-    waveContext.putImageData(wavePixels,0,0);
-    const wave=new T.CanvasTexture(waveCanvas);wave.wrapS=wave.wrapT=T.RepeatWrapping;
-    const waterMaterial=new T.MeshStandardMaterial({color:0x48786f,normalMap:wave,normalScale:new T.Vector2(.32,.32),roughness:.22,metalness:.37,side:T.DoubleSide});
+    const waterSurface=createDrivingWater(T,true);
     const relief=createVietnamRelief(T,scene,small);
     const unitBox=new T.BoxGeometry(),unitPlane=new T.PlaneGeometry(),unitPole=new T.CylinderGeometry(.5,.5,1,8);
     const roofSection=new T.Shape();roofSection.moveTo(-.5,0);roofSection.lineTo(0,1);roofSection.lineTo(.5,0);roofSection.closePath();
@@ -96,6 +86,7 @@
     let roadGroup=null,originX=0,originZ=0,shadowStamp=-1000;
     const landmarks=window.VietnamLandmarks?.create(T,scene);
     const district=createTourDistrict(T,scene,material.wall);
+    let nearbyWater=()=>false;
     let obstacleCells=new Map(),waterContact=()=>null;
     const obstacleKey=(x,z)=>Math.floor(x/15)+','+Math.floor(z/15);
     function registerObstacle(o){
@@ -170,6 +161,9 @@
         const painter=mask.getContext('2d',{willReadFrequently:true});
         painter.setTransform(maskScale,0,0,maskScale,-maskX*maskScale,-maskZ*maskScale);
         painter.fillStyle=painter.strokeStyle='#fff';painter.lineJoin=painter.lineCap='round';
+        const currentCanvas=mask.cloneNode();
+        const current=currentCanvas.getContext('2d',{willReadFrequently:true});
+        current.setTransform(painter.getTransform());current.lineCap='round';
         for(const feature of water){
           if(!feature.points||feature.points.length<2)continue;
           if(feature.kind==='lake'){
@@ -203,6 +197,9 @@
               if(lateral>cutoff+radius)continue;
               const lo=Math.max(0,along-cutoff-radius),hi=Math.min(len,along+cutoff+radius);
               bx=ax+dx/len*hi;bz=az+dz/len*hi;ax+=dx/len*lo;az+=dz/len*lo;
+              const speed=radius<=5?.98:.58;
+              current.strokeStyle='rgb('+Math.round(128+126*speed*dx/len)+','+Math.round(128+126*speed*dz/len)+',0)';
+              current.lineWidth=radius*2;current.beginPath();current.moveTo(ax,az);current.lineTo(bx,bz);current.stroke();
               quad(waterData,ax-nx*radius,az-nz*radius,ax+nx*radius,az+nz*radius,bx-nx*radius,bz-nz*radius,bx+nx*radius,bz+nz*radius);
               cap(waterData,bx,bz,radius);
               painter.beginPath();painter.moveTo(ax,az);painter.lineTo(bx,bz);painter.stroke();
@@ -210,7 +207,20 @@
           }
         }
         wetMask=painter.getImageData(0,0,maskSize,maskSize).data;
+        if(waterData.length)waterSurface.setField(waterBankField(wetMask,current.getImageData(0,0,maskSize,maskSize).data,maskSize,1/maskScale),
+          maskSize,maskX,maskZ,maskScale,cx,cz);
       }
+      // Index occupied blocks once so narrow streams also enable local reflections.
+      const wetBlocks=new Set(),blockSize=16,blocks=Math.ceil(maskSize/blockSize);
+      if(wetMask)for(let row=0;row<maskSize;row++)for(let col=0;col<maskSize;col++){
+        if(wetMask[(row*maskSize+col)*4+3]>100)wetBlocks.add(Math.floor(row/blockSize)*blocks+Math.floor(col/blockSize));
+      }
+      nearbyWater=(x,z)=>{
+        const col=Math.floor((x-maskX)*maskScale/blockSize),row=Math.floor((z-maskZ)*maskScale/blockSize);
+        for(let j=Math.max(0,row-2);j<=Math.min(blocks-1,row+2);j++)
+          for(let i=Math.max(0,col-2);i<=Math.min(blocks-1,col+2);i++)if(wetBlocks.has(j*blocks+i))return true;
+        return false;
+      };
       function wet(x,z){
         const col=Math.floor((x-maskX)*maskScale),row=Math.floor((z-maskZ)*maskScale);
         return col>=0&&row>=0&&col<maskSize&&row<maskSize&&wetMask[(row*maskSize+col)*4+3]>100;
@@ -408,7 +418,7 @@
         const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;roadGroup.add(mesh);
       }
       material.white.side=material.yellow.side=T.DoubleSide;
-      surface(waterData,waterMaterial,-.085,.074);surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
+      surface(waterData,waterSurface.material,-.085,.074);surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       if(wires.length){
         const lines=new T.BufferGeometry();lines.setAttribute('position',new T.Float32BufferAttribute(wires,3));
         roadGroup.add(new T.LineSegments(lines,wireMaterial));
@@ -553,7 +563,7 @@
       if(!car||!Number.isFinite(car.x)||!Number.isFinite(car.z))return;
       if(car.sightView)inside=false;
       resize();dt=Math.max(0,Math.min(.12,dt||0));version++;totalDriven+=Math.abs(car.speed||0)*dt;
-      wave.offset.set((performance.now()*.000024)%1,(performance.now()*.000012)%1);
+      waterSurface.update(performance.now()*.001);
       const x=car.x-originX,z=car.z-originZ;
       const kind=['supercar','gt','rally'].includes(car.model)?car.model:'supercar';
       if(!player||player.kind!==kind){
@@ -620,6 +630,7 @@
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
+      waterSurface.reflect(renderer,scene,camera,-.085,now,nearbyWater(x,z));
       renderer.render(scene,camera);
       const elapsed=now-lastPaint;
       slowFrames=lastPaint&&elapsed>48&&elapsed<500?slowFrames+1:Math.max(0,slowFrames-1);

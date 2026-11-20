@@ -119,17 +119,32 @@ function groundMap(path){
   map.wrapS=map.wrapT=T.RepeatWrapping;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return map;
 }
 const meadow=groundMap('verge-grass.webp'),earth=groundMap('verge-earth.webp');
+const courseWater=createDrivingWater(T,false);
 function terrain(){
   const grid=6,margin=235,nx=Math.ceil((box.max.x-box.min.x+2*margin)/grid)+1,nz=Math.ceil((box.max.z-box.min.z+2*margin)/grid)+1;
   const verts=[],colors=[],uv=[],soil=[],indices=[],base=new T.Color(),tea=new T.Color(0xcbd3b0),sand=new T.Color(0xe5d6bb);
+  const waterVerts=[],profiles=[],waterIndices=[];
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
     const x=box.min.x-margin+i*grid,z=box.min.z-margin+j*grid,n=nearest(x,z),y=surface(x,z,n);
+    const heading=points[Math.min(points.length-1,Math.round(n.d/step))].h;
+    const crossChannel=Math.abs(n.d-(bridgeStart+bridgeEnd)*.5)<(bridgeEnd-bridgeStart)*.55;
+    const angle=heading+(crossChannel?Math.PI/2:0),current=river?.6:.93;
+    waterVerts.push(x,waterLevel,z);profiles.push(Math.sin(angle)*current,-Math.cos(angle)*current,(waterLevel-y)*2.6);
     const patch=.45+.21*Math.sin(x/33+z/75)+.22*Math.cos(x/85-z/24);
     base.set(river?0xa4b89b:0x94aca0).lerp(tea,patch).lerp(sand,1-smooth(waterLevel,waterLevel+1.8,y));
     uv.push(x/3.6,z/3.6);soil.push(Math.max(1-smooth(6,11,n.dist),1-smooth(waterLevel+.5,waterLevel+2.3,y)));
     base.multiplyScalar(.96+.03*Math.sin(x*.67+z*.22));verts.push(x,y,z);colors.push(base.r,base.g,base.b);
     if(j&&i){const k=j*nx+i;indices.push(k-nx-1,k-1,k-nx,k-1,k,k-nx);}
   }
+  for(let i=0;i<indices.length;i+=3){
+    const a=indices[i],b=indices[i+1],c=indices[i+2];
+    if(Math.max(profiles[a*3+2],profiles[b*3+2],profiles[c*3+2])>=0)waterIndices.push(a,b,c);
+  }
+  const waterGeometry=new T.BufferGeometry();
+  waterGeometry.setAttribute('position',new T.Float32BufferAttribute(waterVerts,3));
+  waterGeometry.setAttribute('riverProfile',new T.Float32BufferAttribute(profiles,3));
+  waterGeometry.setIndex(waterIndices);waterGeometry.computeVertexNormals();
+  const water=new T.Mesh(waterGeometry,courseWater.material);water.receiveShadow=true;scene.add(water);
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();
   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('soil',new T.Float32BufferAttribute(soil,1));
   const land=new T.MeshLambertMaterial({vertexColors:true,map:meadow});
@@ -142,20 +157,6 @@ function terrain(){
 }
 terrain();
 const hills=distantHills();
-function canvasTexture(size,paint){
-  const c=document.createElement('canvas');c.width=c.height=size;paint(c.getContext('2d'),size);
-  const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t;
-}
-const ripples=canvasTexture(256,(g,n)=>{
-  g.fillStyle=river?'#70969a':'#668b82';g.fillRect(0,0,n,n);
-  for(let i=0;i<1700;i++){
-    g.fillStyle=random()>.48?'rgba(202,227,219,.33)':'rgba(43,86,95,.28)';
-    g.fillRect(random()*n,random()*n,2+random()*17,.5+random()*.85);
-  }
-});
-ripples.wrapS=ripples.wrapT=T.RepeatWrapping;ripples.repeat.set(110,145);
-const water=new T.Mesh(new T.PlaneGeometry(3200,4200),new T.MeshStandardMaterial({color:0x547a70,map:ripples,bumpMap:ripples,bumpScale:.12,roughness:.2,metalness:.42}));
-water.rotation.x=-Math.PI/2;water.position.set((box.max.x+box.min.x)/2,waterLevel,(box.max.z+box.min.z)/2);scene.add(water);
 const foliage={};
 for(const kind of ['tree','palm']){
  const texture=new T.TextureLoader().load('streetscape/roadside-'+kind+'.webp');texture.colorSpace=T.SRGBColorSpace;
@@ -442,8 +443,10 @@ function render(now){
  look.set(inside?-.31:0,inside?.02:.6,inside?-12:-6).applyQuaternion(yawQ).add(rig.position);camera.position.copy(eye);camera.lookAt(look);
  if(arcade)raceCamera(dt,now);
  for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.y=-p.h;}
- ripples.offset.x=(now*.000009)%1;
- if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);renderer.render(scene,camera);
+ courseWater.update(now*.001);
+ if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
+ courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
+ renderer.render(scene,camera);
  driveAudio.update({boost:arcade&&cupBody.driving&&cupBody.boost,slip:arcade?cupBody.slip:0,speed:Math.abs(s.v)*3.6,throttle:keys.has('arrowup')||keys.has('w'),braking:keys.has('arrowdown')||keys.has('s'),signal:!!s.signal,mode:s.mode==='drive'?'driving':arcade&&['grid','countdown'].includes(s.mode)?'idling':'ready'});
  if(now-lastHud>90){if(arcade)raceHud();else hud();mapDraw();lastHud=now;}requestAnimationFrame(render);
 }
