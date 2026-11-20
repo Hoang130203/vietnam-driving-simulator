@@ -48,7 +48,7 @@
     // Sweep each hip from the ridge down a concave slope. The four corner
     // rafters turn up above the eave, while the central eave stays level.
     function roof(width,depth,z,y,rise,ridge){
-      const faces=tile.map(()=>[]),hw=width/2,hd=depth/2;
+      const faces=tile.map(()=>[]),soffit=[],thickness=.44,hw=width/2,hd=depth/2;
       const corners=[[-1,-1],[-1,1],[1,1],[1,-1]];
       const sample=(side,u,v)=>{
         const a=corners[side],b=corners[(side+1)%4];
@@ -65,8 +65,9 @@
           const c=sample(side,(i+1)/divisions,(j+1)/rows),d=sample(side,i/divisions,(j+1)/rows);
           const bucket=faces[(i*3+Math.floor(i/5)+Math.floor(j/3))%faces.length];
           tri(bucket,a,d,b);tri(bucket,b,d,c);
+          for(const p of [a,b,d,b,c,d])soffit.push(p.x,p.y-thickness,p.z);
           if(j===rows-1){
-            const e=d.clone(),f=c.clone();e.y-=.44;f.y-=.44;
+            const e=d.clone(),f=c.clone();e.y-=thickness;f.y-=thickness;
             tri(faces[0],d,e,c);tri(faces[0],c,e,f);
           }
         }
@@ -75,10 +76,10 @@
         outline(shape,0x756d5d,tip.x,tip.y,tip.z,.24,Math.atan2(-horn[1],horn[0]));
       }
       box(0x878174,0,y+rise+.16,z,ridge*2+.45,.43,.53);
-      for(const [i,pos] of faces.entries()){
+      for(const [pos,color] of [...faces.map((v,i)=>[v,tile[i]]),[soffit,timber]]){
         const geom=new T.BufferGeometry();
         geom.setAttribute('position',new T.Float32BufferAttribute(pos,3));geom.computeVertexNormals();
-        stamp(geom,tile[i],0,0,0);geom.dispose();
+        stamp(geom,color,0,0,0);geom.dispose();
       }
     }
 

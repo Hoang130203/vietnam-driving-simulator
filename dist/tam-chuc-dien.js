@@ -6,7 +6,7 @@
   // bowed slope, four lifted eaves, a solid fascia, hips and a decorated ridge.
   function hipRoof(T,{box,stamp,outline},w,d,y,rise){
     const halfRidge=Math.max(w*.22,(w-d)*.5),corners=[[-1,-1],[-1,1],[1,1],[1,-1]];
-    const surfaces=tiles.map(()=>[]);
+    const surfaces=tiles.map(()=>[]),soffit=[],thickness=.48;
     function vertex(side,u,t){
       const a=corners[side],b=corners[(side+1)%4],vx=a[0]+(b[0]-a[0])*u,vz=a[1]+(b[1]-a[1])*u;
       return [vx*(halfRidge+(w/2-halfRidge)*t),y+rise*(1-t**.63)+Math.min(2.75,rise*.35)*(Math.abs(vx*vz)**5)*t**3,vz*d*.5*t];
@@ -18,15 +18,16 @@
         const c=vertex(side,(i+1)/cols,(j+1)/rows),e=vertex(side,i/cols,(j+1)/rows);
         const surface=surfaces[(i+Math.floor(i/6)+Math.floor(j/3))%tiles.length];
         surface.push(...a,...e,...b,...b,...e,...c);
-        if(j===rows-1)surfaces[0].push(...e,e[0],e[1]-.48,e[2],...c,...c,e[0],e[1]-.48,e[2],c[0],c[1]-.48,c[2]);
+        for(const p of [a,b,e,b,c,e])soffit.push(p[0],p[1]-thickness,p[2]);
+        if(j===rows-1)surfaces[0].push(...e,e[0],e[1]-thickness,e[2],...c,...c,e[0],e[1]-thickness,e[2],c[0],c[1]-thickness,c[2]);
       }
       const tip=vertex(side,0,1),[sx,sz]=corners[side];
       outline([[0,-.26],[1.1,-.06],[2.1,.64],[2.96,2.08],[2.8,2.26],[2.23,1.46],[2.28,2.06],[1.7,1.84],[1.16,.94],[.4,.62],[-.15,.45]],
         ridge,...tip,.3,Math.atan2(-sz,sx));
     }
-    for(const [i,vertices] of surfaces.entries()){
+    for(const [vertices,color] of [...surfaces.map((v,i)=>[v,tiles[i]]),[soffit,deepWood]]){
       const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.computeVertexNormals();
-      stamp(g,tiles[i],0,0,0);g.dispose();
+      stamp(g,color,0,0,0);g.dispose();
     }
     box(ridge,0,y+rise+.17,0,halfRidge*2+.4,.45,.6);
     for(const side of [-1,1])outline([[0,0],[1.5,.15],[2.4,1.05],[2.15,1.33],[1.36,.78],[.65,.96],[-.45,.5]],ridge,side*(halfRidge-.7),y+rise,0,.35,side===1?0:Math.PI);

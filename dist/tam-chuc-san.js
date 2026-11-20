@@ -21,7 +21,7 @@
     };
     // Sweep both roof hips up into the four lifted corner rafters.
     function roof(cx,y,w,d,rise){
-      const vertices=[],colors=[];
+      const vertices=[],colors=[],soffit=[],thickness=.24;
       const halfW=w/2,halfD=d/2,ridge=Math.max(w*.23,halfW-halfD*.92);
       const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
       for(let side=0;side<4;side++){
@@ -37,13 +37,14 @@
           const bucket=(i%3===0?colors:vertices);
           // Corners wind clockwise in the horizontal XZ plane.
           bucket.push(...p,...q,...s,...q,...r,...s);
-          if(j===4)vertices.push(...s,...r,r[0],r[1]-.24,r[2],...s,r[0],r[1]-.24,r[2],s[0],s[1]-.24,s[2]);
+          for(const pnt of [p,s,q,q,s,r])soffit.push(pnt[0],pnt[1]-thickness,pnt[2]);
+          if(j===4)vertices.push(...s,...r,r[0],r[1]-thickness,r[2],...s,r[0],r[1]-thickness,r[2],s[0],s[1]-thickness,s[2]);
         }
         const [sx,sz]=a;
         outline([[0,0],[.75,.1],[1.4,.61],[2.08,1.88],[1.89,1.99],[1.37,1.24],[1.26,1.61],[.83,1.1],[.28,.64],[-.19,.48]],
           0x60584d,cx+sx*halfW,y+rise*.54,sz*halfD,.21,Math.atan2(-sz,sx));
       }
-      for(const [v,c] of [[vertices,tile],[colors,0x706357]]){
+      for(const [v,c] of [[vertices,tile],[colors,0x706357],[soffit,timber]]){
         const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(v,3));g.computeVertexNormals();stamp(g,c,0,0,0);g.dispose();
       }
       box(0x5a5149,cx,y+rise+.11,0,ridge*2+.18,.30,.32);

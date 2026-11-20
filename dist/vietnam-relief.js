@@ -8,8 +8,8 @@ function createVietnamRelief(T,scene,compact){
   const mat=new T.MeshLambertMaterial({name:'Vietnam relief',map:imagery,side:T.DoubleSide,color:0xc9d5bc});
   mat.onBeforeCompile=shader=>{
     shader.uniforms.terrainDatum=datum;shader.uniforms.passWeight=passWeight;shader.uniforms.terrainEye=eye;shader.uniforms.terrainAnchor=anchor;
-    shader.vertexShader='attribute float coarseElevation; uniform float terrainDatum,passWeight;uniform vec2 terrainEye,terrainAnchor;varying float horizonDistance;varying vec2 canopy;\n'+shader.vertexShader.replace(
-      '#include <begin_vertex>', '#include <begin_vertex>\n canopy=terrainAnchor+position.xz; horizonDistance=distance(terrainEye,position.xz); transformed.y=(mix(coarseElevation,position.y,passWeight*smoothstep(700.,1450.,horizonDistance))-terrainDatum)*mix(.43,.9,smoothstep(1800.,9500.,horizonDistance))-mix(70.,5.,smoothstep(530.,1500.,horizonDistance));');
+    shader.vertexShader='attribute vec2 summitSurface;attribute float coarseElevation; uniform float terrainDatum,passWeight;uniform vec2 terrainEye,terrainAnchor;varying float horizonDistance;varying vec2 canopy;\n'+shader.vertexShader.replace(
+      '#include <begin_vertex>', '#include <begin_vertex>\n canopy=terrainAnchor+position.xz; horizonDistance=distance(terrainEye,position.xz); transformed.y=(mix(coarseElevation,position.y,passWeight*smoothstep(700.,1450.,horizonDistance))-terrainDatum)*mix(.43,.9,smoothstep(1800.,9500.,horizonDistance))-mix(70.,5.,smoothstep(530.,1500.,horizonDistance)); transformed.y=mix(transformed.y,summitSurface.x-mix(1.,.17,smoothstep(780.,1000.,horizonDistance)),summitSurface.y);');
     shader.fragmentShader=`varying float horizonDistance;
       varying vec2 canopy;
       float standHash(vec2 i){vec3 p=fract(vec3(i.xyx)*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
@@ -30,10 +30,18 @@ function createVietnamRelief(T,scene,compact){
     const f=i/(cells/2),size=f<=.42?64:f<=.64?128:f<=.83?256:512;
     axis[cells/2+i]=axis[cells/2+i-1]+size;axis[cells/2-i]=-axis[cells/2+i];
   }
+  // Keep the same 64 m triangle under the pagoda even in the distant, coarser mesh.
+  function summitAxis(offset){
+    const i=axis.findIndex(value=>value>offset);
+    if(i<1||i>=cells)return axis;
+    const result=axis.slice(),low=Math.floor(offset/64)*64;
+    result[i-1]=low;result[i]=low+64;return result;
+  }
   const count=stride*stride,pos=new Float32Array(count*3),uv=new Float32Array(count*2),coarse=new Float32Array(count),indices=[];
   for(let j=0;j<cells;j++)for(let k=0;k<cells;k++){
     const a=j*stride+k,b=a+stride;indices.push(a,b,a+1,a+1,b,b+1);
   }
+  const summitSurface=new T.BufferAttribute(new Float32Array(count*2),2);geometry.setAttribute('summitSurface',summitSurface);
   geometry.setAttribute('coarseElevation',new T.BufferAttribute(coarse,1));geometry.setAttribute('position',new T.BufferAttribute(pos,3));geometry.setAttribute('uv',new T.BufferAttribute(uv,2));geometry.setIndex(indices);
   const mesh=new T.Mesh(geometry,mat);mesh.name='Vietnam terrain horizon';mesh.visible=false;mesh.frustumCulled=false;scene.add(mesh);
   let graph=null,originX=0,originZ=0,anchorX=NaN,anchorZ=NaN,pixels=null,width=0,height=0;
@@ -130,18 +138,24 @@ function createVietnamRelief(T,scene,compact){
     if(ax!==anchorX||az!==anchorZ){
       anchorX=ax;anchorZ=az;anchor.value.set(ax,az);let i=0;
       for(let j=0;j<=cells;j++)for(let k=0;k<=cells;k++,i++){
-        const dx=axis[k],dz=axis[j];
+        const dx=xs[k],dz=zs[j];
+        const blend=nearPeak?1-T.MathUtils.smoothstep(Math.hypot(ax+dx-peak.x,az+dz-peak.z),135,640):0;
+        summitSurface.setXY(i,blend?ground(ax+dx,az+dz):0,blend);
         const [u,v]=uvAt(ax+dx,az+dz);
         let h=elevation(u,v);coarse[i]=h;
         if(activePass){
           const p=activePass,east=(ax+dx-p.x)*p.eastScale,south=az+dz-p.z;
           const tx=east*p.cos+south*p.sin,tz=-east*p.sin+south*p.cos;
           const coverage=1-T.MathUtils.smoothstep(Math.max(Math.abs(tx),Math.abs(tz)),11200,15200);
+      const pagoda=activePass?.stage.id==='kim-bang'&&window.VietnamSights?.find(site=>site.id==='chua-ngoc-tam-chuc');
+      const peak=pagoda&&graph.point(pagoda.lon,pagoda.lat);
+      const nearPeak=peak&&Math.hypot(peak.x-ax,peak.z-az)<5000;
+      const xs=nearPeak?summitAxis(peak.x-ax):axis,zs=nearPeak?summitAxis(peak.z-az):axis;
           h+=(p.grid.elevation(tx,tz)-h)*coverage;
         }
         pos.set([dx,h,dz],i*3);uv.set([u,1-v],i*2);
       }
-      geometry.attributes.coarseElevation.needsUpdate=geometry.attributes.position.needsUpdate=geometry.attributes.uv.needsUpdate=true;geometry.computeVertexNormals();
+      summitSurface.needsUpdate=true;geometry.attributes.coarseElevation.needsUpdate=geometry.attributes.position.needsUpdate=geometry.attributes.uv.needsUpdate=true;geometry.computeVertexNormals();
     }
     passWeight.value=activePass?1-T.MathUtils.smoothstep(Math.hypot(x-activePass.x,z-activePass.z),8600,12000):0;
     mesh.position.set(anchorX-originX,0,anchorZ-originZ);eye.value.set(x-anchorX,z-anchorZ);

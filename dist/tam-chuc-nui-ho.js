@@ -34,6 +34,19 @@
     const mesh=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide}));mesh.castShadow=mesh.receiveShadow=true;k.group.add(mesh);
   }
   function summit(T,k){
+    const foundation=createTempleFoundations(T,k);
+    const roofStart=k.group.children.length;
+    const platform=foundation.fixture(ground=>{
+      let highest=ground(0,0);
+      for(const u of [-8.4,0,8.4])for(const v of [-7.1,0,7.1])highest=Math.max(highest,ground(u,v));
+      return highest;
+    },()=>summitStonework(T,k),height=>{
+      for(const roof of roofs)roof.position.y=height;
+    });
+    const roofs=k.group.children.slice(roofStart);
+    foundation.skirt(0,0,16.8,14.2,.6,platform);
+  }
+  function summitStonework(T,k){
     const {box,tapered,stamp,round}=k,red=0xa55445,sand=0xc98671,dark=0x643a33,basalt=0x6c665c;
     const boulder=new T.DodecahedronGeometry(1,0);
     for(let i=0;i<19;i++){
@@ -144,7 +157,7 @@
   }
   (window.VietnamSights??=[]).push({
     id:'chua-ngoc-tam-chuc',name:'Chùa Ngọc',complex:'tam-chuc',tourOrder:6,city:'Kim Bảng',province:'Ninh Bình',region:'Bắc Bộ',
-    lon:105.79278,lat:20.549706,yaw:2.46,start:[105.793895,20.549502],width:19,depth:21,solids:[[0,0,3.4,3.4]],gardenRadius:66,
+    lon:105.79278,lat:20.549706,yaw:2.46,viewAngle:2.3,viewElevation:.50,start:[105.793895,20.549502],width:19,depth:21,solids:[[0,0,3.4,3.4]],gardenRadius:66,viewDistance:3800,
     description:'Trên đỉnh núi Thất Tinh, chùa Ngọc có ba tầng mái cong. Thân tháp ghép từ các khối granit đỏ do nghệ nhân Ấn Độ chế tác, phía trước mở ra hồ Tam Chúc.',
     map:'https://www.openstreetmap.org/way/1518302477',photo:'https://dantri.com.vn/du-lich/doc-dao-ngoi-chua-co-pho-tuong-phat-hong-ngoc-nang-4-tan-20190427142245497.htm',source:'https://bnews.vn/photo/ve-dep-chua-ngoc-o-trung-tam-van-hoa-phat-giao-tam-chuc/122136/trang-1.html',build:summit
   },{

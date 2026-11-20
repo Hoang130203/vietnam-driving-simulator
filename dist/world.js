@@ -395,6 +395,14 @@ function frame(now){
    car.driving=mode==='drive';car.showroom=mode==='grid';
    if(mode!=='loading'&&mode!=='error'&&!document.hidden){
      const ready=gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'||mode==='sinking'?dt:0,inside);
+     if(mode==='tour'&&car.sightView?.data.id==='tam-chuc'){
+       const point=gfx.projectSummit();
+       summitMarker.hidden=!point;
+       if(point){
+         summitMarker.style.left=(point.x+1)*50+'%';
+         summitMarker.style.top=(1-point.y)*50+'%';
+       }
+     }else summitMarker.hidden=true;
      if(ready&&!$('openingStill').hidden)$('openingStill').hidden=true;
    }
    if(mode==='drive'||mode==='sinking'){uiTick+=dt;if(uiTick>.13){uiTick=0;updateHud();}}
@@ -532,7 +540,16 @@ const tamChucOverview={id:'tam-chuc',complex:'tam-chuc',name:'Toàn cảnh trụ
  description:'Từ hồ vào núi, trục chùa đi qua Tam Quan nội, Vườn Cột Kinh và ba điện Quan Âm, Pháp Chủ, Tam Thế. Chùa Ngọc nằm cao hơn trên núi Thất Tinh.',
  photo:'https://vietnamtourism.gov.vn/en/printer/15748?type=1'};
 $('complexStop').append(new Option('Toàn cảnh trục chùa','tam-chuc'));
-for(const part of tamChucParts)$('complexStop').append(new Option(part.name,part.id));
+const summitId='chua-ngoc-tam-chuc',summitName='Chùa Ngọc · đỉnh Thất Tinh';
+for(const part of tamChucParts)$('complexStop').append(new Option(part.id===summitId?summitName:part.name,part.id));
+const summitMarker=document.createElement('button');
+summitMarker.id='summitMarker';summitMarker.hidden=true;summitMarker.textContent=summitName;
+$('tourCamera').before(summitMarker);
+summitMarker.onclick=()=>{
+ if($('complexStop').disabled)return;
+ $('complexStop').value=summitId;
+ $('complexStop').dispatchEvent(new Event('change'));
+};
 const tamChuc={...tamChucParts.find(site=>site.tourOrder===1),id:'tam-chuc',name:'Quần thể Tam Chúc',custom:true,kind:'Quần thể kiến trúc',formerProvince:'Hà Nam',searchNames:tamChucParts.map(s=>s.name).join(' ')};
 const models=VietnamLandmarks.entries.filter(site=>!site.complex).map(site=>({...site,custom:true,kind:'Mô hình 3D'}));
 models.push(tamChuc);

@@ -16,6 +16,7 @@
     renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.98;
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
     scene.background=new T.Color(0xaec5d2);scene.fog=new T.FogExp2(0xc2d1d0,.00072);
+    const markerPoint=new T.Vector3();
     const camera=new T.PerspectiveCamera(61,1,.14,28000);
     // A thin sunlit haze overlays the panorama and participates in the lake reflection.
     const sunrise=new T.Mesh(new T.SphereGeometry(15000,32,16),new T.ShaderMaterial({
@@ -1049,7 +1050,9 @@
         const focus=relief.ground(v.x,v.z)+v.height*.46;
         look.set(v.x-originX,focus,v.z-originZ);
         camera.position.set(look.x+Math.sin(v.angle)*radius*Math.cos(v.elevation),focus+radius*Math.sin(v.elevation),
-          look.z+Math.cos(v.angle)*radius*Math.cos(v.elevation));camera.lookAt(look);
+          look.z+Math.cos(v.angle)*radius*Math.cos(v.elevation));
+        camera.position.y=Math.max(camera.position.y,relief.ground(camera.position.x+originX,camera.position.z+originZ)+2);
+        camera.lookAt(look);
         sun.target.position.copy(look);sun.position.copy(look).addScaledVector(up,42);sun.position.x-=34;sun.position.z+=25;
       }
       const fov=(inside?64:car.openingPose?57+Math.min(15,speed*.28)-9*car.openingPose:car.showroom?47:57+Math.min(15,speed*.28))+(car.boost?5:0);
@@ -1077,6 +1080,14 @@
       lastPaint=now;
       return player.modelReady;
     }
-    return {weather,preloadVehicle:loadModel,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    function projectSummit(){
+      const summit=scene.getObjectByName('chua-ngoc-tam-chuc');
+      if(!summit?.visible)return null;
+      markerPoint.copy(summit.position);
+      markerPoint.y+=summit.userData.height;
+      markerPoint.project(camera);
+      return markerPoint.z>0 && markerPoint.z<1 && Math.abs(markerPoint.x)<.92 && Math.abs(markerPoint.y)<.9 ? markerPoint : null;
+    }
+    return {projectSummit,weather,preloadVehicle:loadModel,waterAt:(x,z)=>waterAt(x,z),terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),splash:(x,z,nx,nz,strength,level)=>driveFx.impact(x,z,nx,nz,strength,'water',level,.3),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();
