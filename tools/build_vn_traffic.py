@@ -1,7 +1,7 @@
 """Build nationwide traffic tiles for an existing ViVu3D road graph.
 
 python tools/build_vn_traffic.py vietnam.osm.pbf dist/vn-roads dist/vn-traffic
-Requires osmium. Use the PBF whose SHA-256 is recorded by the road builder.
+Requires osmium. Use a Geofabrik PBF at the road graph's replication timestamp.
 """
 import argparse
 import collections
@@ -112,7 +112,10 @@ def build(source, roads, output):
     with source.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     if digest != index["sourceSha256"]:
-        raise ValueError("Traffic and road graph must use the same Vietnam extract")
+        with osmium.io.Reader(source) as reader:
+            timestamp = reader.header().get("osmosis_replication_timestamp")
+        if not timestamp or timestamp != index["osmTimestamp"]:
+            raise ValueError(f"Traffic snapshot {timestamp} does not match graph {index['osmTimestamp']}")
     keys = existing_tiles(index)
     def rows(key):
         with gzip.open(roads / (key + ".gz"), "rb") as f:
@@ -187,7 +190,7 @@ def build(source, roads, output):
             (output / (key + ".gz")).write_bytes(payload)
             tile_keys.append(key)
             total_bytes += len(payload)
-    manifest = dict(tiles=tile_keys, sourceSha256=digest, osmTimestamp=index["osmTimestamp"],
+    manifest = dict(tiles=tile_keys, sourceSha256=digest, graphSourceSha256=index["sourceSha256"], osmTimestamp=index["osmTimestamp"],
                     graphEdges=index["edges"], enrichedEdges=len(done), edgesByAttribute=dict(coverage),
                     controlNodes={k: len(v) for k, v in control_sets.items()}, viaNodeRelations=len(relation_ids),
                     skippedRelations=dict(skipped), bytes=total_bytes)

@@ -17,7 +17,10 @@ jobs:
       - name: Download the road graph's OSM snapshot
         run: |
           snapshot=$(jq -r '.osmTimestamp[:10] | split("-") | join("") | .[2:]' dist/vn-roads/index.json)
-          curl --fail --location --retry 3 -o "$RUNNER_TEMP/vietnam.osm.pbf" "https://download.geofabrik.de/asia/vietnam/vietnam-${snapshot}.osm.pbf"
+          url="https://download.geofabrik.de/asia/vietnam/vietnam-${snapshot}.osm.pbf"
+          curl --fail --location --retry 3 -o "$RUNNER_TEMP/vietnam.osm.pbf" "$url"
+          checksum=$(curl --fail --silent --show-error --location --retry 3 "$url.md5" | cut -d' ' -f1)
+          echo "$checksum  $RUNNER_TEMP/vietnam.osm.pbf" | md5sum --check
       - name: Match controls and attributes to the national road graph
         run: python tools/build_vn_traffic.py "$RUNNER_TEMP/vietnam.osm.pbf" dist/vn-roads "$RUNNER_TEMP/vn-traffic"
       - uses: actions/upload-artifact@v4
