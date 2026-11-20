@@ -286,3 +286,10 @@ Cột mốc Km 0 Đường Hồ Chí Minh, Tân Kỳ
 Quảng trường bát giác lát đá, cột mốc Km 0 đá granit đầu đỏ, phù điêu Trường Sơn, cột cờ và nhà bia cạnh Đường Hồ Chí Minh.
 https://baonghean.vn/cot-moc-so-0-noi-bat-dau-con-duong-huyen-thoai-10295387.html
 https://www.openstreetmap.org/node/9331310775
+
+Cụm địa danh Đà Nẵng & Quảng Nam cũ (20 công trình) — Cầu Rồng, Hải Vân Quan, Chùa Linh Ứng Bãi Bụt, Hội quán Phúc Kiến, Cầu Sông Hàn, Cầu Trần Thị Lý, Cầu Thuận Phước, Bảo tàng Điêu khắc Chăm Đà Nẵng, Thành Điện Hải, Nhà Trưng bày Hoàng Sa, Chùa Tam Thai – Ngũ Hành Sơn, Hải đăng Quản Tượng, Đình Túy Loan, Đình Bồ Bản, Hội quán Triều Châu, Chợ Hội An, Hải đăng Cửa Đại, Tháp Bằng An, Nhóm Tháp Chăm Khương Mỹ và Nhóm Tháp Chăm Chiên Đàn. Tọa độ và đường bao đối chiếu OpenStreetMap (ODbL 1.0); mô hình 3D dựng thủ tục bằng Three.js.
+https://www.openstreetmap.org/copyright
+https://danangfantasticity.com/
+https://chammuseum.vn/
+https://hoianheritage.net/
+https://dsvh.gov.vn/
