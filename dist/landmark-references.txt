@@ -286,3 +286,8 @@ Cột mốc Km 0 Đường Hồ Chí Minh, Tân Kỳ
 Quảng trường bát giác lát đá, cột mốc Km 0 đá granit đầu đỏ, phù điêu Trường Sơn, cột cờ và nhà bia cạnh Đường Hồ Chí Minh.
 https://baonghean.vn/cot-moc-so-0-noi-bat-dau-con-duong-huyen-thoai-10295387.html
 https://www.openstreetmap.org/node/9331310775
+
+Cụm địa danh Huế (18 công trình) — Cầu Trường Tiền, Phu Văn Lâu, Cầu Ngói Thanh Toàn, Lăng Khải Định, Điện Thái Hòa, Hiển Lâm Các & Cửu Đỉnh, Cửa Hiển Nhơn, Lăng Minh Mạng, Lăng Tự Đức, Trường THPT Chuyên Quốc Học Huế, Nhà thờ chính tòa Phủ Cam, Nhà thờ Dòng Chúa Cứu Thế Huế, Chợ Đông Ba, Hổ Quyền, Chùa Từ Hiếu, Chùa Báo Quốc, Tàng Thư Lâu và Hải đăng Thuận An. Tọa độ và đường bao đối chiếu OpenStreetMap (ODbL 1.0); mô hình 3D dựng thủ tục bằng Three.js.
+https://www.openstreetmap.org/copyright
+https://hueworldheritage.org.vn/
+https://visithue.vn/
