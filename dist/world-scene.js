@@ -4,6 +4,8 @@
   const namedPass=e=>e&&typeof e==='object'&&e.name?.startsWith('Đèo ')&&!e.oneway;
   window.worldRoadHalfWidth=edge=>{
     if(edge?.authoredHalfWidth)return edge.authoredHalfWidth;
+    if(edge?.traffic?.width)return Math.max(1.1,Math.min(40,edge.traffic.width/2));
+    if(edge?.traffic?.lanes)return edge.traffic.lanes*(edge.kind.startsWith('motorway')?1.8:1.6);
     const kind=typeof edge==='string'?edge:edge?.kind;
     const w=String(kind).endsWith('_link')?3.8:widths[kind]||4.2;
     return namedPass(edge)?Math.min(w,3.85):w;
@@ -140,6 +142,7 @@
     const coverMap=createWorldLandCover(T,environment);
     const streetLife=createWorldStreetLife(T,scene,small,environment,amenities);
     const rebuildSigns=createWorldSigns(T,scene,small);
+    const mappedLights=createMappedTrafficLights(T,scene,small);
     const landWidth=2048;
     const land=new T.Mesh(new T.PlaneGeometry(landWidth,landWidth,32,32),meadow);
     const landIndex=land.geometry.index;
@@ -274,6 +277,7 @@
       }
 
       const segments=[],cells=new Map(),roadData=[],landData=[],bankData=[],railVerts=[],railIndices=[],cutVerts=[],cutUv=[],cutIndices=[],yellow=[],white=[],wires=[],junctions=new Map(),batches=new Map(),candidates=[],rivals=new Map();
+      const gravelData=[],pavedData=[],crossings=new Set();
       obstacleCells=new Map();
       roadsideImpact.rebase(cx,cz);
       const cellSize=32,cutoff=650,detailRadius=graphics.profile.scenery;
@@ -429,6 +433,18 @@
       }
       for(const e of edges){
         const width=window.worldRoadHalfWidth(e);
+        const finish=e.traffic?.surface;
+        const loose=/^(unpaved|gravel|fine_gravel|compacted|dirt|earth|ground|sand|mud)$/.test(finish);
+        const pavement=loose?gravelData:/^(paving_stones|sett|cobblestone)$/.test(finish)?pavedData:roadData;
+        for(const point of e.controls||[]){
+          if(!(point.flags&2)||crossings.has(point.node))continue;
+          const p=graph.sample({edge:e,dir:1,s:point.s}),x=p.x-cx,z=p.z-cz;
+          if(Math.hypot(x,z)>cutoff)continue;
+          crossings.add(point.node);
+          const fx=Math.sin(p.yaw),fz=-Math.cos(p.yaw),nx=-fz,nz=fx;
+          const cross={ax:x-fx*1.65,az:z-fz*1.65,fx,fz,nx,nz};
+          for(let offset=-width+.3;offset<width-.3;offset+=.85)strip(white,cross,0,3.3,offset,Math.min(width-.2,offset+.43));
+        }
         for(let i=1;i<e.points.length;i++){
           const a=e.points[i-1],b=e.points[i];
           let ax=a.x-cx,az=a.z-cz,bx=b.x-cx,bz=b.z-cz;
@@ -442,6 +458,7 @@
           const mx=graph?111320*Math.cos(latitude*Math.PI/180)/graph.mx:1;
           const sourceLength=Math.hypot(dx*mx,dz);
           const s={ax,az,bx,bz,fx,fz,nx,nz,len:length,sourceLength,w:width,kind:e.kind,oneway:e.oneway,rank:perp,seed};
+          s.traffic=e.traffic;s.loose=loose;
           s.graded=namedPass(e)||relief.altitude((a.x+b.x)*.5,(a.z+b.z)*.5)>280&&!district.builtUp(cx+(ax+bx)*.5,cz+(az+bz)*.5)&&!['residential','service','living_street'].includes(e.kind);
           if(s.graded){
             const n=Math.max(1,Math.ceil(length/12));s.interval=length/n;s.crown=[];
@@ -455,11 +472,11 @@
           s.authoredPavement=Boolean(e.authoredHalfWidth);
           segments.push(s);
           if(!s.authoredPavement)strip(landData,s,0,s.len,-width-.85,width+.85);
-          if(s.graded){strip(roadData,s,0,s.len,-width,0);strip(roadData,s,0,s.len,0,width);}
-          else strip(roadData,s,0,s.len,-width,width);
+          if(s.graded){strip(pavement,s,0,s.len,-width,0);strip(pavement,s,0,s.len,0,width);}
+          else strip(pavement,s,0,s.len,-width,width);
           for(const [x,z] of [[ax,az],[bx,bz]]){
             const k=Math.round(x*10)+','+Math.round(z*10);
-            const node=junctions.get(k);if(node){node.r=Math.max(node.r,width);node.n++;}else junctions.set(k,{x,z,r:width,n:1});
+            const node=junctions.get(k);if(node){if(width>node.r){node.r=width;node.pavement=pavement;}node.n++;}else junctions.set(k,{x,z,r:width,n:1,pavement});
           }
           bounds(s,width+9,key=>{if(!cells.has(key))cells.set(key,[]);cells.get(key).push(s);});
         }
@@ -553,7 +570,7 @@
         }
 
       }
-      for(const node of junctions.values()){cap(roadData,node.x,node.z,node.r);cap(landData,node.x,node.z,node.r+.85);}
+      for(const node of junctions.values()){cap(node.pavement,node.x,node.z,node.r);cap(landData,node.x,node.z,node.r+.85);}
       function openNearEnd(s,x,z){
         const node=junctions.get(Math.round(x*10)+','+Math.round(z*10));return node&&node.n>2?node.r+1:.0;
       }
@@ -588,10 +605,19 @@
         if(street&&s.w<=6.8&&end-start>2&&s.rank<detailRadius+30){
           for(const side of [-1,1])walks.sidewalk(s,start,end,side,s.w<4?1.2:1.85);
         }
-        if(s.w>=4.2||s.graded){
+        if(!s.loose&&(s.traffic?.lanes||s.w>=4.2||s.graded)){
           for(const side of [-1,1])strip(white,s,start,end,side*s.w*.94-.055,side*s.w*.94+.055);
-          for(let u=start+1;u<end;u+=10)strip(s.oneway?white:yellow,s,u,Math.min(end,u+3.7),-.074,.074);
-          if(s.w>=6.75)for(let u=start+2;u<end;u+=11)for(const side of [-1,1])strip(white,s,u,Math.min(end,u+3),side*s.w*.49-.065,side*s.w*.49+.065);
+          const lanes=s.traffic?.lanes;
+          if(lanes){
+            const divide=s.oneway?0:lanes-(s.traffic.forward??lanes/2);
+            for(let i=1;i<lanes;i++){
+              const offset=s.w*(2*i/lanes-1);
+              for(let u=start+1;u<end;u+=10)strip(i===divide?yellow:white,s,u,Math.min(end,u+3.7),offset-.07,offset+.07);
+            }
+          }else{
+            for(let u=start+1;u<end;u+=10)strip(s.oneway?white:yellow,s,u,Math.min(end,u+3.7),-.074,.074);
+            if(s.w>=6.75)for(let u=start+2;u<end;u+=11)for(const side of [-1,1])strip(white,s,u,Math.min(end,u+3),side*s.w*.49-.065,side*s.w*.49+.065);
+          }
         }
         if(s.rank>detailRadius||s.len<3)continue;
         if(!s.graded&&s.w>=4.2&&s.len>=24){
@@ -877,7 +903,9 @@
           if(paving.length){temple??=createTempleSurfaces(T);surface(paving,temple.paving,-.14,1,localGround);}
         }
       }
-      surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
+      surface(landData,material.earth,-.032,.77);surface(roadData,material.asphalt,.002,.25);
+      surface(gravelData,material.earth,.002,.48);surface(pavedData,material.pavers,.002,1);
+      surface(yellow,material.yellow,.026,1);surface(white,material.white,.026,1);
       walks.build(roadGroup,surface,material.pavers,curbStone);pavementLift=walks.liftAt;
       if(wires.length){
         for(let i=0;i<wires.length;i+=3)wires[i+1]+=localGround(wires[i],wires[i+2]);
@@ -893,6 +921,7 @@
       }
       streetLife.rebuild(graph,cx,cz,segments,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r));
       rebuildSigns(graph,edges,cx,cz,(x,z,r)=>!blocked(x-cx,z-cz,r)&&!contact(x,z,r),driveGround,registerObstacle);
+      mappedLights.rebuild(graph,edges,cx,cz,driveGround);
       breakfast.place(graph,cx,cz,segments,(x,z,r)=>!blocked(x,z,r)&&!contact(x+cx,z+cz,r),driveGround);
       shadowStamp=-1000;
     }
@@ -1028,6 +1057,7 @@
       if(car.sightView||car.flood)inside=false;
       graphics.frame(now,car.driving);dt=Math.max(0,Math.min(.12,dt||0));version++;totalDriven+=Math.abs(car.speed||0)*dt;
       waterSurface.update(now*.001,weather.rainfall);
+      mappedLights.update(now*.001);
       const x=car.x-originX,z=car.z-originZ;
       streetLife.render(dt,car.sightView?.x??car.x,car.sightView?.z??car.z,driveGround);
       const wake=car.flood?Math.exp(-car.flood.age*.36):car.wading?Math.min(1,Math.abs(car.speed)*.11):0;

@@ -9,7 +9,9 @@ https://download.geofabrik.de/asia/vietnam/vietnam-261118.osm.pbf
 
 The game graph contains selected public motor-vehicle road classes. Edge endpoints
 follow the source OSM topology and intermediate shape points are simplified.
-It does not include live traffic, temporary closures, or turn-restriction relations.
+Mapped traffic controls and supported turn restrictions are packaged separately
+in ../vn-traffic/. Signal timing is simulated. Live traffic and temporary
+closures are outside this road dataset.
 The HUST landmark adds campus service lanes from the OSM API for simulated
 driving, including visitor- and staff-access roads. Real access rules vary.
 The overview and place search are derived from the same snapshot.

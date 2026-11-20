@@ -40,6 +40,8 @@ Game tải cảnh theo vị trí xe. Dữ liệu mặt bằng nhà OSM trên to�
 
 Dân cư WorldPop, loại đường, địa điểm lân cận và giờ Việt Nam điều chỉnh số xe và người đi bộ. Lớp phủ ESA WorldCover phân bố đồng ruộng, rừng, đất xây dựng và mặt nước. [Nguồn dân cư và lớp phủ](dist/vn-environment/CREDITS.txt) · [Nguồn địa điểm](dist/vn-amenities/CREDITS.txt).
 
+Xuyên Việt tải dữ liệu giao thông theo vị trí xe trên mạng đường toàn quốc. Khi OSM có thông tin, bảng lái hiện số làn, tốc độ giới hạn theo chiều và khoảng cách tới đèn hoặc lối sang đường. Vạch phân làn và bề rộng đường dùng các thông số đã lập bản đồ. Xe lưu thông tuân theo hướng rẽ được phép và dừng trước đèn đỏ. Vị trí đèn lấy từ OSM, còn chu kỳ đèn do game mô phỏng. [Độ phủ theo từng thuộc tính](dist/vn-traffic/index.json) · [Nguồn và phạm vi dữ liệu giao thông](dist/vn-traffic/CREDITS.txt).
+
 ## Đóng góp và báo lỗi
 
 - [Hướng dẫn đóng góp](CONTRIBUTING.md)

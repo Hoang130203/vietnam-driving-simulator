@@ -19,7 +19,7 @@ function breakfastCall(){
  const line='Bánh mì nóng giòn đây! Ai bánh mì nào!';
  inform('“'+line+'”',4);driveAudio.broadcast(line,false);
 }
-function stance(){return Math.min(2.05,worldRoadHalfWidth(player.edge)*.47);}
+function stance(){return roadLaneOffset(player);}
 function save(){
  if(!activeTrip||!player||!roads||car.flood)return;
  const [lon,lat]=roads.geo(car.x,car.z);
@@ -160,11 +160,11 @@ function addNpc(c,i){
  const centre=roads.sample(c);
  const mix=gfx.streetLife.activity(roads,centre.x,centre.z,c.edge.kind);
  const kind=Math.random()<mix.scooter?'scooter':['taxi','van','sedan','rival'][i%4];
- const offset=kind==='scooter'?Math.min(3.3,worldRoadHalfWidth(c.edge)*.7):Math.min(2.05,worldRoadHalfWidth(c.edge)*.47);
+ const offset=roadLaneOffset(c,kind==='scooter');
  const p=roads.sample(c,offset);
  if(Math.hypot(car.x-p.x,car.z-p.z)<16||npcs.some(n=>Math.hypot(p.x-n.x,p.z-n.z)<13))return;
  const pace=(kind==='scooter'?6:kind==='rival'?21:9)+Math.random()*4;
- npcs.push({...c,...p,kind,id:nextNpc++,speed:pace,pace,offset,stopped:0});
+ npcs.push({...c,...p,kind,id:nextNpc++,speed:Math.min(pace,(roadSpeedLimit(c)??160)/3.6),pace,stopped:0});
 }
 function seedTraffic(){
  const target=gfx.streetLife.activity(roads,car.x,car.z,player.edge.kind).vehicles;
@@ -184,11 +184,16 @@ function fillTraffic(){
  if(npcs.length<Math.min(6,target))spawnAhead(85+Math.random()*125,nextNpc);
 }
 function trafficStep(dt){
+ const seconds=performance.now()/1000;
  for(const n of npcs){
    if(n.flood){advanceFlood(n,dt);if(n.flood.age>5)n.stopped=7;continue;}
    const dx=car.x-n.x,dz=car.z-n.z,fx=Math.sin(n.yaw),fz=-Math.cos(n.yaw);
    const fallen=n.recoil?.fallen;
-   let target=fallen||n.recoil?.braking?0:n.pace;
+   let target=fallen||n.recoil?.braking?0:Math.min(n.pace,(roadSpeedLimit(n)??160)/3.6);
+   const control=roadControlAhead(roads,n,seconds,true);
+   const wait=control&&(control.phase==='red'||control.phase==='amber'&&control.distance>n.speed*.9);
+   const stopAt=wait?Math.max(0,control.distance-3.5):Infinity;
+   if(wait)target=Math.min(target,Math.sqrt(7*stopAt));
    for(const other of npcs){
      if(other===n)continue;const ox=other.x-n.x,oz=other.z-n.z,long=ox*fx+oz*fz;
      if(long>0&&long<15&&Math.abs(ox*fz-oz*fx)<1.65)target=Math.min(target,Math.max(0,(long-4)*1.3));
@@ -196,12 +201,12 @@ function trafficStep(dt){
    const ahead=dx*fx+dz*fz;
    if(ahead>0&&ahead<17&&Math.abs(dx*fz-dz*fx)<1.75)target=Math.min(target,Math.max(0,(ahead-5)*1.2));
    n.speed=fallen?0:n.speed+clamp(target-n.speed,-9*dt,2.8*dt);
-   const moved=roads.advance(n,n.speed*dt,options=>{
+   const moved=roads.advance(n,Math.min(stopAt,n.speed*dt),options=>{
      const opts=n.kind==='scooter'?options.filter(o=>!o.edge.kind.startsWith('motorway')):options;
      return opts.length>1&&Math.random()<.24?opts[Math.floor(Math.random()*opts.length)]:opts[0];
    });
-   if(moved<.001&&!fallen)n.stopped+=dt;else n.stopped=0;
-   const pos=roads.sample(n,Math.min(n.offset,worldRoadHalfWidth(n.edge)*.75));
+   if(moved<.001&&!fallen&&!wait&&target>0)n.stopped+=dt;else n.stopped=0;
+   const pos=roads.sample(n,roadLaneOffset(n,n.kind==='scooter'));
    const landing=DriveBody.advanceRecoil(n,dt);Object.assign(n,pos);
    if(n.recoil){n.x+=n.recoil.x;n.z+=n.recoil.z;n.yaw+=n.recoil.angle;}
    if(n.recoil){
@@ -353,6 +358,19 @@ function updateHud(){
  $('landmark').hidden=!landmark;
  if(landmark)$('landmark').textContent=landmark.data.name+' · '+Math.round(landmark.distance)+' m';
  const grade=Math.round(100*gfx.grade(car.x,car.z,car.yaw));
+ const info=[],traffic=player.edge.traffic,limit=roadSpeedLimit(player);
+ if(!car.offroad&&traffic){
+   if(traffic.bridge)info.push('Cầu');
+   if(traffic.tunnel)info.push('Hầm');
+   if(traffic.lanes)info.push(traffic.lanes+' làn');
+   if(limit)info.push('Giới hạn '+limit+' km/h');
+ }
+ const control=car.offroad?null:roadControlAhead(roads,player,performance.now()/1000);
+ if(control){
+   const label=({red:'Đèn đỏ',amber:'Đèn vàng',green:'Đèn xanh'})[control.phase]||'Lối sang đường';
+   info.push(label+' · '+Math.max(0,Math.round(control.distance))+' m');
+ }
+ $('roadFacts').hidden=!info.length;$('roadFacts').textContent=info.join(' · ');
  $('street').textContent=nameOf(player.edge)+(Math.abs(grade)>=2?' · '+(grade>0?'↑ ':'↓ ')+Math.abs(grade)+'%':'');$('speed').textContent=Math.round(Math.abs(car.speed)*3.6);$('trip').textContent=fmt(distance)+' · '+passes+' lượt vượt';$('hp').value=hp;$('nitro').value=nitro;
  const fork=branchAhead(),plan=duel&&fork?duel.nextAt(fork.node):null;
  $('duelInfo').hidden=!duel;
@@ -883,7 +901,10 @@ async function fetchJSON(path){const r=await fetch(path);if(!r.ok)throw Error('C
 (async()=>{
  $('openMap').disabled=true;
  try{
-   gfx=createWorldScene($('world'),breakfastCall);indexData=await fetchJSON('vn-roads/index.json');
+   gfx=createWorldScene($('world'),breakfastCall);
+   const [roadIndex,trafficIndex]=await Promise.all([fetchJSON('vn-roads/index.json'),fetchJSON('vn-traffic/index.json').catch(()=>null)]);
+   indexData=roadIndex;
+   if(trafficIndex?.graphSourceSha256===roadIndex.sourceSha256&&trafficIndex.osmTimestamp===roadIndex.osmTimestamp)indexData.trafficTiles=trafficIndex.tiles;
    $('coverage').textContent=indexData.roadKm.toLocaleString('vi-VN')+' km đường · Dữ liệu '+new Date(indexData.osmTimestamp).toLocaleDateString('vi-VN');
    $('openingAtlas').disabled=false;$('openMap').disabled=false;$('travel').disabled=false;
    const valid=new URLSearchParams(location.search).get('intro')!=='tam-chuc'&&saved&&Number.isFinite(saved.lon)&&Number.isFinite(saved.lat)&&Number.isFinite(saved.distance)&&saved.distance>=0;
