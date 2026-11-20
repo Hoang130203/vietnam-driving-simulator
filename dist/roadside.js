@@ -71,6 +71,7 @@ function mountainHorizon(near,relief){
       diffuseColor.rgb*=.59+dot(canopy,vec3(.36,.49,.15))*.85+dot(finer,vec3(.29,.44,.27))*.45+thickets*.11;
       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.078,.13,.14),.18);
       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.047,.134,.139),smoothstep(.3,2.,seaDepth));`);
+    passSurface?.shade(shader,'vistaPoint.xz','.87');
   };
   if(route.stage&&marine.some(d=>d>0)){
     const sea=[],profile=[];
@@ -120,7 +121,7 @@ function buildRoadside(){
   }
   const clusters=river?[16,145,305,495,935,1235,1510,1830,2080]:[20,355,700,1120,1435,1770,2205];
   for(const [i,d] of clusters.entries()){
-    if(d>route.finish-25||route.stage&&i%3!==0)continue;
+    if(d>route.finish-25||route.stage&&i%3!==0||featuredPass&&i===0)continue;
     for(let k=0;k<(i%3===0?3:2);k++)store(d+k*9.3,river?14+k*.7:(i%2?-1:1)*(16+k*.65),(i+k+(river?0:3))%4);
   }
   for(const group of facades){

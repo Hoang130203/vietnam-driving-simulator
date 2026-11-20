@@ -34,7 +34,7 @@ async function fitCoupe(parent,paint,isPlayer,name,driver){
      else{m.emissive.set(0xff1604);m.emissiveIntensity=.6;}
      finish.set(src.name,m);
    }
-   part.material=finish.get(src.name);
+   part.material=finish.get(src.name);passSky?.registerFinish(part.material);
  });
  model.rotation.y=Math.PI;
  parent.add(model);
@@ -117,10 +117,17 @@ function beginRace(){
  const p=at(0,1.6);
  state={mode:'grid',d:0,x:p.x,z:p.z,h:p.h,offset:1.6,v:0,steer:0,time:0,signal:0,charge:100,collected:new Set()};
  racers=[state,...rivals];
+ if(scenicPasses.has(route.id)){
+   $('raceIntro').textContent=scenicPasses.get(route.id).description;
+   $('passAtlas').href='cung-duong.html#'+route.id;
+ }
  if(cupRamp)$('raceIntro').textContent='Nhặt bánh mì để nạp nitro. Gần đích, rẽ vào nhánh trái để thử dốc bay.';
  parkCup();cupFx.reset();inside=false;placeRivals();$('routeName').textContent=route.name;$('progress').max=route.finish;
  const choices=Object.keys(routes);$('next').href='?route='+choices[(choices.indexOf(route.id)+1)%choices.length];
- if(route.stage){const link=$('freePass');link.href='./?pass='+route.id;link.textContent='Lái tự do tại '+route.name;}
+ if(route.stage){
+   const link=$('freePass'),light=scenicHour()===null?'':'&light='+query.get('light');
+   link.href='./?pass='+route.id+light;link.textContent='Lái tự do tại '+route.name;
+ }
  requestAnimationFrame(render);
 }
 const cupBoard=createLeaderboard(route.id,route.name);
@@ -259,6 +266,25 @@ function raceHud(){
  $('distance').textContent=Math.round(state.d)+' m';$('progress').value=state.d;
  $('callout').textContent=state.mode==='drive'?(state.time<feedbackUntil?message:drafting?'Núp gió · nạp nitro':''):'';
 }
+// Frame a bend from the uphill side so the road and the valley read together.
+function passPanorama(){
+ let best=null,score=-Infinity;
+ for(let d=120;d<route.finish-100;d+=80){
+   const road=at(d);
+   for(const side of [-1,1]){
+     const valley=at(d,side*450),eye=at(d-52,-side*80);
+     const drop=road.y-renderedGround(valley.x,valley.z);
+     const bend=Math.min(1,Math.abs(heading(d+48)-heading(d-48)));
+     if(drop+80*bend<=score)continue;
+     score=drop+80*bend;
+     const target=at(d+38,side*32);
+     best={eye:new T.Vector3(eye.x,Math.max(renderedGround(eye.x,eye.z)+26,road.y+43),eye.z),
+       target:new T.Vector3(target.x,road.y+7,target.z)};
+   }
+ }
+ return best;
+}
+const scenicView=featuredPass?passPanorama():null;
 function raceCamera(dt,now){
  const driving=state.mode==='drive',braking=held('s','arrowdown',' ');
  playerShadow.visible=!state.airborne;
@@ -276,7 +302,9 @@ function raceCamera(dt,now){
    const station=c.isPlayer?state.d:c.driver.d;
    c.model.rotation.x=c.isPlayer?-cupBody.pitch:Math.atan(roadGrade(station,at(station).h));
  }
- if(state.mode==='grid'){
+ if(state.mode==='grid'&&scenicView){
+   camera.position.copy(scenicView.eye);camera.lookAt(scenicView.target);
+ }else if(state.mode==='grid'){
    const portrait=camera.aspect<.85;
    eye.set(portrait?-5.5:-4.0,portrait?1.85:1.42,portrait?8.4:5.18).applyQuaternion(yawQ).add(rig.position);
    look.set(portrait?0:-1.28,.77,-.35).applyQuaternion(yawQ).add(rig.position);

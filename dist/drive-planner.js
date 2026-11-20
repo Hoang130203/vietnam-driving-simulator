@@ -25,6 +25,7 @@ function createDrivePlanner({getOrigin,choosePoint,drive,openBoard,getIndex}) {
     el('planDrive').disabled=Boolean(worker) || (custom?!start||!finish:!selected);
     el('planDrive').textContent=worker?'Đang tìm đường…':custom?'Tìm đường':'Chọn tuyến này';
     el('planRanking').hidden=custom||!selected;
+    el('featuredDescription').textContent=selected?.description||'';
     for(const id of ['pickOrigin','pickDestination','customTab','featuredTab'])el(id).disabled=Boolean(worker);
   }
   function showTab(isCustom){
@@ -46,7 +47,9 @@ function createDrivePlanner({getOrigin,choosePoint,drive,openBoard,getIndex}) {
         radio.type='radio';radio.name='featured-drive';radio.value=route.id;radio.checked=selected===route;
         radio.onchange=()=>{selected=route;status('');refresh();};
         title.textContent=route.title;km.textContent=(route.metres/1000).toLocaleString('vi-VN',{maximumFractionDigits:1})+' km';
-        label.append(radio,title,km);el('featuredChoices').append(label);
+        const photo=document.createElement('img');photo.alt='';photo.width=66;photo.height=40;
+        photo.src='landmark-previews/'+encodeURIComponent(route.landmarkId)+'.webp';
+        label.append(radio,photo,title,km);el('featuredChoices').append(label);
       }
       refresh();
     }catch{if(token===session && !custom)status('Chưa tải được các tuyến. Chọn lại mục Tuyến nổi bật để thử lại.');}

@@ -84,8 +84,14 @@ def stage(name, edges, dem):
         heights.append(round(h,1))
     slug = unicodedata.normalize('NFKD',name.lower().replace('đ','d')).encode('ascii','ignore').decode()
     slug = '-'.join(slug.replace("'",'').split())
-    return dict(id=slug,name=name,start=[round(v,7) for v in samples[0]],bearing=round(angles[0],1),
-                step=STEP,angles=[round(v-angles[0],1) for v in angles],heights=heights)
+    result = dict(id=slug,name=name,start=[round(v,7) for v in samples[0]],bearing=round(angles[0],1),
+                  step=STEP,angles=[round(v-angles[0],1) for v in angles],heights=heights)
+    if slug in ('deo-hai-van','deo-ma-pi-leng','deo-khau-pha','deo-o-quy-ho','deo-pha-din','deo-ngoan-muc'):
+        # Free driving follows OSM in its original map frame. Store the sampled
+        # offsets so rounding and chord shortening never accumulate around bends.
+        lon,lat = samples[0]
+        result['trace'] = [[round((x-lon)*1e6),round((y-lat)*1e6)] for x,y in samples]
+    return result
 
 
 def main():
@@ -95,6 +101,12 @@ def main():
             name = label.split(' · ')[0]
             if name.startswith('Đèo ') and not oneway and kind not in ('service','track'):
                 groups[name][key] = list(zip(coords[::2],coords[1::2]))
+            # OSM labels the two-way pass above Tu Sản as QL.4C rather than
+            # naming the pass. Select the connected stretch around its overlook.
+            elif label.endswith(' · QL.4C') and kind == 'trunk' and not oneway:
+                ends = (coords[:2], coords[-2:])
+                if all(10539000 <= x <= 10541700 and 2323000 <= y <= 2325100 for x, y in ends):
+                    groups['Đèo Mã Pí Lèng'][key] = list(zip(coords[::2],coords[1::2]))
     dem = Image.open(ROOT/'streetscape/surfaces/vietnam-elevation.png').convert('L')
     stages = [s for name in sorted(groups) if (s:=stage(name, groups[name], dem))]
     seen = set()

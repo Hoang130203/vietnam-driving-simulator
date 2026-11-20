@@ -8,6 +8,11 @@
 #featuredChoices {padding:0;border:0;margin:0;min-width:0}
 #featuredChoices label {display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:9px;min-height:43px;padding:7px 3px;border-bottom:1px solid #c8d5c8;font-size:.95rem;cursor:pointer}
 #featuredChoices input {width:17px;height:17px;accent-color:#346741}
+#featuredChoices label {grid-template-columns:18px clamp(45px,13vw,66px) 1fr auto;padding-inline:5px}
+#featuredChoices img {width:100%;height:40px;object-fit:cover;border-radius:3px}
+#featuredChoices label:has(:checked) {background:#e3eddb}
+#featuredDescription {margin:12px 0 4px;color:#314e3b}
+#featuredTrips>a {color:#284a36;text-decoration:underline}
 #featuredChoices label span {font-variant-numeric:tabular-nums;color:#466351;white-space:nowrap}
 .planActions {display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .planActions button {min-height:44px}

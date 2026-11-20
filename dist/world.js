@@ -9,6 +9,7 @@ let gfx,atlasData,indexData,roads,waterIndex,water,player,nearby=[],npcs=[],next
 let viewX=Infinity,viewZ=Infinity,loadX=Infinity,loadZ=Infinity,busy=false,loadToken=0,streamRetry=0,tourPins=[];
 let hp=100,nitro=100,cooldown=0,distance=0,snapshot=0,toastTime=0,crashTime=0,crashKind='car',passes=0,duel=null;
 let car={model:'supercar',x:0,z:0,yaw:0,speed:0,steer:0,brake:false},last=performance.now(),uiTick=0,spawnTick=0;
+let scenicTrace=null;
 let activeTrip=false,loadRequest=null,openingCameraTime=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
 try{const model=localStorage.getItem('taylai.garage');if(['gt','rally'].includes(model))car.model=model;}catch{}
@@ -75,7 +76,7 @@ async function streamWater(graph){
  }catch{/* Road navigation stays available when this scenery layer is offline. */}
 }
 async function startAt(place,restore=null,guided=null){
- guide=null;guideStarted=0;customSaveKey=null;
+ guide=null;scenicTrace=null;guideStarted=0;customSaveKey=null;
  $('startGuided').disabled=true;$('guidedInfo').hidden=true;
  loadRequest={place,restore,guided};activeTrip=false;
  const firstDrive=place===openingPlace&&!restore;
@@ -84,6 +85,7 @@ async function startAt(place,restore=null,guided=null){
  document.body.toggleAttribute('data-lakeside',firstDrive);
  gfx.preloadVehicle(car.model);
  const site=place[3]||destinations.find(entry=>restore?.destination===entry.id);
+ car.scenicHour=scenicPasses.has(site?.id)?scenicHour():null;
  const departure=restore?null:JourneyDepartures.byId(site?.id);
  JourneyDepartures.select(departure);
  $('journeyTitle').textContent=departure?.title||site?.name||place[0];
@@ -91,6 +93,7 @@ async function startAt(place,restore=null,guided=null){
  $('journeyCaption').textContent=guided?guided.id?'Đồng hồ xếp hạng chạy từ lúc cầm lái và tính cả thời gian tạm dừng.':'Đi theo vệt xanh đến '+guided.finishLabel+'.':restore?'Tiếp tục hành trình đã lưu · '+fmt(restore.distance):
    departure?departure.caption:
    samePlace(place,baSaoDrive)?'Theo đường Điện Biên Phủ về phía Khả Phong, qua khu dân cư Ba Sao và chân núi.':
+   scenicPasses.has(site?.id)?scenicPasses.get(site.id).description:
    site?.km?'Chinh phục '+fmt(site.km*1000)+' đường đèo.':[site?.kind,site?.city].filter(Boolean).join(' · ')||'Khám phá những con đường quanh điểm xuất phát.';
  if(guided){
    $('journeyTitle').textContent=guided.title;
@@ -130,6 +133,7 @@ async function startAt(place,restore=null,guided=null){
      guide=createGuidedDrive(graph,route,resume);nearest={...guide.start};
      $('journeyCaption').textContent=fmt(guide.length)+' · '+$('journeyCaption').textContent;
    }
+   if(!guided&&scenicPasses.has(site?.id))scenicTrace=createScenicTrace(mountainStages.find(stage=>stage.id===site.id),graph);
    nextWeatherCheck=0;roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
    car.region=place[2]<10.8?'delta':place[2]>21.6||(place[1]>107&&place[2]>11&&place[2]<15)?'highlands':'city';
    duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();gfx.resetFx();
@@ -411,7 +415,8 @@ function updateHud(){
  $('duelInfo').hidden=!duel;
  if(duel)$('duelInfo').textContent='CHẶNG '+duel.round+' · '+(duel.player>=duel.opponent?'1/2':'2/2')+' · CÒN '+Math.ceil(duel.gate-duel.player)+' M';
  $('turnInfo').textContent=car.flood?'Xe ngập nước · chờ cứu hộ':car.wading?'Đang lội nước':duel?.offCourse?'Lệch lộ trình · tự lái về vệt xanh trên bản đồ':car.offroad?'Ngoài mặt đường':plan?'Giao lộ sau '+Math.ceil(fork.left)+' m · '+branchText(fork.options.find(o=>o.edge.id===plan.edge.id)?.angle||0):fork?'Giao lộ sau '+Math.ceil(fork.left)+' m':'';
- $('guidedInfo').hidden=!guide;
+ $('guidedInfo').hidden=!guide&&(!scenicTrace||!!duel);
+ if(scenicTrace&&!duel)$('guidedInfo').textContent=source[3].name+' · '+scenicTrace.status(car);
  if(guide){
    $('guidedInfo').textContent=guide.timeMs?'Đã đến '+guide.route.finishLabel+' · '+formatRaceTime(guide.timeMs):guide.route.finishLabel+' · Còn '+fmt(guide.remaining)+' · '+formatRaceTime(Math.max(0,Math.floor(performance.now()-guideStarted))).split('.')[0];
    if(guide.timeMs===null && !car.flood && !car.wading)$('turnInfo').textContent=guide.instruction();
@@ -449,7 +454,7 @@ function drawDepartureMap(){
  g.beginPath();g.arc(c.width/2,c.height/2,5,0,Math.PI*2);g.fillStyle='#f2ffca';g.fill();
 }
 let mapPlaces=[];
-const drivingMap=createDrivingMap(()=>({graph:roads,car,edge:player.edge,water,duel,guide,places:mapPlaces,amenities:gfx.streetLife?.places||[]}));
+const drivingMap=createDrivingMap(()=>({graph:roads,car,edge:player.edge,water,duel,guide:guide||(!duel&&scenicTrace),places:mapPlaces,amenities:gfx.streetLife?.places||[]}));
 function openDrivingMap(){
  if(mode!=='drive')return;
  mode='map';keySet.clear();save();
@@ -470,10 +475,11 @@ function drawMini(landmark){
    g.strokeStyle=e.id===player.edge.id?'#d8f791':'#93aba2';g.lineWidth=e.id===player.edge.id?7:3;
    traceMapLine(g,e.points);g.stroke();
  }
- if(guide){
+ const trace=guide||(!duel&&scenicTrace);
+ if(trace){
    g.lineWidth=6;g.strokeStyle='#8af5ae';
-   for(const points of guide.visiblePaths(nearby)){traceMapLine(g,points);g.stroke();}
-   if(guide.detour){
+   for(const points of trace.visiblePaths(nearby)){traceMapLine(g,points);g.stroke();}
+   if(guide?.detour){
      g.setLineDash([10,7]);g.strokeStyle='#ffba78';traceMapLine(g,guide.detour.points);g.stroke();g.setLineDash([]);
    }
  }
@@ -807,7 +813,7 @@ for(const model of models){
 const catalog=tourismSites.filter(site=>!replaced.has(site)&&site.id!=='osm-way-1346643116')
   .map(site=>({...site,photo:window.VietnamSightDetails?.[site.id]?.photo}));
 const mountainPlaces=mountainStages.map(stage=>({
- id:stage.id,name:stage.name,kind:'Đường đèo',city:'Đường đèo',start:stage.start,
+ id:stage.id,name:stage.name,kind:'Đường đèo',city:scenicPasses.get(stage.id)?.region||'Đường đèo',start:stage.start,
  lon:stage.start[0],lat:stage.start[1],bearing:stage.bearing,km:stage.angles.length*stage.step/1000
 }));
 const destinations=[...models,...mountainPlaces,...catalog];

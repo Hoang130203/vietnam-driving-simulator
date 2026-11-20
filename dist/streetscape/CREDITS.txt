@@ -51,7 +51,7 @@ https://polyhaven.com/license
 Pine Tree 01 by Rob Tuytel (photography) and Rico Cilliers (modeling), Poly Haven, CC0. The mountain pine billboard is a locally rendered orthographic view of the second full-resolution tree.
 https://polyhaven.com/a/pine_tree_01
 https://polyhaven.com/license
-Visitor atlas satellite imagery, vegetation index and inland/coastal water masks
+Visitor atlas and featured mountain passes: satellite imagery, land cover, vegetation index and inland/coastal water masks
 © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium.
 Zanaga et al. (2022), ESA WorldCover 10 m 2021 v200 (CC BY 4.0).
 The simulator crops and resamples the annual Sentinel-2 RGBNIR composite, derives the vegetation index from red and near-infrared reflectance and extracts permanent water from the 10 m classification.

@@ -146,6 +146,7 @@
         shader.fragmentShader='varying vec2 groundMetres; varying float bankWet; uniform sampler2D shoreEarth;\n'+shader.fragmentShader.replace('#include <map_fragment>',
           '#include <map_fragment>\n float patchiness=sin(dot(groundMetres,vec2(.035,.019)))+.55*cos(dot(groundMetres,vec2(-.015,.047))); diffuseColor.rgb*=vec3(.96,.98,.95)+patchiness*vec3(.08,.035,.05); vec3 silt=texture2D(shoreEarth,groundMetres*.58).rgb; float bank=clamp(bankWet+(silt.g-.17)*.7,0.,1.)*smoothstep(0.,.2,bankWet); diffuseColor.rgb=mix(diffuseColor.rgb,silt*mix(vec3(.84,.78,.66),vec3(.34,.31,.25),bankWet),bank);');
         coverMap.shade(shader);landscapes.shade(shader);
+        relief.passSurface.shade(shader,'groundMetres','(.40+.46*smoothstep(35.,450.,length(vViewPosition)))*(1.-bankWet)');
         // The satellite texels span several metres. Restore ground-scale contrast
         // after the regional tint, including at the edge of a streamed tile.
         shader.fragmentShader=shader.fragmentShader.replace('#include <alphamap_fragment>',`
@@ -1178,6 +1179,7 @@
       }
       sightings.update(dt,car,originX,originZ,camera.aspect);
       if(breakfast.update(car,dt))onBreakfastCall?.();
+      atmosphere.setHour(car.scenicHour);
       weather.render(camera,now,car.dawn||0,atmosphere.update);
       headlight.intensity=car.flood?0:atmosphere.lamps.value*2600;
       headlight.visible=headlight.intensity>3;

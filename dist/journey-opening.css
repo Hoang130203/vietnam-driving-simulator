@@ -57,23 +57,25 @@
 @media(orientation:portrait) {
   #openingStill {background-image:var(--tall-view,none)}
 }
-.departureChoices {
+.departureRibbon {
   position:absolute; z-index:1; top:calc(68px + env(safe-area-inset-top)); left:var(--gutter,5vw); right:var(--gutter,5vw);
   display:flex; align-items:center; flex-wrap:wrap; gap:6px; pointer-events:none;
 }
-.departureChoices a {
+.departureChoices {display:contents}
+.departureChoices a,.passCollection {
   pointer-events:auto; padding:7px 13px; text-decoration:none; color:#fffdf1;
   background:#172622df; border:1px solid #b9c6bb8c; border-radius:18px;
   font:600 14px/1.25 system-ui,sans-serif;
 }
 .departureChoices a[aria-current] {color:#18271a; background:var(--lime);border-color:var(--lime)}
-.departureChoices a:focus-visible {outline:3px solid white;outline-offset:2px}
+.passCollection {border-color:#d9eab3;color:#e5f8be;background:#203e30}
+.departureChoices a:focus-visible,.passCollection:focus-visible {outline:3px solid white;outline-offset:2px}
 @media(max-width:650px) {
-  .departureChoices {left:max(16px,env(safe-area-inset-left));right:16px;top:calc(61px + env(safe-area-inset-top));gap:5px}
-  .departureChoices a {padding:7px 10px;font-size:13px}
+  .departureRibbon {left:max(16px,env(safe-area-inset-left));right:16px;top:calc(61px + env(safe-area-inset-top));gap:5px}
+  .departureChoices a,.passCollection {padding:7px 10px;font-size:13px}
 }
 @media(max-height:480px) and (orientation:landscape) {
-  .departureChoices {top:calc(46px + env(safe-area-inset-top))}
+  .departureRibbon {top:calc(46px + env(safe-area-inset-top))}
 }
 .journey[data-lakeside] .routeInfo [data-weather],
 .journey[data-lakeside] .routeInfo #trip,

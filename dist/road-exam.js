@@ -27,24 +27,8 @@ const route=(Object.hasOwn(routes,query.get('route')) && routes[query.get('route
 $('route').value=route.id;$('route').disabled=exam;$('routeName').textContent=route.name;
 $('route').onchange=e=>{const u=new URL(location.href);u.searchParams.set('route',e.target.value);location.href=u.href;};
 const roadHalfWidth=route.stage?4.15:6;
+const featuredPass=scenicPasses.has(route.id);
 const step=4,points=[];
-function smoothRoadProfile(stage){
-  if(!stage)return null;
-  // Average over a vehicle-scale approach to a crest. Coarse DEM pixels describe
-  // hillsides and often overstate the gradient of a road cut into that hillside.
-  const h=stage.heights,rises=[];
-  for(let i=1;i<h.length;i++)rises.push((h[i]-h[i-1])/stage.step);
-  const result=[0],weights=[1,2,3,4,5,6,5,4,3,2,1];
-  let previous;
-  for(let i=0;i<rises.length;i++){
-    let slope=0;
-    for(let j=-5;j<=5;j++)slope+=weights[j+5]*rises[clamp(i+j,0,rises.length-1)]/36;
-    const target=.087*Math.tanh(slope/.087);
-    previous=previous===undefined?target:clamp(target,previous-.018,previous+.018);
-    result.push(result[i]+stage.step*previous);
-  }
-  return result;
-}
 const carriagewayHeights=smoothRoadProfile(route.stage);
 function heading(d){
   if(route.stage)return sampleStage(route.stage.angles,d-route.stage.step/2,route.stage.step)*Math.PI/180;
@@ -97,15 +81,18 @@ function roadCoordinates(x,z,near){
 }
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas:$('world'),antialias:true});
 scene.background=new T.Color(0xbcd7de);scene.fog=new T.FogExp2(0xc8dbd4,.00205);
-const sky=new T.TextureLoader().load('streetscape/sky.jpg',tex=>{tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.background=tex;if(!scene.environment)scene.environment=tex;});
+if(!featuredPass)new T.TextureLoader().load('streetscape/sky.jpg',tex=>{tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.background=tex;if(!scene.environment)scene.environment=tex;});
 if(arcade)new T.TextureLoader().load('streetscape/'+(route.stage?'pass':route.id)+'-reflection.jpg',tex=>{
  tex.mapping=T.EquirectangularReflectionMapping;tex.colorSpace=T.SRGBColorSpace;scene.environment=tex;
 });
 renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.04;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
 scene.fog=new T.FogExp2(0xb4c6c5,.00135);
-scene.add(new T.HemisphereLight(0xcde4ff,0x887d64,1.05));
+if(!featuredPass)scene.add(new T.HemisphereLight(0xcde4ff,0x887d64,1.05));
 const sun=new T.DirectionalLight(0xffdfaf,2.8);sun.castShadow=true;sun.position.set(-38,45,22);scene.add(sun,sun.target);
+const passSky=featuredPass?createWorldAtmosphere(T,scene,sun,new T.TextureLoader(),route.stage.bearing*Math.PI/180,.00016):null;
+const passSurface=featuredPass?createPassSurface(T):null;
+if(passSky){passSky.setLocation(...route.stage.start);passSky.setHour(scenicHour());passSurface.select(route.id);}
 renderer.shadowMap.autoUpdate=false;
 Object.assign(sun.shadow.camera,{left:-43,right:43,top:43,bottom:-43,near:1,far:170});sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.normalBias=.025;sun.shadow.bias=-.00022;
@@ -143,6 +130,12 @@ function ribbon(left,right,color,raise,roadMaterial,dashed=false){
       float mottle=texture2D(map,vMapUv*.124+vec2(.41,.13)).r;
       diffuseColor.rgb*=clamp(.9+mottle*.36,.88,1.10)*(1.-tires*(.13+.05*sin(roadUv.y*.7)));
     `);
+    if(passSky){
+      shader.uniforms.wetPavement=passSky.wetness;
+      shader.fragmentShader='uniform float wetPavement;\n'+shader.fragmentShader
+        .replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb*=1.-.35*wetPavement;')
+        .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor=mix(roughnessFactor,.17,wetPavement*(.5+.5*mottle));');
+    }
   };
   const surface=new T.Mesh(geo,material);surface.receiveShadow=true;scene.add(surface);
 }
@@ -378,6 +371,7 @@ function terrain(){
     }
     shader.fragmentShader=vars+'uniform sampler2D earthMap; uniform sampler2D cutStone; uniform sampler2D cutNormal;\n'
       +shader.fragmentShader.replace('#include <map_fragment>',colour);
+    passSurface?.shade(shader,'hillside.xz','(.32+.56*smoothstep(22.,190.,length(vViewPosition)))*(1.-exposed)*(1.-soilWeight)');
   };
   const field=new T.Mesh(g,land);field.receiveShadow=true;scene.add(field);
 }
@@ -543,6 +537,11 @@ for(const b of batches.values()){
  const m=new T.InstancedMesh(geom[b.kind],foliage[b.kind]||new T.MeshLambertMaterial({color:b.color}),b.matrices.length);b.matrices.forEach((mat,i)=>m.setMatrixAt(i,mat));m.castShadow=b.kind!=='undergrowth';m.receiveShadow=!foliage[b.kind];scene.add(m);
 }
 const rig=new T.Group();scene.add(rig);
+const passHeadlights=featuredPass?new T.SpotLight(0xffe8c1,0,85,.5,.55,2):null;
+if(passHeadlights){
+  passHeadlights.position.set(0,.76,-2.2);passHeadlights.target.position.set(0,.09,-24);
+  rig.add(passHeadlights,passHeadlights.target);
+}
 const cabin=buildDriverCabin(T,rig), outer=new T.Group();rig.add(outer);
 const fallback=new T.Mesh(new T.BoxGeometry(1.8,1.1,4),new T.MeshStandardMaterial({color:0xcda05e}));fallback.position.y=.75;outer.add(fallback);
 async function loadSedan(){
@@ -748,7 +747,8 @@ function render(now){
    const north=-s.x*Math.sin(weatherBearing)-s.z*Math.cos(weatherBearing);
    courseWeather.locate(weatherOrigin[0]+east/(111320*Math.cos(weatherOrigin[1]*Math.PI/180)),weatherOrigin[1]+north/111320);
  }
- courseWeather.render(camera,now);
+ courseWeather.render(camera,now,0,passSky?.update);
+ if(passHeadlights){passHeadlights.intensity=passSky.lamps.value*2600;passHeadlights.visible=passHeadlights.intensity>3;}
  courseWater.update(now*.001,courseWeather.rainfall);
  if(s.mode==='ready'||s.mode==='grid')cabin.prepare(renderer,scene,camera);
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0,graphics.profile.mirrorMs);

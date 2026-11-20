@@ -102,6 +102,19 @@ function buildMountainVerges(){
   }
   mesh(shoulders,null,uv,disturbed);
   mesh(rail,railIndices,null,new T.MeshStandardMaterial({color:0xb0b3ad,metalness:.54,roughness:.55,side:T.DoubleSide}));
+  if(featuredPass){
+    // White roadside delineators pick out the outer edge of the next curve.
+    // Test the nearest carriageway too: the next hairpin can double back here.
+    for(let d=50;d<route.finish-20;d+=25){
+      const turn=heading(d+16)-heading(d-16);
+      if(Math.abs(turn)<.13)continue;
+      const side=-Math.sign(turn),p=at(d,side*(roadHalfWidth+1.85)),n=nearest(p.x,p.z);
+      const y=renderedGround(p.x,p.z);
+      if(n.dist<roadHalfWidth+1||Math.abs(y-p.y)>.6)continue;
+      scatter('box',0xdedcc8,p.x,y+.43,p.z,.21,.86,.22,-p.h);
+      scatter('box',0xa44330,p.x,y+.90,p.z,.215,.16,.225,-p.h);
+    }
+  }
   const fern=loader.load('streetscape/surfaces/bank-fern.webp');fern.colorSpace=T.SRGBColorSpace;
   foliage.undergrowth=new T.MeshLambertMaterial({map:fern,side:T.DoubleSide,alphaTest:.34,color:0xd4d8be,emissive:0x89906c,emissiveMap:fern,emissiveIntensity:.8});
   geom.undergrowth=geom.tree;
@@ -109,6 +122,33 @@ function buildMountainVerges(){
   foliage.pine=new T.MeshLambertMaterial({map:pine,side:T.DoubleSide,alphaTest:.31,
     color:0xf1f2e8,emissive:0x858b7a,emissiveMap:pine,emissiveIntensity:.5});
   geom.pine=geom.tree;
+  if(featuredPass){
+    // One canopy spans two crossed planes. Give both faces a crown normal so
+    // raking sunlight doesn't turn one half of a tree black and the other gold.
+    for(const crown of [foliage.tree,foliage.pine,foliage.undergrowth]){
+      crown.emissive.set(0x060a07);
+      crown.onBeforeCompile=shader=>{
+        shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>',
+          '#include <beginnormal_vertex>\n objectNormal=normalize(vec3((uv.x-.5)*.3,1.,.12));');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>',
+          '#include <normal_fragment_begin>\n normal*=faceDirection;');
+      };
+    }
+    // Weathered outcrops emerge from the cut side, especially in the limestone
+    // gorge. Sample the ground under each rock and exclude adjacent switchbacks.
+    const limestone=route.id==='deo-ma-pi-leng',rockColour=limestone?0xb3b5a7:0x969287;
+    geom.outcrop=new T.DodecahedronGeometry(1,0);
+    for(let d=25;d<route.finish;d+=limestone?17:47){
+      const side=random()<.5?-1:1,l=side*(10+random()*18);
+      const near=at(d,l),back=at(d,l+side*7);
+      if(renderedGround(back.x,back.z)-renderedGround(near.x,near.z)<2.1)continue;
+      for(let j=0;j<4;j++){
+        const p=at(d+random()*7,l+side*random()*4),w=1+random()*2.3,h=w*(limestone?1.5:.82);
+        if(nearest(p.x,p.z).dist<roadHalfWidth+w+2)continue;
+        scatter('outcrop',rockColour,p.x,renderedGround(p.x,p.z)-h*.23,p.z,w,h,w*.64,-p.h+random()*.7,-.21+random()*.32);
+      }
+    }
+  }
   // Conifers occur in pockets. Retain broadleaf vegetation on low coastal stages.
   const conifers=!route.stage||/o-quy-ho|khanh-le|prenn|mimosa|dran|dai-ninh|sacom|pha-din|khau-pha/.test(route.id);
   const compact=matchMedia('(pointer:coarse)').matches;

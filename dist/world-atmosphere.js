@@ -1,11 +1,12 @@
 'use strict';
 
 // The sky, its reflection in water, and the key light share a sun direction.
-function createWorldAtmosphere(T, scene, sun, loader) {
+function createWorldAtmosphere(T, scene, sun, loader, bearing=0, clearFog=.00078) {
   const skyMap = loader.load('streetscape/sky.jpg');
   skyMap.colorSpace = T.SRGBColorSpace;
   skyMap.wrapS = T.RepeatWrapping;
   const solar = new T.Vector3(), direction = new T.Vector3();
+  const up = new T.Vector3(0,1,0);
   const morning = new T.Vector3(.94,.115,-.32).normalize();
   const uniforms = {
     panorama: {value:skyMap}, sunRay: {value:direction}, overcast: {value:0},
@@ -67,7 +68,10 @@ function createWorldAtmosphere(T, scene, sun, loader) {
     mat.envMapIntensity=mat.userData.dayReflection*reflectionLight;
     finishes.add(mat);
   }
-  let lastMinute=-1, longitude=105.8, latitude=21;
+  let lastMinute=-1, longitude=105.8, latitude=21, localHour=null;
+  function setHour(hour){
+    if(hour!==localHour){localHour=hour;lastMinute=-1;}
+  }
   function setLocation(lon,lat) {
     longitude=lon; latitude=lat; lastMinute=-1;
   }
@@ -78,10 +82,11 @@ function createWorldAtmosphere(T, scene, sun, loader) {
       const day=new Date(minute*60000);
       const yearDay=(minute*60000-Date.UTC(day.getUTCFullYear(),0,1))/86400000;
       const rad=Math.PI/180, declination=.409*Math.sin((yearDay-80)*2*Math.PI/365.24);
-      const angle=((minute%1440)/4+longitude-180)*rad, lat=latitude*rad;
+      const utcMinutes=localHour==null?minute%1440:(localHour-7)*60;
+      const angle=(utcMinutes/4+longitude-180)*rad, lat=latitude*rad;
       const cd=Math.cos(declination), sd=Math.sin(declination);
       solar.set(-cd*Math.sin(angle),sd*Math.sin(lat)+cd*Math.cos(angle)*Math.cos(lat),
-        cd*Math.cos(angle)*Math.sin(lat)-sd*Math.cos(lat));
+        cd*Math.cos(angle)*Math.sin(lat)-sd*Math.cos(lat)).applyAxisAngle(up,bearing);
     }
     direction.copy(solar).lerp(morning,dawn).normalize();
     const day=T.MathUtils.smoothstep(direction.y,-.14,.08);
@@ -98,7 +103,7 @@ function createWorldAtmosphere(T, scene, sun, loader) {
     lamps.value=Math.max(1-day,T.MathUtils.smoothstep(cover,.65,.98)*.24);
     mixColour.copy(clearAir).lerp(warmAir,dusk*.88).lerp(greyAir,cover).lerp(nightAir,1-day);
     scene.fog.color.copy(mixColour);
-    scene.fog.density=Math.max(.00078+dusk*.00043+cover*.00072,.010*fog,.0032*wetness.value);
+    scene.fog.density=Math.max(clearFog*(1.+dusk*.55+cover*.92),.010*fog,.0032*wetness.value);
     sun.color.copy(daySun).lerp(warmSun,dusk).lerp(greyAir,cover*.65).lerp(moon,1-day);
     sun.intensity=(.29+day*(3.25-.54*dusk))*(1.-.79*cover);
     fill.color.copy(skyFill).lerp(lowFill,dusk*.60).lerp(nightFill,1-day);
@@ -109,5 +114,5 @@ function createWorldAtmosphere(T, scene, sun, loader) {
     sun.position.y=Math.max(.17,sun.position.y);
     sun.position.normalize().multiplyScalar(68).add(sun.target.position);
   }
-  return {update,setLocation,registerFinish,wetness,lamps};
+  return {update,setLocation,setHour,registerFinish,wetness,lamps};
 }

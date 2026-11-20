@@ -2,6 +2,7 @@
   {
     "id": "ba-sao-tam-chuc",
     "title": "Ba Sao → Tam Chúc",
+    "description": "Rời khu dân cư Ba Sao, theo QL21 tới đường ven hồ Tam Chúc dưới chân núi đá vôi.",
     "startLabel": "Ba Sao",
     "finishLabel": "Tam Chúc",
     "start": [105.815695,20.550735],
@@ -14,6 +15,7 @@
   {
     "id": "thac-bac-sa-pa",
     "title": "Thác Bạc → Nhà thờ đá Sa Pa",
+    "description": "Từ đường núi ở Thác Bạc, lái về phố dốc và quảng trường trước nhà thờ đá Sa Pa.",
     "startLabel": "Thác Bạc",
     "finishLabel": "Nhà thờ đá Sa Pa",
     "start": [103.7799201,22.3604611],
@@ -26,6 +28,7 @@
   {
     "id": "bach-khoa-ho-guom",
     "title": "Bách khoa Hà Nội → Hồ Gươm",
+    "description": "Rời khu Bách khoa, qua các giao lộ nội thành rồi dừng bên Hồ Gươm.",
     "startLabel": "Bách khoa Hà Nội",
     "finishLabel": "Hồ Gươm",
     "start": [105.8415793,21.0051],
@@ -38,6 +41,7 @@
   {
     "id": "ky-dai-thien-mu",
     "title": "Kỳ Đài Huế → Chùa Thiên Mụ",
+    "description": "Từ Kỳ Đài bên Kinh thành, đi về phía chùa Thiên Mụ trên bờ bắc sông Hương.",
     "startLabel": "Kỳ Đài Huế",
     "finishLabel": "Chùa Thiên Mụ",
     "start": [107.581668,16.465841],
@@ -50,6 +54,7 @@
   {
     "id": "thanh-vinh-lang-sen",
     "title": "Thành cổ Vinh → Làng Sen",
+    "description": "Khởi hành từ thành cổ giữa phố Vinh, lái về làng quê ở Kim Liên.",
     "startLabel": "Thành cổ Vinh",
     "finishLabel": "Làng Sen",
     "start": [105.66932,18.667487],
@@ -62,6 +67,7 @@
   {
     "id": "hon-chong-po-nagar",
     "title": "Hòn Chồng → Tháp Bà Po Nagar",
+    "description": "Chặng ngắn ở Nha Trang nối bãi đá Hòn Chồng với quần thể tháp Chăm bên sông Cái.",
     "startLabel": "Hòn Chồng",
     "finishLabel": "Tháp Bà Po Nagar",
     "start": [109.2058,12.27203],
@@ -74,6 +80,7 @@
   {
     "id": "dam-sen-ben-thanh",
     "title": "Đầm Sen → Chợ Bến Thành",
+    "description": "Từ Đầm Sen, theo mạng phố đông giao lộ vào trung tâm thành phố, kết thúc ở chợ Bến Thành.",
     "startLabel": "Đầm Sen",
     "finishLabel": "Chợ Bến Thành",
     "start": [106.6386114,10.7630873],
@@ -86,6 +93,7 @@
   {
     "id": "chua-ong-cai-rang",
     "title": "Chùa Ông Cần Thơ → Chợ nổi Cái Răng",
+    "description": "Xuất phát ở bến Ninh Kiều, từ chùa Ông lái về khu chợ nổi trên sông Cần Thơ.",
     "startLabel": "Chùa Ông Cần Thơ",
     "finishLabel": "Chợ nổi Cái Răng",
     "start": [105.7885939,10.034133],
