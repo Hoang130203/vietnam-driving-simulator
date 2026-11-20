@@ -116,7 +116,11 @@ function beginRace(){
  if(route.stage){const link=$('freePass');link.href='./?pass='+route.id;link.textContent='Lái tự do tại '+route.name;}
  requestAnimationFrame(render);
 }
+const cupBoard=createLeaderboard(route.id,route.name);
+$('showBoard').onclick=()=>cupBoard.open();
+$('scoreBoard').onclick=()=>cupBoard.open((state.time+penalty)*1000);
 function startCountdown(){
+ cupBoard.start();
  $('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('pause').hidden=false;
  setMode('countdown');keys.clear();$('count').textContent='3';driveAudio.cue(false);
 }
@@ -198,8 +202,8 @@ function raceUpdate(dt){
  DriveBody.step(cupBody,{grade:roadGrade(s.d,cupBody.yaw),gas,brake:held(' '),reverse:held('s','arrowdown'),steer,boost:nitro,power:setup.power+(drafting?1.6:0),top:setup.top},dt);
  syncCup();
  const angle=at(s.d).h;
- const rail=route.stage&&mountainRails.get(Math.sign(s.offset))?.some(span=>s.d>=span.start&&s.d<=span.end);
- const boundary=route.stage?roadHalfWidth+(rail ? .1 : 1.45):roadHalfWidth-.65;
+ const rail=route.stage&&mountainRails.get(Math.sign(s.offset))?.find(span=>s.d>=span.start&&s.d<=span.end);
+ const boundary=route.stage?roadHalfWidth+(rail?railSetback(s.d,rail.start,rail.end)-.95:1.45):roadHalfWidth-.65;
  const edge=Math.abs(s.offset)-boundary;
  if(edge>0){
    const side=-Math.sign(s.offset);
@@ -279,7 +283,7 @@ $('resume').onclick=()=>{$('rest').close();keys.clear();setMode(resumePhase);};
 $('again').onclick=()=>location.reload();
 $('camera').onclick=()=>{if(state.mode!=='grid')inside=!inside;};
 $('sound').onclick=()=>{sound=driveAudio.toggle();$('sound').textContent=sound?'Tắt âm':'Bật âm';};
-for(const dialog of document.querySelectorAll('dialog'))dialog.oncancel=e=>{e.preventDefault();if(dialog.id==='rest')$('resume').click();};
+for(const dialog of document.querySelectorAll('#rest,#finish,#pit'))dialog.oncancel=e=>{e.preventDefault();if(dialog.id==='rest')$('resume').click();};
 window.addEventListener('keydown',e=>{
  const key=e.key.toLowerCase();
  if(key==='p'&&!e.repeat){if(state.mode==='paused')$('resume').click();else pauseRace();return;}

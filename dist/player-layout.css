@@ -94,3 +94,18 @@
 @media(orientation:landscape) and (max-height:520px){
  .arcade .navigationDock{width:clamp(92px,19dvh,110px)}
 }
+.arcade [data-weather]{font-size:12px;line-height:1.25;color:#d6e8d9;text-underline-offset:2px;pointer-events:auto}
+.arcade .launchpanel [data-weather]{color:#365643}
+.arcade .routeInfo [data-weather],.arcade .track [data-weather]{display:block;margin-top:3px}
+.arcade .openBoard{margin-top:8px;background:transparent;border-color:#96a99c;color:#214637;font-size:14px}
+.scoreBoard{width:min(420px,94vw)}
+.boardHead,.scoreBoard form,.scoreBoard li{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.boardHead h2{font-size:23px}
+.scoreBoard ol{padding:0;counter-reset:place}
+.scoreBoard li{counter-increment:place;border-bottom:1px solid #536158;padding:6px 0}
+.scoreBoard li::before{content:counter(place);color:#c2d2c1;width:1.5em}
+.scoreBoard li span{flex:1;overflow-wrap:anywhere}
+.scoreBoard li b{font-variant-numeric:tabular-nums}
+.scoreBoard form{flex-wrap:wrap}
+.scoreBoard input{display:block;font:inherit;padding:8px;width:12em;max-width:100%;border-radius:4px}
+.scoreBoard .reloadBoard{margin-top:12px}

@@ -2,6 +2,9 @@
 
 // Terrain and route coordinates here are metres in the course frame.
 const mountainRails=new Map();
+function railSetback(station,start,end){
+  return 1.05+.46*(1-Math.min(1,(station-start)/4,(end-station)/4));
+}
 function buildMountainVerges(){
   const loader=new T.TextureLoader(),disturbed=surfaces.scanned('verge',0xc8c4a7,.48);
   disturbed.side=T.DoubleSide;
@@ -24,6 +27,20 @@ function buildMountainVerges(){
       prev=points;
     }
   }
+  // A 4 m beam can see all intersecting road segments in its midpoint cell.
+  // Include the shoulder, terminal flare and half-span in the cell padding.
+  const roadCells=new Map(),cellSize=24,pad=roadHalfWidth+5;
+  for(let i=1;i<points.length;i++){
+    const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
+    if(!len)continue;
+    const r={ax:a.x,az:a.z,bx:b.x,bz:b.z,fx:dx/len,fz:dz/len,len,w:roadHalfWidth};
+    for(let x=Math.floor((Math.min(a.x,b.x)-pad)/cellSize);x<=Math.floor((Math.max(a.x,b.x)+pad)/cellSize);x++)
+      for(let z=Math.floor((Math.min(a.z,b.z)-pad)/cellSize);z<=Math.floor((Math.max(a.z,b.z)+pad)/cellSize);z++){
+        const key=x+','+z;
+        if(!roadCells.has(key))roadCells.set(key,[]);
+        roadCells.get(key).push(r);
+      }
+  }
   function beam(side){
     const spans=[];
     let run=null;
@@ -35,13 +52,26 @@ function buildMountainVerges(){
       if(!run||d-run.end>16){run={start:d,end:d};spans.push(run);}
       else run.end=d;
     }
-    const runs=spans.filter(line=>line.end-line.start>=16);
+    const runs=[];
+    for(const line of spans){
+      run=null;
+      for(let d=line.start;d<line.end;d+=4){
+        // Use the middle of the terminal's outward flare and reserve its full width.
+        const l=side*(roadHalfWidth+1.28),a=at(d,l),b=at(d+4,l);
+        const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2,key=Math.floor(mx/cellSize)+','+Math.floor(mz/cellSize);
+        if(!guardrailFits(a.x,a.z,b.x,b.z,roadCells.get(key)||[],.57)||
+          (!route.stage&&onBranch(mx,mz,3))){run=null;continue;}
+        if(!run){run={start:d,end:d+4};runs.push(run);}
+        else run.end=d+4;
+      }
+    }
+    for(let i=runs.length-1;i>=0;i--)if(runs[i].end-runs[i].start<16)runs.splice(i,1);
     mountainRails.set(side,runs);
     for(const {start,end} of runs){
       let prev=-1;
       for(let d=start;d<=end;d+=4){
         const terminal=Math.min(1,(d-start)/4,(end-d)/4);
-        const l=side*(roadHalfWidth+1.05+(1-terminal)*.46);
+        const l=side*(roadHalfWidth+railSetback(d,start,end));
         const p=at(d,l),floor=Math.min(renderedGround(p.x,p.z),p.y-.08);
         const index=rail.length/3;
         for(const [out,h] of section){

@@ -42,6 +42,7 @@
       awning:basic(0x9c9f92),tree:new T.MeshLambertMaterial({map:texture('roadside-tree.webp'),alphaTest:.46,side:T.DoubleSide,color:0xd4dbcc,emissive:0x262b23}),
       palm:new T.MeshLambertMaterial({map:texture('roadside-palm.webp'),alphaTest:.46,side:T.DoubleSide,color:0xd6dccb,emissive:0x262b23})
     };
+    const weather=createDrivingWeather(T,scene,sun,material.asphalt);
     const stoneNormal=skyLoader.load('streetscape/surfaces/cut-rock-normal.webp');
     stoneNormal.wrapS=stoneNormal.wrapT=T.RepeatWrapping;
     material.cut=new T.MeshStandardMaterial({map:texture('surfaces/cut-rock-color.webp',true),normalMap:stoneNormal,
@@ -412,6 +413,10 @@
           const toe=1.45+.44*coarse+fracture;
           const footX=px+sign*s.nx*(s.w+toe),footZ=pz+sign*s.nz*(s.w+toe);
           const backX=footX+sign*s.nx*5.5,backZ=footZ+sign*s.nz*5.5;
+          const cutRoads=cells.get(nearbyCell((footX+backX)*.5,(footZ+backZ)*.5))||[];
+          if(!guardrailFits(footX,footZ,backX,backZ,cutRoads,s.len/count*.5+.45,s)){
+            prev=-1;continue;
+          }
           const rise=Math.max(0,natural(backX,backZ)-natural(footX,footZ));
           const ends=Math.min(1,u/4,(s.len-u)/4),gap=Math.min(cutClearance(footX,footZ,s),cutClearance(backX,backZ,s));
           const height=Math.min(3.9,.15+rise*(1.15+coarse)+coarse*coarse*1.65)*gap*ends;
@@ -425,9 +430,10 @@
           if(prev>=0){
             for(let k=0;k<5;k++)cutIndices.push(prev+k,row+k,prev+k+1,prev+k+1,row+k,row+k+1);
             if(height>.48){
-              const length=s.len/count;
-              registerObstacle({id:s.seed+':cut:'+j,kind:'barrier',x:footX-s.fx*length*.5,z:footZ-s.fz*length*.5,
-                fx:s.fx,fz:s.fz,w:length*.5,d:.13,height,parts:[]});
+              const lastX=cutVerts[prev*3],lastZ=cutVerts[prev*3+2];
+              const dx=footX-lastX,dz=footZ-lastZ,length=Math.hypot(dx,dz);
+              registerObstacle({id:s.seed+':cut:'+j,kind:'barrier',x:(footX+lastX)*.5,z:(footZ+lastZ)*.5,
+                fx:dx/length,fz:dz/length,w:length*.5,d:.13,height,parts:[]});
             }
           }
           prev=row;
@@ -603,22 +609,29 @@
         const start=openNearEnd(s,s.ax,s.az),end=s.len-openNearEnd(s,s.bx,s.bz),length=end-start;
         if(length<2)continue;
         const count=Math.ceil(length/4),angle=Math.atan2(s.fx,s.fz);
-        let prev=-1;
-        for(let j=0;j<=count;j++){
-          const d=start+length*j/count,px=s.ax+s.fx*d+s.nx*off,pz=s.az+s.fz*d+s.nz*off;
-          const y=roadway(cx+px,cz+pz);
-          const row=railVerts.length/3;
-          for(const [push,up] of [[0,.51],[.064,.55],[.012,.605],[.067,.66],[0,.70]]){
-            railVerts.push(px-side*push*s.nx,y+up,pz-side*push*s.nz);
+        const span=length/count;
+        function row(x,z){
+          const first=railVerts.length/3,y=roadway(cx+x,cz+z);
+          for(const [push,up] of [[0,.51],[.064,.55],[.012,.605],[.067,.66],[0,.70]])
+            railVerts.push(x-side*push*s.nx,y+up,z-side*push*s.nz);
+          return first;
+        }
+        let previousRow=-1;
+        for(let j=0;j<count;j++){
+          const d=start+span*j,px=s.ax+s.fx*d+s.nx*off,pz=s.az+s.fz*d+s.nz*off;
+          const ex=px+s.fx*span,ez=pz+s.fz*span,mx=(px+ex)*.5,mz=(pz+ez)*.5;
+          // A side road or the return leg of a hairpin can overlap a shoulder
+          // well beyond the node itself. Open the rail and its collider together.
+          if(!guardrailFits(px,pz,ex,ez,cells.get(nearbyCell(mx,mz))||[],.32,s)){
+            previousRow=-1;continue;
           }
-          if(prev>=0)for(let k=0;k<4;k++)railIndices.push(prev+k,row+k,prev+k+1,prev+k+1,row+k,row+k+1);
-          prev=row;
-          if(j===count)continue;
-          const adjust=y-natural(px,pz);
+          const a=previousRow>=0?previousRow:row(px,pz),b=row(ex,ez);
+          for(let k=0;k<4;k++)railIndices.push(a+k,b+k,a+k+1,a+k+1,b+k,b+k+1);
+          previousRow=b;
+          const adjust=roadway(cx+px,cz+pz)-natural(px,pz);
           instance('steel',unitBox,px+side*.08*s.nx,adjust+.27,pz+side*.08*s.nz,.10,.88,.12,angle);
           if(j%4===0)instance('white',unitBox,px,adjust+.697,pz,.12,.054,.06,angle);
-          const half=length/count*.5;
-          registerObstacle({id:s.seed+':rail:'+j,kind:'barrier',x:px+s.fx*half,z:pz+s.fz*half,fx:s.fx,fz:s.fz,w:half,d:.10,height:.70,parts:[]});
+          registerObstacle({id:s.seed+':rail:'+j,kind:'barrier',x:mx,z:mz,fx:s.fx,fz:s.fz,w:span*.5,d:.10,height:.70,parts:[]});
         }
       }
       if(railVerts.length){
@@ -888,6 +901,7 @@
       if(Math.abs(fov-camera.fov)>.05){camera.fov+=(fov-camera.fov)*(1-Math.exp(-dt*7));camera.updateProjectionMatrix();}
       if(inside&&cabin)cabin.reflect(mirrorAdapter,scene,playerRig,0,0);
       roadsideImpact.update(dt);driveFx.update(car,dt,originX,originZ,inside,camera);
+      weather.render(camera,now);
       const waterLevel=nearbyWaterLevel(x,z);
       waterSurface.reflect(renderer,scene,camera,waterLevel,now,waterLevel!==null);
       renderer.render(scene,camera);
@@ -898,6 +912,6 @@
       }
       lastPaint=now;
     }
-    return {terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
+    return {weather,terrainReady:relief.ready,grade:driveGrade,ground:driveGround,setRoads,render,resize,contact,loadDistrict:async(g,x,z)=>(await Promise.all([district.load(g,x,z),relief.loadLocal(g,x,z)])).some(Boolean),nearLandmark:(x,z)=>landmarks?.nearest(x,z),reactToContact:roadsideImpact.react,impact:(x,z,nx,nz,s,k,h=0,g)=>driveFx.impact(x,z,nx,nz,s,k,driveGround(x,z)+h,g),scrape:(x,y,z,vx,vz)=>driveFx.scrape(x,driveGround(x,z)+y,z,vx,vz),resetFx(){driveFx.reset();roadsideImpact.reset();}};
   };
 })();

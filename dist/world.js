@@ -65,7 +65,7 @@ async function startAt(place,restore=null){
      if((target.x-p.x)*Math.sin(p.yaw)-(target.z-p.z)*Math.cos(p.yaw)<0)nearest.dir=-1;
    }
    if(restore&&restore.edge===nearest.edge.id&&restore.dir===-1&&!nearest.edge.oneway)nearest.dir=-1;
-   roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
+   nextWeatherCheck=0;roads=graph;water=null;player=nearest;source=place;distance=restore?.distance||0;hp=nitro=100;
    car.region=place[2]<10.8?'delta':place[2]>21.6||(place[1]>107&&place[2]>11&&place[2]<15)?'highlands':'city';
    duel=null;passes=restore?.passes||0;inside=false;busy=false;npcs=[];parkOnRoad();gfx.resetFx();
    if(Number.isFinite(restore?.yaw)){car.x=start.x;car.z=start.z;car.yaw=restore.yaw;trackRoad();}
@@ -271,6 +271,7 @@ function drawMini(landmark){
  g.fillStyle='#ffbe68';for(const n of npcs){g.beginPath();g.arc(n.x-car.x,n.z-car.z,4,0,2*Math.PI);g.fill();}
  g.restore();g.fillStyle='#e5ff9b';g.beginPath();g.moveTo(c.width/2,c.height*.56-7);g.lineTo(c.width/2+5,c.height*.56+5);g.lineTo(c.width/2-5,c.height*.56+5);g.fill();
 }
+let nextWeatherCheck=0;
 function frame(now){
  const dt=clamp((now-last)/1000,0,.1);last=now;
  if(gfx&&player){
@@ -288,6 +289,7 @@ function frame(now){
      }
      crashTime-=dt;if(crashTime<=0){mode='pit';pit(crashKind);}
    }
+   if(mode!=='loading'&&roads&&!document.hidden&&now>=nextWeatherCheck){nextWeatherCheck=now+2000;gfx.weather.locate(...roads.geo(car.x,car.z));}
    car.driving=mode==='drive';car.showroom=mode==='grid';
    if(mode!=='loading'&&mode!=='error'&&!document.hidden)gfx.render(car,duel?[duel.actor,...npcs]:npcs,mode==='drive'||mode==='crash'?dt:0,inside);
    if(mode==='drive'){uiTick+=dt;if(uiTick>.13){uiTick=0;updateHud();}}
@@ -296,9 +298,14 @@ function frame(now){
  if(toastTime>0&&(toastTime-=dt)<=0)$('callout').textContent='';
  requestAnimationFrame(frame);
 }
+const worldBoard=createLeaderboard('xuyen-viet','Xuyên Việt');
+let tripStart=0;
+$('showBoard').onclick=()=>worldBoard.open();
+$('scoreBoard').onclick=()=>worldBoard.open(distance-tripStart);
 function begin(){
  if(mode==='error'){if(indexData&&gfx)startAt(pendingPlace);else location.reload();return;}
  if(!player||mode!=='grid')return;
+ tripStart=distance;worldBoard.start();
  mode='drive';document.body.dataset.phase='drive';$('grid').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('camera').hidden=false;$('pause').hidden=false;updateHud();driveAudio.cue(true);
 }
 function pause(){

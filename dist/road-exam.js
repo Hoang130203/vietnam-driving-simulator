@@ -204,6 +204,11 @@ const mountainField=courseRelief(window.stageRelief);
 if(mountainField){
   scene.fog.density=.00019;camera.far=22000;camera.updateProjectionMatrix();
 }
+// The two fictional training routes use explicitly named reference cities.
+const weatherOrigin=route.stage?.start||(river?[105.785,10.034]:[107.808,11.547]);
+const weatherBearing=(route.stage?.bearing||0)*Math.PI/180;
+const courseWeather=createDrivingWeather(T,scene,sun,roadSurface,route.stage?'':river?'Cần Thơ':'Bảo Lộc');
+let nextWeatherCheck=0;
 const waterLevel=river?-3:height((bridgeStart+bridgeEnd)/2)-8;
 function naturalSurface(x,z,n){
   const a=n.dist,d=n.d;
@@ -712,6 +717,13 @@ function render(now){
  look.set(inside?-.31:0,inside?.02:.6,inside?-12:-6).applyQuaternion(yawQ).add(rig.position);camera.position.copy(eye);camera.lookAt(look);
  if(arcade)raceCamera(dt,now);
  for(const c of traffic){const p=at(c.d,-2.8);c.model.position.set(p.x,p.y,p.z);c.model.rotation.set(Math.atan(roadGrade(c.d,p.h)),-p.h,0,'YXZ');}
+ if(now>=nextWeatherCheck&&!document.hidden){
+   nextWeatherCheck=now+2000;
+   const east=s.x*Math.cos(weatherBearing)-s.z*Math.sin(weatherBearing);
+   const north=-s.x*Math.sin(weatherBearing)-s.z*Math.cos(weatherBearing);
+   courseWeather.locate(weatherOrigin[0]+east/(111320*Math.cos(weatherOrigin[1]*Math.PI/180)),weatherOrigin[1]+north/111320);
+ }
+ courseWeather.render(camera,now);
  courseWater.update(now*.001);
  if(inside)cabin.reflect(mirrorAdapter,scene,rig,0,0);
  if(!route.stage)courseWater.reflect(renderer,scene,camera,waterLevel,now,Math.abs(s.d-(bridgeStart+bridgeEnd)*.5)<220||(river&&s.d<bridgeEnd+150));
