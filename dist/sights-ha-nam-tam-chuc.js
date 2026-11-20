@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  function buildWaterPavilion(T,{stamp,box,outline}) {
+  function buildWaterPavilion(T,{stamp,box,deck,outline}) {
     const timber=0x513522, beam=0x6c4c33, trim=0x896d50, stone=0xaca99e;
     const tile=[0x605e58,0x68675f,0x64615b,0x5f5c57,0x68645e];
     const post=new T.CylinderGeometry(1,1,1,8);
@@ -85,11 +85,11 @@
 
     // OSM places the long building NW–SE, with twin footbridges to the NE bank.
     box(0x7f7e76,0,.05,0,88,3.6,50);
-    box(stone,0,1.9,0,89,.34,51);
+    deck(stone,0,1.9,0,89,.34,51);
     box(0x96958a,0,.30,29,60,3.30,16);
-    box(stone,0,1.9,29,61,.34,17);
+    deck(stone,0,1.9,29,61,.34,17);
     for(const x of [-15.5,24.5]){
-      box(0x8a8b81,x,1.15,-66.5,5.4,1.24,82);
+      deck(0x8a8b81,x,1.15,-66.5,5.4,1.24,82);
       for(const side of [-1,1])balustrade(x+side*2.47,-66.5,82,true);
       for(let z=-32;z>=-104;z-=13)box(0x85867a,x,-.85,z,3.55,3.15,1.2);
     }

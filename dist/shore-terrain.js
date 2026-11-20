@@ -100,6 +100,31 @@ function buildMappedShore(T, options){
   bank.onBeforeRender=()=>{bank.material=land.material;};
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(water,3));g.setIndex(waterIndices);g.computeVertexNormals();
   const surface=new T.Mesh(g,waterMaterial);surface.name='Mapped water';surface.receiveShadow=true;group.add(surface);
+  // Index the actual triangles that cover a bank (verges, paving and gardens).
+  // A cover below the waterline reduces the depth, while one above it stays dry.
+  const covers=new Map();
+  function addCover(geometry,matrix,start=0,end=geometry.index?.count??geometry.attributes.position.count){
+    const position=geometry.attributes.position,index=geometry.index;
+    const a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3();
+    function read(p,i){
+      p.fromBufferAttribute(position,index?index.getX(i):i);
+      if(matrix)p.applyMatrix4(matrix);
+    }
+    for(let i=start;i<end;i+=3){
+      read(a,i);read(b,i+1);read(c,i+2);
+      const bx=b.x-a.x,bz=b.z-a.z,cx=c.x-a.x,cz=c.z-a.z,det=bx*cz-bz*cx;
+      if(Math.abs(det)<1e-8)continue;
+      const x0=Math.max(0,Math.floor((Math.min(a.x,b.x,c.x)-left)/coarse)),x1=Math.min(31,Math.floor((Math.max(a.x,b.x,c.x)-left)/coarse));
+      const z0=Math.max(0,Math.floor((Math.min(a.z,b.z,c.z)-top)/coarse)),z1=Math.min(31,Math.floor((Math.max(a.z,b.z,c.z)-top)/coarse));
+      let tri;
+      for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++){
+        const key=z*32+x;if(!active[key])continue;
+        if(!covers.has(key))covers.set(key,[]);
+        tri??={x:a.x,y:a.y,z:a.z,bx,bz,cx,cz,by:b.y-a.y,cy:c.y-a.y,det};
+        covers.get(key).push(tri);
+      }
+    }
+  }
   function sample(x,z,includeBank=false){
     const tx=Math.floor((x-left)/coarse),tz=Math.floor((z-top)/coarse);
     if(tx<0||tx>=32||tz<0||tz>=32||!active[tz*32+tx])return null;
@@ -109,7 +134,12 @@ function buildMappedShore(T, options){
     if(!a||!b||!c||!d)return null;
     const height=k=>f+h<=1?a[k]+f*(b[k]-a[k])+h*(c[k]-a[k]):d[k]+(1-f)*(c[k]-d[k])+(1-h)*(b[k]-d[k]);
     if(!includeBank&&height('d')<=0)return null;
-    return {level:height('level'),bed:height('bed')};
+    const level=height('level');let bed=height('bed');
+    for(const t of covers.get(tz*32+tx)||[]){
+      const dx=x-t.x,dz=z-t.z,u=(dx*t.cz-dz*t.cx)/t.det,v=(t.bx*dz-t.bz*dx)/t.det;
+      if(u>=-1e-7&&v>=-1e-7&&u+v<=1.0000001)bed=Math.max(bed,t.y+u*t.by+v*t.cy);
+    }
+    return includeBank||level>bed?{level,bed}:null;
   }
-  return {sample,dispose(){land.remove(bank);patch.dispose();land.geometry.setIndex(landIndex);}};
+  return {sample,addCover,dispose(){land.remove(bank);patch.dispose();land.geometry.setIndex(landIndex);}};
 }

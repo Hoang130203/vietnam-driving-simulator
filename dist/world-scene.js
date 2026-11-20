@@ -359,6 +359,7 @@
           waterSurface.setField(field,maskSize,maskX,maskZ,maskScale,cx,cz);
           shorePatch=buildMappedShore(T,{mask:wetMask,field,size:maskSize,scale:maskScale,maskX,maskZ,cx,cz,gx,gz,landWidth,land,landIndex,
             ground:localGround,pools,group:roadGroup,waterMaterial:waterSurface.material});
+          landmarks?.addShoreCover(shorePatch);
         }
       }
       // Index occupied blocks once so narrow streams also enable local reflections.
@@ -400,24 +401,8 @@
           if(dx*dx+dz*dz<(s.w+r)*(s.w+r))return true;
         }return false;
       }
-      // The road graph lacks explicit bridge tags. Keep mapped carriageways
-      // above water traversable and sample the exposed bed beyond the deck.
-      function onDeck(x,z){
-        for(const s of cells.get(nearbyCell(x,z))||[]){
-          const d=Math.max(0,Math.min(s.len,(x-s.ax)*s.fx+(z-s.az)*s.fz));
-          if(Math.hypot(s.ax+d*s.fx-x,s.az+d*s.fz-z)<s.w+.35)return true;
-        }
-        return false;
-      }
-      waterAt=(worldX,worldZ)=>{
-        const x=worldX-cx,z=worldZ-cz,shore=sampleShore(x,z);
-        return shore&&!onDeck(x,z)?shore:null;
-      };
-      shoreBed=(worldX,worldZ)=>{
-        if(!shorePatch)return null;
-        const x=worldX-cx,z=worldZ-cz;
-        return onDeck(x,z)?null:shorePatch.sample(x,z,true)?.bed;
-      };
+      waterAt=(x,z)=>sampleShore(x-cx,z-cz);
+      shoreBed=(x,z)=>shorePatch?.sample(x-cx,z-cz,true)?.bed;
       let buildingBase=null;
       function instance(mat,geo,x,y,z,sx,sy,sz,yaw=0,color=null,owner=null){
         const key=mat+':'+geo.id;
@@ -573,8 +558,6 @@
       // Reordering visible roads or clipping a distant street cannot cascade into a new layout.
       function compareCandidate(a,b){return a.priority-b.priority||a.key.localeCompare(b.key);}
       const plotSize=12;
-      const templeGrounds=graph?VietnamLandmarks.entries.filter(s=>s.gardenRadius).map(s=>({...graph.point(s.lon,s.lat),radius:s.gardenRadius}))
-        .filter(p=>Math.hypot(p.x-cx,p.z-cz)<620+p.radius):[];
       function visitPlots(c,cb){
         for(let i=Math.floor((c.hx-c.footprint)/plotSize);i<=Math.floor((c.hx+c.footprint)/plotSize);i++)
           for(let j=Math.floor((c.hz-c.footprint)/plotSize);j<=Math.floor((c.hz+c.footprint)/plotSize);j++)cb(i+','+j);
@@ -650,9 +633,13 @@
             if(cover===1||house&&cover>178||landClass===80||landClass===95)continue;
             if(house&&(structures.covered(graph,hx+cx,hz+cz)||(landClass!=null&&landClass!==50)))continue;
             if(!house&&[40,60,70,90].includes(landClass)&&random()>.09)continue;
-            if(house&&(templeGrounds.some(p=>Math.hypot(hx+cx-p.x,hz+cz-p.z)<p.radius)||
-              innerPrecinct&&Math.hypot(hx+cx-complexCenter.x,hz+cz-complexCenter.z)<445))continue;
             if(blocked(hx,hz,footprint)||onApproach(hx+cx,hz+cz)||house&&district.mappedBlock(hx+cx,hz+cz))continue;
+            if(house){
+              const x=hx+cx,z=hz+cz,w=width/2+.25,d=depth/2+.30,front=-sign*(depth/2+2);
+              const ring=[[-w,front],[w,front],[w,sign*d],[-w,sign*d]].map(([u,v])=>new T.Vector2(x+s.fx*u+s.nx*v,z+s.fz*u+s.nz*v));
+              const bounds=new T.Box2().setFromPoints(ring);
+              if(district.overlapsSight(landmarks,[ring],{minX:bounds.min.x,maxX:bounds.max.x,minZ:bounds.min.y,maxZ:bounds.max.y},true))continue;
+            }
             const c={key:s.seed+':'+index+':'+sign,priority,s,sign,hx,hz,footprint,house,width,depth,type,random};
             candidates.push(c);
             visitPlots(c,k=>{if(!rivals.has(k))rivals.set(k,[]);rivals.get(k).push(c);});
@@ -847,6 +834,7 @@
         }
         const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.computeVertexNormals();
         const mesh=new T.Mesh(g,mat);mesh.receiveShadow=true;
+        if(mat!==material.white&&mat!==material.yellow)shorePatch?.addCover(g);
         if(mat.transparent&&mat.userData.templeSurface)mesh.renderOrder=1;
         roadGroup.add(mesh);
       }

@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  function coveredBridge(T,{box,outline,stamp,round}) {
+  function coveredBridge(T,{box,deck,outline,stamp,round}) {
     const wood=0x613c32,red=0xb8543b,tile=0x55504c,ridge=0x9b9180;
     const z=2.4;
     function roof(x,y,cz,length,half,rise){
@@ -13,7 +13,7 @@
         outline([[-.43,0],[.42,0],[.43,.24],[.23,.14],[0,.48],[-.18,.24],[-.38,.28]],0x889990,end,y+rise,cz-.1,.2);
       }
     }
-    box(0x9b8a79,0,.38,z,19.2,.72,5.9);
+    deck(0x9b8a79,0,.38,z,19.2,.72,5.9);
     roof(0,4.55,z,8.0,3.5,1.48);
     for(const s of [-1,1]){
       const x=s*6.68;

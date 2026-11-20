@@ -53,6 +53,12 @@ window.VietnamLandmarks=(()=>{
       transformed.dispose();
     }
     const box=(...args)=>stamp(cube,...args);
+    const shoreRanges=[];
+    function groundStamp(...args){
+      const first=positions.length/3;
+      stamp(...args);shoreRanges.push([first,positions.length/3]);
+    }
+    const deck=(...args)=>groundStamp(cube,...args);
     function tapered(tint,x,y,z,base,top,height,depthRatio=1,sides=4){
       const geo=new T.CylinderGeometry(top,base,height,sides);
       if(sides===4)geo.rotateY(Math.PI/4);
@@ -104,7 +110,7 @@ window.VietnamLandmarks=(()=>{
         const p=island.attributes.position,x=p.getX(i),y=p.getY(i),z=p.getZ(i),a=Math.atan2(z,x),wave=1+.027*Math.sin(a*7)+.016*Math.cos(a*11);
         p.setXYZ(i,x*wave,y,z*wave);
       }
-      island.computeVertexNormals();stamp(island,0x726952,0,-.98,0,9.5,1.47,12.7);stamp(island,0x617746,0,-.64,0,8.96,1.23,11.95);
+      island.computeVertexNormals();groundStamp(island,0x726952,0,-.98,0,9.5,1.47,12.7);groundStamp(island,0x617746,0,-.64,0,8.96,1.23,11.95);
       const shrub=new T.IcosahedronGeometry(1,0);
       for(let i=0;i<64;i++){
         const a=random()*Math.PI*2,dist=.61+random()*.28,x=Math.cos(a)*8.9*dist,z=Math.sin(a)*11.9*dist;
@@ -947,7 +953,7 @@ window.VietnamLandmarks=(()=>{
       canopy.dispose();
     }
     const addition=additions.get(id);
-    if(addition)addition.build(T,{group,stamp,box,round,tapered,profile,outline,arch,sign,random,wavingFlag,vertexCount:()=>positions.length/3});
+    if(addition)addition.build(T,{group,stamp,box,deck,round,tapered,profile,outline,arch,sign,random,wavingFlag,vertexCount:()=>positions.length/3});
     cube.dispose();round.dispose();group.name=id;
     if(!positions.length)return group;
     const geometry=new T.BufferGeometry();
@@ -993,10 +999,41 @@ window.VietnamLandmarks=(()=>{
       };
     }
     const mesh=new T.Mesh(geometry,finish);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
+    if(shoreRanges.length)mesh.userData.shoreCover=shoreRanges;
     return group;
   }
   function create(T,scene){
     const cached=new Map(),finishes=createSightFinishes(T);let active=[];
+    const buildingAreas=[],gardens=[],modeledBuildings=new Set();
+    function reserveBuildingArea(site,localRing){
+      const ring=localRing.map(([u,v])=>new T.Vector2(site.x+u*site.c+v*site.s,site.z-u*site.s+v*site.c));
+      buildingAreas.push({ring,bounds:new T.Box2().setFromPoints(ring)});
+    }
+    function prepareBuildingSites(graph,cx,cz){
+      buildingAreas.length=gardens.length=0;modeledBuildings.clear();
+      if(!graph)return;
+      for(const site of active){
+        const {data}=site,extra=data.id==='cathedral'?8:data.id==='turtle'?12:2;
+        const rectangle=(x,z,w,d)=>reserveBuildingArea(site,[[x-w,z-d],[x+w,z-d],[x+w,z+d],[x-w,z+d]]);
+        if(data.boundary)reserveBuildingArea(site,data.boundary);
+        else rectangle(0,0,data.width/2+extra,data.depth/2+extra);
+        if(data.id==='cathedral')rectangle(0,28.5,16,28.5);
+        if(!data.boundary)for(const [x,z,w,d] of data.solids||[]){
+          if(Math.abs(x)+w>data.width/2+extra||Math.abs(z)+d>data.depth/2+extra)rectangle(x,z,w,d);
+        }
+        const ref=(data.map||data.source||'').match(/openstreetmap\.org\/(way|relation)\/(\d+)\/?$/);
+        if(ref)modeledBuildings.add(ref[1][0]+ref[2]);
+        if(data.gardenRadius)gardens.push({x:site.x,z:site.z,r:data.gardenRadius});
+      }
+      const precinct=graph.point(105.7956,20.5528);
+      if(Math.hypot(precinct.x-cx,precinct.z-cz)<1500)gardens.push({...precinct,r:445});
+      // A catalogue pin without a surveyed outline only reserves its immediate
+      // surroundings against inferred buildings. Its mapped building remains visible.
+      for(const site of window.VietnamTourism?.entries||[]){
+        const p=graph.point(site.lon,site.lat);
+        if(Math.abs(p.x-cx)<900&&Math.abs(p.z-cz)<900)gardens.push({...p,r:12});
+      }
+    }
     function trim(){
       const limit=Math.max(12,active.length);
       for(const [id,mesh] of cached){
@@ -1018,7 +1055,7 @@ window.VietnamLandmarks=(()=>{
     function setOrigin(graph,cx,cz,ground=()=>0){
       for(const {mesh} of active)mesh.visible=false;
       active=[];
-      if(!graph)return;
+      if(!graph){prepareBuildingSites(null,cx,cz);return;}
       for(const data of entries){
         const {x,z}=graph.point(data.lon,data.lat);if(Math.hypot(x-cx,z-cz)>(data.viewDistance??1050))continue;
         if(!cached.has(data.id)){const mesh=model(T,data.id);finishes.apply(mesh);mesh.userData.height=new T.Box3().setFromObject(mesh).max.y*(data.scale?.[1]||1);scene.add(mesh);cached.set(data.id,mesh);}
@@ -1029,6 +1066,7 @@ window.VietnamLandmarks=(()=>{
         active.push({data,x,z,mesh,c,s});
       }
       trim();
+      prepareBuildingSites(graph,cx,cz);
     }
     function nearest(x,z,maxMeters=650){
       let best=null;
@@ -1069,7 +1107,17 @@ window.VietnamLandmarks=(()=>{
       }
       return null;
     }
-    return {setOrigin,nearest,reserved,contact,weather:finishes.weather};
+    function addShoreCover(patch){
+      for(const {mesh} of active){
+        mesh.updateMatrixWorld(true);
+        mesh.traverse(part=>{
+          const cover=part.userData.shoreCover;
+          if(cover===true)patch.addCover(part.geometry,part.matrixWorld);
+          else if(cover)for(const [start,end] of cover)patch.addCover(part.geometry,part.matrixWorld,start,end);
+        });
+      }
+    }
+    return {setOrigin,nearest,reserved,contact,addShoreCover,buildingAreas,gardens,modeledBuildings,weather:finishes.weather};
   }
   return {entries,create};
 })();

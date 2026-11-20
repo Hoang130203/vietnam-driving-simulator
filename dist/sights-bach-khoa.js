@@ -423,7 +423,7 @@
       const p=geo.attributes.position,uv=geo.attributes.uv;
       const scale=material===lawn?5:2.4;
       for(let i=0;i<p.count;i++)uv.setXY(i,p.getX(i)/scale,p.getZ(i)/scale);
-      const mesh=new T.Mesh(geo,material);mesh.receiveShadow=true;group.add(mesh);gardens.push({geo,lift});
+      const mesh=new T.Mesh(geo,material);mesh.receiveShadow=true;mesh.userData.shoreCover=true;group.add(mesh);gardens.push({geo,lift});
     }
     bed(-34,-71,72,135,granite,-.14);
     bed(gateX+3,gateZ,24,27,granite,-.11);
@@ -448,7 +448,7 @@
       material.side=T.DoubleSide;
       const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
       geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.computeVertexNormals();
-      const mesh=new T.Mesh(geo,material);mesh.receiveShadow=true;group.add(mesh);gardens.push({geo,lift});
+      const mesh=new T.Mesh(geo,material);mesh.receiveShadow=true;mesh.userData.shoreCover=true;group.add(mesh);gardens.push({geo,lift});
     }
     mappedSurface(lawn,-.085,bachKhoaGrounds.lawns);
     mappedSurface(granite,-.10,bachKhoaGrounds.plazas,bachKhoaGrounds.paths);
@@ -499,7 +499,7 @@
   (window.VietnamSights??=[]).push({
     id:'bach-khoa-ha-noi',name:'Đại học Bách khoa Hà Nội',city:'Hà Nội',province:'Hà Nội',region:'Bắc Bộ',
     lon:105.84346,lat:21.00568,start:[105.84156,21.00510],bearing:90,yaw:0,
-    width:445,depth:452,viewAngle:.18,viewElevation:.72,plasterStain:.024,reserve,solids,build,
+    width:445,depth:452,viewAngle:.18,viewElevation:.72,plasterStain:.024,reserve,boundary,solids,build,
     views:[
       {name:'Sân C1',offset:[-35.8,-142],viewRadius:39,height:14,viewAngle:.015,viewElevation:-.09,
         description:'Từ sân lát đá nhìn về sảnh C1, biểu tượng I ♥ BK nằm trước bậc thềm. Phía trên là chín ô hoa gió và mái chín nhịp sóng.'},

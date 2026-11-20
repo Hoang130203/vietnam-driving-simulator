@@ -92,6 +92,32 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
   function insideBuilding(x,z,rings){
     return insideRing(x,z,rings[0])&&!rings.slice(1).some(hole=>insideRing(x,z,hole));
   }
+  function overlapsSight(landmarks,rings,box,inferred){
+    if(!landmarks)return false;
+    for(const {ring:area,bounds} of landmarks.buildingAreas){
+      if(box.maxX<bounds.min.x||box.minX>bounds.max.x||box.maxZ<bounds.min.y||box.minZ>bounds.max.y)continue;
+      if(insideRing(rings[0][0].x,rings[0][0].y,area)||insideBuilding(area[0].x,area[0].y,rings))return true;
+      for(const ring of rings)for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+        const a=ring[j],b=ring[i],dx=b.x-a.x,dz=b.y-a.y;
+        for(let k=0,l=area.length-1;k<area.length;l=k++){
+          const p=area[l],q=area[k],ex=q.x-p.x,ez=q.y-p.y,det=dx*ez-dz*ex;
+          if(Math.abs(det)<1e-8)continue;
+          const px=p.x-a.x,pz=p.y-a.y,t=(px*ez-pz*ex)/det,u=(px*dz-pz*dx)/det;
+          if(t>=0&&t<=1&&u>=0&&u<=1)return true;
+        }
+      }
+    }
+    if(inferred)for(const {x,z,r} of landmarks.gardens){
+      if(x+r<box.minX||x-r>box.maxX||z+r<box.minZ||z-r>box.maxZ)continue;
+      if(insideBuilding(x,z,rings))return true;
+      for(const ring of rings)for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+        const a=ring[j],b=ring[i],dx=b.x-a.x,dz=b.y-a.y;
+        const t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.y)*dz)/(dx*dx+dz*dz||1)));
+        if((a.x+t*dx-x)**2+(a.y+t*dz-z)**2<=r*r)return true;
+      }
+    }
+    return false;
+  }
   function overlapsMapped(rings,box){
     const seen=new Set();
     for(let i=Math.floor(box.minX/cell);i<=Math.floor(box.maxX/cell);i++){
@@ -203,7 +229,7 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
     }
     const ids=new Set(),surveyedIds=new Set(surveyed.map(row=>row[0]));
     for(const [id,kind,tagH,levels,raw,shape] of [...surveyed,...extra]){
-      if(ids.has(id))continue;
+      if(ids.has(id)||landmarks?.modeledBuildings.has(id))continue;
       const first=graph.point(raw[0][0]/scale,raw[0][1]/scale);
       if(Math.abs(first.x-cx)>850||Math.abs(first.z-cz)>850)continue;
       const rings=raw.map(r=>decode(r,graph)).filter(r=>r.length>=3);
@@ -211,8 +237,9 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
       const outer=rings[0];let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
       for(const p of outer){minX=Math.min(minX,p.x);minZ=Math.min(minZ,p.y);maxX=Math.max(maxX,p.x);maxZ=Math.max(maxZ,p.y);}
       const x=(minX+maxX)/2,z=(minZ+maxZ)/2;
-      if(Math.hypot(x-cx,z-cz)>620+Math.hypot(maxX-minX,maxZ-minZ)/2||landmarks?.reserved(x,z,1))continue;
+      if(Math.hypot(x-cx,z-cz)>620+Math.hypot(maxX-minX,maxZ-minZ)/2)continue;
       const original=surveyedIds.has(id),box={minX,minZ,maxX,maxZ};
+      if(overlapsSight(landmarks,rings,box,!original))continue;
       if(!original&&(overlapsMapped(rings,box)||obstructsRoad(rings,box,x,z)))continue;
       ids.add(id);
       // Keep floors level, and seat the plinth against the terrain around the
@@ -295,6 +322,6 @@ function createTourDistrict(T,scene,plaster,structures,osmBuildings){
     if(!id)return null;
     return cells.get(Math.floor(x/cell)+','+Math.floor(z/cell))?.find(b=>b.id===id[1][0]+id[2]);
   }
-  return {load,build,contact,footprint,builtUp:(x,z)=>cells.has(Math.floor(x/cell)+','+Math.floor(z/cell)),
+  return {load,build,contact,footprint,overlapsSight,builtUp:(x,z)=>cells.has(Math.floor(x/cell)+','+Math.floor(z/cell)),
     mappedBlock:(x,z)=>(blocks.get(Math.floor(x/70)+','+Math.floor(z/70))||0)>=3};
 }
